@@ -1,0 +1,24 @@
+const connectDB = require("../../../../../lib/db");
+const Lead = require("../../../../../models/Lead");
+const { requireAuth } = require("../../../../../lib/auth");
+
+async function handler(req, res) {
+  if (req.method !== "PATCH") return res.status(405).json({ error: "Method not allowed" });
+
+  const { id, followUpId } = req.query;
+  const { completed } = req.body || {};
+
+  await connectDB();
+  const lead = await Lead.findOne({ _id: id, "followUps._id": followUpId });
+  if (!lead) return res.status(404).json({ error: "Follow-up not found" });
+
+  const followUp = lead.followUps.id(followUpId);
+  followUp.completed = Boolean(completed);
+  followUp.completedAt = followUp.completed ? new Date() : undefined;
+  await lead.save();
+
+  if (global._io) global._io.emit("leads:changed", { updatedCount: 1 });
+  res.status(200).json({ lead });
+}
+
+export default requireAuth(handler);
