@@ -14,8 +14,8 @@ async function handler(req, res) {
   if (req.method === "POST") {
     const { sheetId, sheetName, syncIntervalMinutes } = req.body || {};
 
-    if (syncIntervalMinutes !== undefined && ![1, 5, 15].includes(Number(syncIntervalMinutes))) {
-      return res.status(400).json({ error: "syncIntervalMinutes must be 1, 5, or 15" });
+    if (syncIntervalMinutes !== undefined && ![1, 5, 15, 1440].includes(Number(syncIntervalMinutes))) {
+      return res.status(400).json({ error: "syncIntervalMinutes must be 1, 5, 15, or 1440 (daily)" });
     }
 
     const update = {};

@@ -63,7 +63,11 @@ export default function SettingsForm({ initial, onSaved }) {
           <option value={1}>Every 1 minute</option>
           <option value={5}>Every 5 minutes</option>
           <option value={15}>Every 15 minutes</option>
+          <option value={1440}>Daily</option>
         </select>
+        <div className="hint">
+          This only sets the Online/Offline threshold — it doesn't change how often the sync actually runs. Match it to your real cron cadence (e.g. "Daily" on Vercel Hobby's once-a-day cron limit).
+        </div>
       </div>
 
       <button className="btn" type="submit" disabled={saving}>

@@ -63,7 +63,7 @@ sync runs immediately, then every `syncIntervalMinutes`.
 - **`lib/cron.js`** + **`server.js`** — local-dev-only. Schedules `runSync` with `node-cron` at the configured interval, re-reading Settings every 15s to pick up interval changes made in the UI. Never runs on Vercel.
 - **`pages/api/cron/sync.js`** — the Vercel-side equivalent: calls the same `runSync()`, guarded by `CRON_SECRET`. Triggered on the schedule in `vercel.json`.
 - **Dashboard (`pages/index.js`)** — shows the Sync Status card (last sync time, total records, new leads today, online/offline), a Follow-ups reminder card (overdue/today/upcoming counts), and a searchable Leads table. Polls the API every 10s for updates.
-- **Settings (`pages/settings.js`)** — admin can change the Sheet ID, Sheet Tabs, and sync interval (1/5/15 min). Saving triggers an immediate (awaited) sync so the change takes effect right away.
+- **Settings (`pages/settings.js`)** — admin can change the Sheet ID, Sheet Tabs, and sync interval (1/5/15 min, or Daily). Saving triggers an immediate (awaited) sync so the change takes effect right away.
 
 ## Deploying to Vercel
 
@@ -77,7 +77,7 @@ sync runs immediately, then every `syncIntervalMinutes`.
 3. Redeploy after adding env vars (Vercel doesn't hot-reload them into an existing deployment).
 4. Log in once at `/login` — this is what actually creates the admin account on Vercel (lazy-seeded from `ADMIN_USERNAME`/`ADMIN_PASSWORD` on first login attempt, since there's no server-boot hook to do it otherwise).
 
-**Cron frequency caveat:** `vercel.json` requests `/api/cron/sync` every 5 minutes. Vercel's **Hobby plan only allows once-per-day cron jobs** — it will silently coerce or reject a more frequent schedule. For anything more frequent than daily (including the 1-minute interval originally requested), you need a **Pro** plan or higher. If you're on Hobby, either upgrade or change the schedule in `vercel.json` to something like `"0 3 * * *"` (once daily) and accept that the dashboard's Online/Offline indicator will read "Offline" between runs, since it compares against the `syncIntervalMinutes` setting in the Settings page — set that to a value that matches your real cron cadence so the indicator isn't misleading.
+**Cron frequency caveat:** `vercel.json` requests `/api/cron/sync` **once daily** (`0 3 * * *`, 3am UTC) — this is the max frequency Vercel's **Hobby plan** allows. A more frequent schedule (e.g. every 5 minutes) isn't just throttled, it makes Vercel **reject the deployment entirely**, which is likely why earlier pushes didn't seem to update anything. If you're on a **Pro** plan or higher, you can tighten this schedule (down to per-minute). Either way, set **Sync Interval** on the Settings page to match your real cron cadence ("Daily" for Hobby) — the dashboard's Online/Offline indicator compares against that value, so a mismatch makes it look broken even when it's working as configured.
 
 ## Login
 
