@@ -59,12 +59,18 @@ a {
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.01em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 8px;
+}
+
+.sidebar-brand svg {
+  color: var(--accent);
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   padding: 8px 12px;
   flex: 1;
 }
@@ -79,6 +85,8 @@ a {
   color: var(--sidebar-text);
   font-size: 14px;
   font-weight: 500;
+  position: relative;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .sidebar-link:hover {
@@ -89,6 +97,17 @@ a {
 .sidebar-link.active {
   background: var(--sidebar-bg-active);
   color: var(--sidebar-text-active);
+}
+
+.sidebar-link.active::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
 }
 
 .sidebar-footer {
@@ -133,6 +152,7 @@ a {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .sidebar-logout:hover {
@@ -357,6 +377,64 @@ tbody tr:hover {
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.table-toolbar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: #fbfcfe;
+}
+
+.toolbar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toolbar-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.table-toolbar select,
+.table-toolbar input[type="date"] {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.btn-export {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.btn-export:hover {
+  background: var(--accent-hover);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 /* ---------- Forms / buttons ---------- */

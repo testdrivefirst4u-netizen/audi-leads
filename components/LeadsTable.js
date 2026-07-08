@@ -49,7 +49,24 @@ function FollowUpBadge({ lead }) {
   return <span className={`pill followup-${info.status}`}>{label}</span>;
 }
 
-export default function LeadsTable({ leads, search, onSearchChange, onLeadUpdated }) {
+export default function LeadsTable({
+  leads,
+  search,
+  onSearchChange,
+  model,
+  onModelChange,
+  models,
+  page,
+  totalPages,
+  total,
+  pageSize,
+  onPageChange,
+  exportRange,
+  onExportRangeChange,
+  onExport,
+  exporting,
+  onLeadUpdated,
+}) {
   const [selected, setSelected] = useState(null);
 
   function handleUpdated(updatedLead) {
@@ -57,10 +74,13 @@ export default function LeadsTable({ leads, search, onSearchChange, onLeadUpdate
     onLeadUpdated?.(updatedLead);
   }
 
+  const firstRow = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastRow = Math.min(page * pageSize, total);
+
   return (
     <div className="panel">
       <div className="panel-header">
-        <h2>Leads ({leads.length})</h2>
+        <h2>Leads ({total})</h2>
         <input
           className="search-input"
           placeholder="Search name, phone, email..."
@@ -69,64 +89,121 @@ export default function LeadsTable({ leads, search, onSearchChange, onLeadUpdate
         />
       </div>
 
+      <div className="table-toolbar">
+        <div className="toolbar-group">
+          <label className="toolbar-label">Model</label>
+          <select value={model} onChange={(e) => onModelChange(e.target.value)}>
+            <option value="">All models</option>
+            {models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="toolbar-group">
+          <label className="toolbar-label">From</label>
+          <input
+            type="date"
+            value={exportRange.from}
+            onChange={(e) => onExportRangeChange({ ...exportRange, from: e.target.value })}
+          />
+        </div>
+
+        <div className="toolbar-group">
+          <label className="toolbar-label">To</label>
+          <input
+            type="date"
+            value={exportRange.to}
+            onChange={(e) => onExportRangeChange({ ...exportRange, to: e.target.value })}
+          />
+        </div>
+
+        <button className="btn-sm btn-export" onClick={onExport} disabled={exporting}>
+          {exporting ? "Exporting..." : "Export to Excel"}
+        </button>
+      </div>
+
       {leads.length === 0 ? (
         <div className="empty-state">No leads yet. Configure your Google Sheet in Settings.</div>
       ) : (
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Model</th>
-                <th>Name</th>
-                <th>Phone</th>
-                <th>Email</th>
-                <th>Created</th>
-                <th>Campaign</th>
-                <th>Purchase Timeline</th>
-                <th>Exchange Plan</th>
-                <th>Showroom</th>
-                <th>Latest Remark</th>
-                <th>Next Follow-up</th>
-                <th>Updated At</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {leads.map((lead) => {
-                const remark = latestRemarkText(lead);
-                return (
-                  <tr key={lead._id}>
-                    <td>
-                      <ModelBadge model={lead.model} />
-                    </td>
-                    <td>
-                      <NameCell lead={lead} />
-                    </td>
-                    <td>{lead.phone || "-"}</td>
-                    <td className="text-muted">{lead.email || "-"}</td>
-                    <td>{pickField(lead.data, FIELD_MATCHERS.createdTime) || "-"}</td>
-                    <td>{pickField(lead.data, FIELD_MATCHERS.campaign) || "-"}</td>
-                    <td>{prettify(pickField(lead.data, FIELD_MATCHERS.purchaseTimeline)) || "-"}</td>
-                    <td>{prettify(pickField(lead.data, FIELD_MATCHERS.exchangePlan)) || "-"}</td>
-                    <td>{prettify(pickField(lead.data, FIELD_MATCHERS.showroom)) || "-"}</td>
-                    <td className="remark-cell" title={remark || ""}>
-                      {remark || <span className="hint">-</span>}
-                    </td>
-                    <td>
-                      <FollowUpBadge lead={lead} />
-                    </td>
-                    <td className="text-muted">{formatTime(lead.updatedAt)}</td>
-                    <td>
-                      <button className="btn-sm" onClick={() => setSelected(lead)}>
-                        Manage
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Model</th>
+                  <th>Name</th>
+                  <th>Phone</th>
+                  <th>Email</th>
+                  <th>Created</th>
+                  <th>Campaign</th>
+                  <th>Purchase Timeline</th>
+                  <th>Exchange Plan</th>
+                  <th>Showroom</th>
+                  <th>Latest Remark</th>
+                  <th>Next Follow-up</th>
+                  <th>Updated At</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {leads.map((lead, index) => {
+                  const remark = latestRemarkText(lead);
+                  return (
+                    <tr key={lead._id}>
+                      <td className="text-muted">{(page - 1) * pageSize + index + 1}</td>
+                      <td>
+                        <ModelBadge model={lead.model} />
+                      </td>
+                      <td>
+                        <NameCell lead={lead} />
+                      </td>
+                      <td>{lead.phone || "-"}</td>
+                      <td className="text-muted">{lead.email || "-"}</td>
+                      <td>{pickField(lead.data, FIELD_MATCHERS.createdTime) || "-"}</td>
+                      <td>{pickField(lead.data, FIELD_MATCHERS.campaign) || "-"}</td>
+                      <td>{prettify(pickField(lead.data, FIELD_MATCHERS.purchaseTimeline)) || "-"}</td>
+                      <td>{prettify(pickField(lead.data, FIELD_MATCHERS.exchangePlan)) || "-"}</td>
+                      <td>{prettify(pickField(lead.data, FIELD_MATCHERS.showroom)) || "-"}</td>
+                      <td className="remark-cell" title={remark || ""}>
+                        {remark || <span className="hint">-</span>}
+                      </td>
+                      <td>
+                        <FollowUpBadge lead={lead} />
+                      </td>
+                      <td className="text-muted">{formatTime(lead.updatedAt)}</td>
+                      <td>
+                        <button className="btn-sm" onClick={() => setSelected(lead)}>
+                          Manage
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="pagination">
+            <span className="hint">
+              {firstRow}-{lastRow} of {total}
+            </span>
+            <div className="pagination-controls">
+              <button className="btn-sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+                Prev
+              </button>
+              <span className="hint">
+                Page {page} of {totalPages}
+              </span>
+              <button className="btn-sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+                Next
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {selected && <LeadDetailModal lead={selected} onClose={() => setSelected(null)} onUpdated={handleUpdated} />}
