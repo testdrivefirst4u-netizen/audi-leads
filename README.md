@@ -1,13 +1,22 @@
 # Audi Leads Dashboard — Google Sheets → MongoDB
 
 A dashboard that stays in sync with a Google Sheet automatically. A background
-cron job polls the sheet on an interval, upserts new/changed rows into
-MongoDB, and pushes live updates to the browser over Socket.IO — no "Sync"
+job polls the sheet on an interval, upserts new/changed rows into MongoDB,
+and the dashboard polls the API every 10s to reflect changes — no "Sync"
 button anywhere.
 
 ```
-Google Sheet -> Background Sync Service (node-cron) -> MongoDB -> Dashboard (Socket.IO push)
+Google Sheet -> Background Sync -> MongoDB -> Dashboard (polls the API)
 ```
+
+This app runs in two different modes depending on where it's hosted, because
+the "background job" needs a persistent process to run on a schedule, which
+not every host provides:
+
+- **Local dev / any host with a persistent Node process** (Render, Railway, Fly.io, a VPS, etc.) — `server.js` runs a custom Node server that starts `node-cron` in-process (see `lib/cron.js`) and seeds the admin account on boot.
+- **Vercel** — serverless, no persistent process, so `server.js` never runs there at all. Instead, **Vercel Cron** (`vercel.json`) hits `/api/cron/sync` on a schedule, and the admin account is lazy-seeded on first login instead of at server boot. See "Deploying to Vercel" below.
+
+Either way, the sync logic itself (`lib/syncService.js`) is identical — only what triggers it differs.
 
 ## 1. Google Cloud service account setup
 
@@ -50,15 +59,29 @@ sync runs immediately, then every `syncIntervalMinutes`.
 ## How it works
 
 - **`lib/googleSheets.js`** — authenticates with the service account and reads all rows from the configured sheet/tab.
-- **`lib/syncService.js`** — for every row, hashes its contents and looks up an existing lead by Lead ID (or Phone). Inserts new rows, updates changed rows, skips unchanged rows, and writes a `SyncLog` entry every run.
-- **`lib/cron.js`** — schedules `runSync` with `node-cron` at the configured interval, and re-reads Settings every 15s to pick up interval changes made in the UI.
-- **`server.js`** — wires Next.js, MongoDB, Socket.IO, and the cron scheduler together. After each sync it emits `sync:status` and `leads:changed` events so every open dashboard updates without a page refresh.
-- **Dashboard (`pages/index.js`)** — shows the Sync Status card (last sync time, total records, new leads today, online/offline), a Follow-ups reminder card (overdue/today/upcoming counts), and a searchable Leads table, all updated live via Socket.IO.
-- **Settings (`pages/settings.js`)** — admin can change the Sheet ID, Sheet Tabs, and sync interval (1/5/15 min). Saving triggers an immediate sync so the change takes effect right away.
+- **`lib/syncService.js`** — for every row, hashes its contents and looks up an existing lead by Lead ID (or Phone). Inserts new rows, updates changed rows, skips unchanged rows, and writes a `SyncLog` entry every run. Platform-agnostic — takes no arguments, pushes nothing, just does the sync.
+- **`lib/cron.js`** + **`server.js`** — local-dev-only. Schedules `runSync` with `node-cron` at the configured interval, re-reading Settings every 15s to pick up interval changes made in the UI. Never runs on Vercel.
+- **`pages/api/cron/sync.js`** — the Vercel-side equivalent: calls the same `runSync()`, guarded by `CRON_SECRET`. Triggered on the schedule in `vercel.json`.
+- **Dashboard (`pages/index.js`)** — shows the Sync Status card (last sync time, total records, new leads today, online/offline), a Follow-ups reminder card (overdue/today/upcoming counts), and a searchable Leads table. Polls the API every 10s for updates.
+- **Settings (`pages/settings.js`)** — admin can change the Sheet ID, Sheet Tabs, and sync interval (1/5/15 min). Saving triggers an immediate (awaited) sync so the change takes effect right away.
+
+## Deploying to Vercel
+
+1. Push this repo to GitHub/GitLab/Bitbucket and import it into Vercel (or `vercel deploy`). Vercel auto-detects Next.js — `npm run build` / `next build` is all it runs; it ignores `server.js` and the `dev`/`start` scripts entirely.
+2. In the Vercel project's **Settings → Environment Variables**, add every variable from `.env`:
+   - `MONGODB_URI`
+   - `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY` (the service-account **JSON file won't be deployed** — it's gitignored — so these inline vars are mandatory on Vercel, not optional like they are locally)
+   - `GOOGLE_SHEET_ID`, `GOOGLE_SHEET_NAME`, `SYNC_INTERVAL_MINUTES`
+   - `AUTH_SECRET`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`
+   - `CRON_SECRET`
+3. Redeploy after adding env vars (Vercel doesn't hot-reload them into an existing deployment).
+4. Log in once at `/login` — this is what actually creates the admin account on Vercel (lazy-seeded from `ADMIN_USERNAME`/`ADMIN_PASSWORD` on first login attempt, since there's no server-boot hook to do it otherwise).
+
+**Cron frequency caveat:** `vercel.json` requests `/api/cron/sync` every 5 minutes. Vercel's **Hobby plan only allows once-per-day cron jobs** — it will silently coerce or reject a more frequent schedule. For anything more frequent than daily (including the 1-minute interval originally requested), you need a **Pro** plan or higher. If you're on Hobby, either upgrade or change the schedule in `vercel.json` to something like `"0 3 * * *"` (once daily) and accept that the dashboard's Online/Offline indicator will read "Offline" between runs, since it compares against the `syncIntervalMinutes` setting in the Settings page — set that to a value that matches your real cron cadence so the indicator isn't misleading.
 
 ## Login
 
-The whole dashboard sits behind a single admin login (`lib/auth.js` + `lib/seedAdmin.js`, JWT session cookie). Unauthenticated requests to any page or API route redirect to `/login` (pages) or 401 (API/Socket.IO). Log in at `/login` with `ADMIN_USERNAME`/`ADMIN_PASSWORD` from `.env`.
+The whole dashboard sits behind a single admin login (`lib/auth.js` + `lib/seedAdmin.js`, JWT session cookie). Unauthenticated requests to any page or API route redirect to `/login` (pages) or 401 (API). Log in at `/login` with `ADMIN_USERNAME`/`ADMIN_PASSWORD` from `.env`.
 
 ## CRM: remarks & follow-ups
 

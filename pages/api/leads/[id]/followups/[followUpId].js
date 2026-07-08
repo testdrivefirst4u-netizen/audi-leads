@@ -17,7 +17,6 @@ async function handler(req, res) {
   followUp.completedAt = followUp.completed ? new Date() : undefined;
   await lead.save();
 
-  if (global._io) global._io.emit("leads:changed", { updatedCount: 1 });
   res.status(200).json({ lead });
 }
 

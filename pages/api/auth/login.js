@@ -1,6 +1,7 @@
 const connectDB = require("../../../lib/db");
 const Admin = require("../../../models/Admin");
 const { verifyPassword, signSessionToken, serializeSessionCookie } = require("../../../lib/auth");
+const { seedAdmin } = require("../../../lib/seedAdmin");
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -11,6 +12,10 @@ export default async function handler(req, res) {
   }
 
   await connectDB();
+  // On Vercel, server.js (which seeds the admin on boot) never runs, so seed
+  // it here instead. Idempotent and cheap — safe to run on every login.
+  await seedAdmin();
+
   const admin = await Admin.findOne({ username });
   if (!admin) {
     return res.status(401).json({ error: "Invalid username or password" });

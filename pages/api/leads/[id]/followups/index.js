@@ -27,7 +27,6 @@ async function handler(req, res) {
 
   if (!lead) return res.status(404).json({ error: "Lead not found" });
 
-  if (global._io) global._io.emit("leads:changed", { updatedCount: 1 });
   res.status(200).json({ lead });
 }
 

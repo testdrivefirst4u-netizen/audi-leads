@@ -3,9 +3,10 @@ import Layout from "../components/Layout";
 import SyncStatusCard from "../components/SyncStatusCard";
 import FollowUpsCard from "../components/FollowUpsCard";
 import LeadsTable from "../components/LeadsTable";
-import { getSocket } from "../lib/socketClient";
 import { getSessionFromCookieHeader } from "../lib/auth";
 import { apiFetch } from "../lib/apiFetch";
+
+const POLL_INTERVAL_MS = 10000;
 
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);
@@ -49,26 +50,17 @@ export default function Dashboard({ username }) {
     return () => clearTimeout(timeout);
   }, [search, fetchLeads]);
 
-  // Live updates pushed from the background sync service
+  // Poll for changes made by the background sync (works the same whether the
+  // sync is triggered by local node-cron or a Vercel Cron hit — there's no
+  // persistent server to push updates from on Vercel, so we pull instead).
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket) return;
-
-    const onStatus = (payload) => setStatus(payload);
-    const onLeadsChanged = () => {
+    const interval = setInterval(() => {
+      fetchStatus();
       fetchLeads(search);
       fetchFollowUps();
-    };
-
-    socket.on("sync:status", onStatus);
-    socket.on("leads:changed", onLeadsChanged);
-
-    return () => {
-      socket.off("sync:status", onStatus);
-      socket.off("leads:changed", onLeadsChanged);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [search, fetchStatus, fetchLeads, fetchFollowUps]);
 
   function handleLeadUpdated(updatedLead) {
     setLeads((prev) => prev.map((l) => (l._id === updatedLead._id ? updatedLead : l)));

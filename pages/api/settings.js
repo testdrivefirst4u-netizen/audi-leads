@@ -29,7 +29,13 @@ async function handler(req, res) {
     });
 
     // Apply the new config immediately instead of waiting for the next tick.
-    runSync(global._io).catch((err) => console.error("Sync after settings update failed:", err));
+    // Awaited (not fire-and-forget) because serverless functions can freeze
+    // right after the response is sent, which would cut a background sync short.
+    try {
+      await runSync();
+    } catch (err) {
+      console.error("Sync after settings update failed:", err);
+    }
 
     return res.status(200).json({ settings });
   }
