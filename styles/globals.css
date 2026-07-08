@@ -256,6 +256,11 @@ a {
   box-shadow: 0 0 0 3px rgba(61, 90, 254, 0.15);
 }
 
+.table-scroll {
+  overflow: auto;
+  max-height: 640px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -263,6 +268,9 @@ table {
 }
 
 thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   text-align: left;
   padding: 12px 20px;
   color: var(--text-muted);
@@ -290,11 +298,65 @@ tbody tr:hover {
   background: #f8f9fc;
 }
 
+.text-muted {
+  color: var(--text-muted);
+}
+
 .empty-state {
   padding: 40px 18px;
   text-align: center;
   color: var(--text-muted);
   font-size: 14px;
+}
+
+.pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pill.followup-overdue {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.pill.followup-today {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.pill.followup-upcoming {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.lead-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.avatar-sm {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.remark-cell {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---------- Forms / buttons ---------- */

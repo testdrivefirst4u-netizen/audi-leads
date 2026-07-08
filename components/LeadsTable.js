@@ -1,24 +1,52 @@
 import { useState } from "react";
 import LeadDetailModal from "./LeadDetailModal";
-import { pickField, FIELD_MATCHERS } from "../lib/leadFields";
+import {
+  pickField,
+  FIELD_MATCHERS,
+  prettify,
+  modelColor,
+  avatarColor,
+  initials,
+  nextFollowUp,
+} from "../lib/leadFields";
 
 function formatTime(value) {
   if (!value) return "-";
   return new Date(value).toLocaleString();
 }
 
-function nextFollowUpLabel(lead) {
-  const pending = (lead.followUps || [])
-    .filter((f) => !f.completed)
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
-  if (!pending.length) return "-";
-  return new Date(pending[0].date).toLocaleDateString();
-}
-
 function latestRemarkText(lead) {
   const remarks = lead.remarks || [];
-  if (!remarks.length) return "-";
+  if (!remarks.length) return null;
   return remarks[remarks.length - 1].text;
+}
+
+function ModelBadge({ model }) {
+  if (!model) return <span>-</span>;
+  const { bg, text } = modelColor(model);
+  return (
+    <span className="pill" style={{ background: bg, color: text }}>
+      {model}
+    </span>
+  );
+}
+
+function NameCell({ lead }) {
+  return (
+    <div className="lead-name-cell">
+      <div className="avatar-sm" style={{ background: avatarColor(lead.name) }}>
+        {initials(lead.name)}
+      </div>
+      <span>{lead.name || "-"}</span>
+    </div>
+  );
+}
+
+function FollowUpBadge({ lead }) {
+  const info = nextFollowUp(lead);
+  if (!info) return <span className="hint">-</span>;
+  const label = info.date.toLocaleDateString();
+  return <span className={`pill followup-${info.status}`}>{label}</span>;
 }
 
 export default function LeadsTable({ leads, search, onSearchChange, onLeadUpdated }) {
@@ -44,7 +72,7 @@ export default function LeadsTable({ leads, search, onSearchChange, onLeadUpdate
       {leads.length === 0 ? (
         <div className="empty-state">No leads yet. Configure your Google Sheet in Settings.</div>
       ) : (
-        <div style={{ overflowX: "auto" }}>
+        <div className="table-scroll">
           <table>
             <thead>
               <tr>
@@ -64,27 +92,38 @@ export default function LeadsTable({ leads, search, onSearchChange, onLeadUpdate
               </tr>
             </thead>
             <tbody>
-              {leads.map((lead) => (
-                <tr key={lead._id}>
-                  <td>{lead.model || "-"}</td>
-                  <td>{lead.name || "-"}</td>
-                  <td>{lead.phone || "-"}</td>
-                  <td>{lead.email || "-"}</td>
-                  <td>{pickField(lead.data, FIELD_MATCHERS.createdTime) || "-"}</td>
-                  <td>{pickField(lead.data, FIELD_MATCHERS.campaign) || "-"}</td>
-                  <td>{pickField(lead.data, FIELD_MATCHERS.purchaseTimeline) || "-"}</td>
-                  <td>{pickField(lead.data, FIELD_MATCHERS.exchangePlan) || "-"}</td>
-                  <td>{pickField(lead.data, FIELD_MATCHERS.showroom) || "-"}</td>
-                  <td>{latestRemarkText(lead)}</td>
-                  <td>{nextFollowUpLabel(lead)}</td>
-                  <td>{formatTime(lead.updatedAt)}</td>
-                  <td>
-                    <button className="btn-sm" onClick={() => setSelected(lead)}>
-                      Manage
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {leads.map((lead) => {
+                const remark = latestRemarkText(lead);
+                return (
+                  <tr key={lead._id}>
+                    <td>
+                      <ModelBadge model={lead.model} />
+                    </td>
+                    <td>
+                      <NameCell lead={lead} />
+                    </td>
+                    <td>{lead.phone || "-"}</td>
+                    <td className="text-muted">{lead.email || "-"}</td>
+                    <td>{pickField(lead.data, FIELD_MATCHERS.createdTime) || "-"}</td>
+                    <td>{pickField(lead.data, FIELD_MATCHERS.campaign) || "-"}</td>
+                    <td>{prettify(pickField(lead.data, FIELD_MATCHERS.purchaseTimeline)) || "-"}</td>
+                    <td>{prettify(pickField(lead.data, FIELD_MATCHERS.exchangePlan)) || "-"}</td>
+                    <td>{prettify(pickField(lead.data, FIELD_MATCHERS.showroom)) || "-"}</td>
+                    <td className="remark-cell" title={remark || ""}>
+                      {remark || <span className="hint">-</span>}
+                    </td>
+                    <td>
+                      <FollowUpBadge lead={lead} />
+                    </td>
+                    <td className="text-muted">{formatTime(lead.updatedAt)}</td>
+                    <td>
+                      <button className="btn-sm" onClick={() => setSelected(lead)}>
+                        Manage
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
