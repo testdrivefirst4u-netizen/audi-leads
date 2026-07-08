@@ -1,22 +1,27 @@
 # Audi Leads Dashboard — Google Sheets → MongoDB
 
-A dashboard that stays in sync with a Google Sheet automatically. A background
-job polls the sheet on an interval, upserts new/changed rows into MongoDB,
-and the dashboard polls the API every 10s to reflect changes — no "Sync"
-button anywhere.
+A dashboard that stays in sync with a Google Sheet automatically. A single API
+endpoint pulls the sheet, upserts new/changed rows into MongoDB, and the
+dashboard polls the API every 10s to reflect changes — no "Sync" button
+anywhere.
 
 ```
-Google Sheet -> Background Sync -> MongoDB -> Dashboard (polls the API)
+Scheduler (any) -> /api/cron/sync -> MongoDB -> Dashboard (polls the API)
 ```
 
-This app runs in two different modes depending on where it's hosted, because
-the "background job" needs a persistent process to run on a schedule, which
-not every host provides:
+This is a **plain Next.js app — no custom server, no in-process scheduler**.
+`npm run dev` is just `next dev`; `npm start` is just `next start`. The sync
+itself (`lib/syncService.js`) has to be triggered by *something* on a
+schedule, and since a plain Next.js app has no long-running background
+process of its own, that trigger is external: hit `/api/cron/sync` (guarded
+by `CRON_SECRET`) from whatever scheduler is convenient —
 
-- **Local dev / any host with a persistent Node process** (Render, Railway, Fly.io, a VPS, etc.) — `server.js` runs a custom Node server that starts `node-cron` in-process (see `lib/cron.js`) and seeds the admin account on boot.
-- **Vercel** — serverless, no persistent process, so `server.js` never runs there at all. Instead, **Vercel Cron** (`vercel.json`) hits `/api/cron/sync` on a schedule, and the admin account is lazy-seeded on first login instead of at server boot. See "Deploying to Vercel" below.
+- **Vercel** — a `vercel.json` `crons` entry (see "Deploying to Vercel").
+- **Any other host, or local dev** — an external service like [cron-job.org](https://cron-job.org), a scheduled GitHub Actions workflow, Windows Task Scheduler / cron, or just a periodic `curl`.
 
-Either way, the sync logic itself (`lib/syncService.js`) is identical — only what triggers it differs.
+The admin account is lazy-seeded on first login (`lib/seedAdmin.js`, called
+from `pages/api/auth/login.js`) rather than at server boot, since there is no
+"boot" hook in a plain Next.js app either.
 
 ## 1. Google Cloud service account setup
 
@@ -42,32 +47,33 @@ Fill in `MONGODB_URI` and either `GOOGLE_APPLICATION_CREDENTIALS` (path to the J
 
 `GOOGLE_SHEET_ID` / `GOOGLE_SHEET_NAME` / `SYNC_INTERVAL_MINUTES` only seed the initial Settings document — they can be changed later from the **Settings** page in the dashboard without restarting the server.
 
-Also set `AUTH_SECRET` (a long random string), `ADMIN_USERNAME`, and `ADMIN_PASSWORD` — these seed the single admin login. Re-run the server to rotate the password (it re-syncs the DB with whatever is in `.env` on every boot).
+Also set `AUTH_SECRET` (a long random string), `ADMIN_USERNAME`, and `ADMIN_PASSWORD` — these seed the single admin login. The admin account is created/updated to match `.env` on every login attempt, so to rotate the password, change it in `.env` and just log in again.
 
 ## 3. Install & run
 
 ```bash
 npm install
-npm run dev      # development
-npm run build && npm start   # production
+npm run dev      # next dev
+npm run build && npm start   # next build && next start, for production
 ```
 
-The app boots a custom Node server (`server.js`) that serves Next.js, hosts
-Socket.IO at `/api/socket`, and starts the cron scheduler on startup — a full
-sync runs immediately, then every `syncIntervalMinutes`.
+This alone gets you a working dashboard, login, and Settings — but nothing
+syncs automatically, since a plain Next.js process has no background
+scheduler. To actually see leads sync while developing, either:
+- Click **Save Settings** on the Settings page whenever you want a fresh pull (it awaits a full sync before responding), or
+- Run a scheduler against your local server yourself, e.g. `curl -H "Authorization: Bearer <CRON_SECRET>" http://localhost:3000/api/cron/sync` on a loop.
 
 ## How it works
 
 - **`lib/googleSheets.js`** — authenticates with the service account and reads all rows from the configured sheet/tab.
-- **`lib/syncService.js`** — for every row, hashes its contents and looks up an existing lead by Lead ID (or Phone). Inserts new rows, updates changed rows, skips unchanged rows, and writes a `SyncLog` entry every run. Platform-agnostic — takes no arguments, pushes nothing, just does the sync.
-- **`lib/cron.js`** + **`server.js`** — local-dev-only. Schedules `runSync` with `node-cron` at the configured interval, re-reading Settings every 15s to pick up interval changes made in the UI. Never runs on Vercel.
-- **`pages/api/cron/sync.js`** — the Vercel-side equivalent: calls the same `runSync()`, guarded by `CRON_SECRET`. Triggered on the schedule in `vercel.json`.
+- **`lib/syncService.js`** — for every row, hashes its contents and looks up an existing lead by Lead ID (or Phone). Inserts new rows, updates changed rows, skips unchanged rows, and writes a `SyncLog` entry every run. Takes no arguments, pushes nothing — just does the sync, callable from anywhere.
+- **`pages/api/cron/sync.js`** — the one and only trigger point. Calls `runSync()`, guarded by `CRON_SECRET`. Point any scheduler at this URL.
 - **Dashboard (`pages/index.js`)** — shows the Sync Status card (last sync time, total records, new leads today, online/offline), a Follow-ups reminder card (overdue/today/upcoming counts), and a searchable Leads table. Polls the API every 10s for updates.
-- **Settings (`pages/settings.js`)** — admin can change the Sheet ID, Sheet Tabs, and sync interval (1/5/15 min, or Daily). Saving triggers an immediate (awaited) sync so the change takes effect right away.
+- **Settings (`pages/settings.js`)** — admin can change the Sheet ID, Sheet Tabs, and sync interval (1/5/15 min, or Daily — this is just the Online/Offline threshold, not an actual schedule). Saving triggers an immediate (awaited) sync.
 
 ## Deploying to Vercel
 
-1. Push this repo to GitHub/GitLab/Bitbucket and import it into Vercel (or `vercel deploy`). Vercel auto-detects Next.js — `npm run build` / `next build` is all it runs; it ignores `server.js` and the `dev`/`start` scripts entirely.
+1. Push this repo to GitHub/GitLab/Bitbucket and import it into Vercel (or `vercel deploy`). Vercel auto-detects Next.js — zero config needed.
 2. In the Vercel project's **Settings → Environment Variables**, add every variable from `.env`:
    - `MONGODB_URI`
    - `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY` (the service-account **JSON file won't be deployed** — it's gitignored — so these inline vars are mandatory on Vercel, not optional like they are locally)
@@ -75,9 +81,13 @@ sync runs immediately, then every `syncIntervalMinutes`.
    - `AUTH_SECRET`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`
    - `CRON_SECRET`
 3. Redeploy after adding env vars (Vercel doesn't hot-reload them into an existing deployment).
-4. Log in once at `/login` — this is what actually creates the admin account on Vercel (lazy-seeded from `ADMIN_USERNAME`/`ADMIN_PASSWORD` on first login attempt, since there's no server-boot hook to do it otherwise).
+4. Log in once at `/login` — this is what actually creates the admin account on Vercel (lazy-seeded from `ADMIN_USERNAME`/`ADMIN_PASSWORD` on first login attempt).
 
-**Cron frequency caveat:** `vercel.json` requests `/api/cron/sync` **once daily** (`0 3 * * *`, 3am UTC) — this is the max frequency Vercel's **Hobby plan** allows. A more frequent schedule (e.g. every 5 minutes) isn't just throttled, it makes Vercel **reject the deployment entirely**, which is likely why earlier pushes didn't seem to update anything. If you're on a **Pro** plan or higher, you can tighten this schedule (down to per-minute). Either way, set **Sync Interval** on the Settings page to match your real cron cadence ("Daily" for Hobby) — the dashboard's Online/Offline indicator compares against that value, so a mismatch makes it look broken even when it's working as configured.
+**Nothing triggers the sync automatically on Vercel until you add a scheduler.** There's no `vercel.json` in this repo currently. To add automatic sync:
+- Add a `vercel.json` with a `crons` entry pointing at `/api/cron/sync` (once-daily max on the Hobby plan — a more frequent schedule doesn't just get throttled, Vercel **rejects the entire deployment**), or
+- Point a free external scheduler (e.g. [cron-job.org](https://cron-job.org), or a scheduled GitHub Actions workflow) at your deployed `/api/cron/sync` URL with header `Authorization: Bearer <CRON_SECRET>`, on whatever interval you want.
+
+If you do add a schedule, set **Sync Interval** on the Settings page to match it — the Online/Offline indicator compares against that value, so a mismatch makes it look broken even when it's working as configured.
 
 ## Login
 

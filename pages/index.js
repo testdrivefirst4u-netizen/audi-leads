@@ -50,9 +50,8 @@ export default function Dashboard({ username }) {
     return () => clearTimeout(timeout);
   }, [search, fetchLeads]);
 
-  // Poll for changes made by the background sync (works the same whether the
-  // sync is triggered by local node-cron or a Vercel Cron hit — there's no
-  // persistent server to push updates from on Vercel, so we pull instead).
+  // Poll for changes made by the background sync (triggered externally via
+  // /api/cron/sync — no persistent server here to push updates from, so we pull instead).
   useEffect(() => {
     const interval = setInterval(() => {
       fetchStatus();
