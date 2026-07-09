@@ -36,6 +36,7 @@ const LeadSchema = new mongoose.Schema(
     name: { type: String },
     email: { type: String },
     model: { type: String, index: true }, // source sheet tab, e.g. "Q3", "A6"
+    canonicalModel: { type: String, index: true }, // folded down for filtering/charts, e.g. "Q5 jun" -> "Q5"
     data: { type: mongoose.Schema.Types.Mixed, default: {} }, // full row, keyed by sheet header
     rowNumber: { type: Number }, // 1-based row number in the sheet (excluding header)
     contentHash: { type: String, index: true },

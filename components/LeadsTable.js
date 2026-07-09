@@ -11,6 +11,7 @@ import {
   LEAD_STATUSES,
   statusColor,
 } from "../lib/leadFields";
+import { WhatsAppIcon, SortIcon, FireIcon } from "./icons";
 
 function formatTime(value) {
   if (!value) return "-";
@@ -23,12 +24,13 @@ function latestRemarkText(lead) {
   return remarks[remarks.length - 1].text;
 }
 
-function ModelBadge({ model }) {
-  if (!model) return <span>-</span>;
-  const { bg, text } = modelColor(model);
+function ModelBadge({ lead }) {
+  const label = lead.canonicalModel || lead.model;
+  if (!label) return <span>-</span>;
+  const { bg, text } = modelColor(label);
   return (
-    <span className="pill" style={{ background: bg, color: text }}>
-      {model}
+    <span className="pill" style={{ background: bg, color: text }} title={lead.model !== label ? lead.model : undefined}>
+      {label}
     </span>
   );
 }
@@ -48,6 +50,27 @@ function NameCell({ lead }) {
   );
 }
 
+function PhoneCell({ phone }) {
+  if (!phone) return <span>-</span>;
+  return (
+    <span className="phone-cell">
+      <a href={`tel:+${phone}`} onClick={(e) => e.stopPropagation()} title="Call">
+        {phone}
+      </a>
+      <a
+        href={`https://wa.me/${phone}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="whatsapp-link"
+        title="Chat on WhatsApp"
+      >
+        <WhatsAppIcon />
+      </a>
+    </span>
+  );
+}
+
 function FollowUpBadge({ lead }) {
   const info = nextFollowUp(lead);
   if (!info) return <span className="hint">-</span>;
@@ -64,6 +87,18 @@ function StatusBadge({ status }) {
   );
 }
 
+function SortableHeader({ label, field, sortBy, sortDir, onSort }) {
+  const active = sortBy === field;
+  return (
+    <th className="sortable-th" onClick={() => onSort(field)}>
+      <span className="sortable-th-inner">
+        {label}
+        <SortIcon direction={active ? sortDir : null} />
+      </span>
+    </th>
+  );
+}
+
 export default function LeadsTable({
   leads,
   search,
@@ -73,6 +108,11 @@ export default function LeadsTable({
   models,
   status,
   onStatusChange,
+  hotOnly,
+  onHotOnlyChange,
+  sortBy,
+  sortDir,
+  onSortChange,
   page,
   totalPages,
   total,
@@ -166,13 +206,23 @@ export default function LeadsTable({
           </>
         )}
 
+        <button
+          className={`btn-sm btn-hot ${hotOnly ? "active" : ""}`}
+          onClick={() => onHotOnlyChange(!hotOnly)}
+          title="Urgent leads with no calls or remarks yet"
+        >
+          <FireIcon /> Hot Leads
+        </button>
+
         <button className="btn-sm btn-export" onClick={onExport} disabled={exporting}>
           {exporting ? "Exporting..." : "Export to Excel"}
         </button>
       </div>
 
       {leads.length === 0 ? (
-        <div className="empty-state">No leads yet. Configure your Google Sheet in Settings.</div>
+        <div className="empty-state">
+          {hotOnly ? "No hot leads right now." : "No leads yet. Configure your Google Sheet in Settings."}
+        </div>
       ) : (
         <>
           <div className="table-scroll">
@@ -180,20 +230,21 @@ export default function LeadsTable({
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Model</th>
-                  <th>Name</th>
+                  <SortableHeader label="Model" field="canonicalModel" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
+                  <SortableHeader label="Name" field="name" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th>Phone</th>
                   <th>Email</th>
-                  <th>Status</th>
+                  <SortableHeader label="Status" field="status" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th>Calls</th>
-                  <th>Created</th>
+                  <th>Created (Sheet)</th>
                   <th>Campaign</th>
                   <th>Purchase Timeline</th>
                   <th>Exchange Plan</th>
                   <th>Showroom</th>
                   <th>Latest Remark</th>
                   <th>Next Follow-up</th>
-                  <th>Updated At</th>
+                  <SortableHeader label="Synced At" field="createdAt" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
+                  <SortableHeader label="Updated At" field="updatedAt" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th></th>
                 </tr>
               </thead>
@@ -204,12 +255,14 @@ export default function LeadsTable({
                     <tr key={lead._id}>
                       <td className="text-muted">{(page - 1) * pageSize + index + 1}</td>
                       <td>
-                        <ModelBadge model={lead.model} />
+                        <ModelBadge lead={lead} />
                       </td>
                       <td>
                         <NameCell lead={lead} />
                       </td>
-                      <td>{lead.phone || "-"}</td>
+                      <td>
+                        <PhoneCell phone={lead.phone} />
+                      </td>
                       <td className="text-muted">{lead.email || "-"}</td>
                       <td>
                         <StatusBadge status={lead.status} />
@@ -226,6 +279,7 @@ export default function LeadsTable({
                       <td>
                         <FollowUpBadge lead={lead} />
                       </td>
+                      <td className="text-muted">{formatTime(lead.createdAt)}</td>
                       <td className="text-muted">{formatTime(lead.updatedAt)}</td>
                       <td>
                         <button className="btn-sm" onClick={() => setSelected(lead)}>

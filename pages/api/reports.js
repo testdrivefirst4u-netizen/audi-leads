@@ -34,7 +34,7 @@ async function handler(req, res) {
   end.setUTCMonth(end.getUTCMonth() + 1);
 
   const leads = await Lead.find({ createdAt: { $gte: start, $lt: end } })
-    .select("model data status calls createdAt")
+    .select("model canonicalModel data status calls createdAt")
     .lean();
 
   const modelCounts = {};
@@ -43,7 +43,7 @@ async function handler(req, res) {
   let totalCalls = 0;
 
   for (const lead of leads) {
-    const modelName = lead.model || "Unknown";
+    const modelName = lead.canonicalModel || lead.model || "Unknown";
     modelCounts[modelName] = (modelCounts[modelName] || 0) + 1;
 
     const showroom = normalizeShowroom(pickField(lead.data, FIELD_MATCHERS.showroom));

@@ -10,7 +10,7 @@ const PAGE_SIZE = 20;
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);
   if (!session) return { redirect: { destination: "/login", permanent: false } };
-  return { props: { username: session.username } };
+  return { props: { username: session.username, initialHot: context.query.hot === "true" } };
 }
 
 // Turns an export date-range preset into concrete from/to date strings.
@@ -27,11 +27,14 @@ function resolveExportRange(preset, custom) {
   return { from: toISODate(from), to: toISODate(to) };
 }
 
-export default function LeadsPage({ username }) {
+export default function LeadsPage({ username, initialHot }) {
   const [leads, setLeads] = useState([]);
   const [search, setSearch] = useState("");
   const [model, setModel] = useState("");
   const [status, setStatus] = useState("");
+  const [hotOnly, setHotOnly] = useState(!!initialHot);
+  const [sortBy, setSortBy] = useState("updatedAt");
+  const [sortDir, setSortDir] = useState("desc");
   const [models, setModels] = useState([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -40,35 +43,40 @@ export default function LeadsPage({ username }) {
   const [customRange, setCustomRange] = useState({ from: "", to: "" });
   const [exporting, setExporting] = useState(false);
 
-  const fetchLeads = useCallback(async (q, m, s, p) => {
+  const fetchLeads = useCallback((filters) => {
     const params = new URLSearchParams({
-      search: q || "",
-      model: m || "",
-      status: s || "",
-      page: String(p || 1),
+      search: filters.search || "",
+      model: filters.model || "",
+      status: filters.status || "",
+      hot: filters.hotOnly ? "true" : "",
+      sortBy: filters.sortBy || "updatedAt",
+      sortDir: filters.sortDir || "desc",
+      page: String(filters.page || 1),
       pageSize: String(PAGE_SIZE),
     });
-    const res = await apiFetch(`/api/leads?${params.toString()}`);
-    const data = await res.json();
-    setLeads(data.leads || []);
-    setTotal(data.total || 0);
-    setTotalPages(data.totalPages || 1);
-    setModels(data.models || []);
+    return apiFetch(`/api/leads?${params.toString()}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setLeads(data.leads || []);
+        setTotal(data.total || 0);
+        setTotalPages(data.totalPages || 1);
+        setModels(data.models || []);
+      });
   }, []);
 
-  useEffect(() => {
-    fetchLeads("", "", "", 1);
-  }, [fetchLeads]);
+  const filters = { search, model, status, hotOnly, sortBy, sortDir, page };
 
   useEffect(() => {
-    const timeout = setTimeout(() => fetchLeads(search, model, status, page), 250);
+    const timeout = setTimeout(() => fetchLeads(filters), 250);
     return () => clearTimeout(timeout);
-  }, [search, model, status, page, fetchLeads]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, model, status, hotOnly, sortBy, sortDir, page, fetchLeads]);
 
   useEffect(() => {
-    const interval = setInterval(() => fetchLeads(search, model, status, page), POLL_INTERVAL_MS);
+    const interval = setInterval(() => fetchLeads(filters), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [search, model, status, page, fetchLeads]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, model, status, hotOnly, sortBy, sortDir, page, fetchLeads]);
 
   function handleSearchChange(value) {
     setSearch(value);
@@ -82,6 +90,21 @@ export default function LeadsPage({ username }) {
 
   function handleStatusChange(value) {
     setStatus(value);
+    setPage(1);
+  }
+
+  function handleHotOnlyChange(value) {
+    setHotOnly(value);
+    setPage(1);
+  }
+
+  function handleSortChange(field) {
+    if (sortBy === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(field);
+      setSortDir("desc");
+    }
     setPage(1);
   }
 
@@ -128,6 +151,11 @@ export default function LeadsPage({ username }) {
         onModelChange={handleModelChange}
         status={status}
         onStatusChange={handleStatusChange}
+        hotOnly={hotOnly}
+        onHotOnlyChange={handleHotOnlyChange}
+        sortBy={sortBy}
+        sortDir={sortDir}
+        onSortChange={handleSortChange}
         models={models}
         page={page}
         totalPages={totalPages}

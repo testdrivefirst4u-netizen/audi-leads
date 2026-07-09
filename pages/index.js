@@ -3,6 +3,7 @@ import Layout from "../components/Layout";
 import SyncStatusCard from "../components/SyncStatusCard";
 import FollowUpsCard from "../components/FollowUpsCard";
 import DueTodayBanner from "../components/DueTodayBanner";
+import HotLeadsCard from "../components/HotLeadsCard";
 import PipelineStats from "../components/PipelineStats";
 import LeadsTrendChart from "../components/LeadsTrendChart";
 import ModelBarChart from "../components/ModelBarChart";
@@ -59,6 +60,7 @@ export default function Dashboard({ username }) {
       <h1 className="page-title">Dashboard</h1>
 
       <DueTodayBanner followUps={pendingFollowUps} />
+      <HotLeadsCard count={stats?.hotCount} />
 
       <SyncStatusCard status={status} />
 

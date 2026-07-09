@@ -11,7 +11,7 @@ async function handler(req, res) {
   const { from, to, model = "", status = "" } = req.query;
 
   const filter = {};
-  if (model) filter.model = model;
+  if (model) filter.canonicalModel = model;
   if (status) filter.status = status;
   if (from || to) {
     filter.createdAt = {};
@@ -23,6 +23,7 @@ async function handler(req, res) {
 
   const header = [
     "Model",
+    "Sheet Tab",
     "Lead ID",
     "Name",
     "Phone",
@@ -49,6 +50,7 @@ async function handler(req, res) {
     const nextFollowUp = pendingFollowUps.length ? new Date(pendingFollowUps[0].date).toLocaleDateString() : "";
 
     return [
+      lead.canonicalModel || lead.model || "",
       lead.model || "",
       lead.leadId || "",
       lead.name || "",

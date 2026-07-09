@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { apiFetch } from "../lib/apiFetch";
 import { LEAD_STATUSES, statusColor } from "../lib/leadFields";
+import { WhatsAppIcon, PhoneIcon } from "./icons";
 
 function formatDate(d) {
   if (!d) return "-";
@@ -160,6 +161,22 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
           <span className="hint">
             Called {(lead.calls || []).length} time{(lead.calls || []).length === 1 ? "" : "s"}
           </span>
+          {lead.phone && (
+            <span className="phone-cell" style={{ marginLeft: "auto" }}>
+              <a href={`tel:+${lead.phone}`} title="Call">
+                <PhoneIcon /> {lead.phone}
+              </a>
+              <a
+                href={`https://wa.me/${lead.phone}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="whatsapp-link"
+                title="Chat on WhatsApp"
+              >
+                <WhatsAppIcon />
+              </a>
+            </span>
+          )}
         </div>
 
         <div className="modal-body">

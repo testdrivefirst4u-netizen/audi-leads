@@ -1,7 +1,7 @@
 const connectDB = require("../../lib/db");
 const Lead = require("../../models/Lead");
 const { requireAuth } = require("../../lib/auth");
-const { pickField, FIELD_MATCHERS } = require("../../lib/leadFields");
+const { pickField, FIELD_MATCHERS, isUrgentTimeline } = require("../../lib/leadFields");
 
 const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Won", "Lost"];
 const TREND_DAYS = 30;
@@ -41,7 +41,7 @@ async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   await connectDB();
-  const leads = await Lead.find({}).select("model data status createdAt calls").lean();
+  const leads = await Lead.find({}).select("model canonicalModel data status createdAt calls remarks").lean();
 
   const exchangeCounts = { Yes: 0, No: 0, "Not Filled": 0 };
   const showroomCounts = {};
@@ -59,15 +59,22 @@ async function handler(req, res) {
   }
 
   let totalCalls = 0;
+  let hotCount = 0;
 
   for (const lead of leads) {
     const exchangeValue = pickField(lead.data, FIELD_MATCHERS.exchangePlan);
     exchangeCounts[normalizeExchange(exchangeValue)]++;
 
+    const untouched =
+      (lead.status || "New") === "New" && !(lead.calls || []).length && !(lead.remarks || []).length;
+    if (untouched && isUrgentTimeline(pickField(lead.data, FIELD_MATCHERS.purchaseTimeline))) {
+      hotCount++;
+    }
+
     const showroom = normalizeShowroom(pickField(lead.data, FIELD_MATCHERS.showroom));
     if (showroom) showroomCounts[showroom] = (showroomCounts[showroom] || 0) + 1;
 
-    const modelName = lead.model || "Unknown";
+    const modelName = lead.canonicalModel || lead.model || "Unknown";
     modelCounts[modelName] = (modelCounts[modelName] || 0) + 1;
 
     const status = LEAD_STATUSES.includes(lead.status) ? lead.status : "New";
@@ -86,6 +93,7 @@ async function handler(req, res) {
   res.status(200).json({
     total: leads.length,
     totalCalls,
+    hotCount,
     exchange: toSortedArray(exchangeCounts),
     showroom: toSortedArray(showroomCounts),
     models: toSortedArray(modelCounts),
