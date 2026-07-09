@@ -19,6 +19,16 @@ const FollowUpSchema = new mongoose.Schema(
   { _id: true }
 );
 
+const CallLogSchema = new mongoose.Schema(
+  {
+    calledAt: { type: Date, default: Date.now },
+    note: { type: String, default: "" },
+  },
+  { _id: true }
+);
+
+const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Won", "Lost"];
+
 const LeadSchema = new mongoose.Schema(
   {
     leadId: { type: String, index: true, sparse: true },
@@ -30,8 +40,10 @@ const LeadSchema = new mongoose.Schema(
     rowNumber: { type: Number }, // 1-based row number in the sheet (excluding header)
     contentHash: { type: String, index: true },
     // CRM fields managed from the dashboard, untouched by the sheet sync.
+    status: { type: String, enum: LEAD_STATUSES, default: "New", index: true },
     remarks: { type: [RemarkSchema], default: [] },
     followUps: { type: [FollowUpSchema], default: [] },
+    calls: { type: [CallLogSchema], default: [] },
   },
   { timestamps: true }
 );
@@ -41,3 +53,4 @@ LeadSchema.index({ model: 1, leadId: 1 });
 LeadSchema.index({ model: 1, phone: 1 });
 
 module.exports = mongoose.models.Lead || mongoose.model("Lead", LeadSchema);
+module.exports.LEAD_STATUSES = LEAD_STATUSES;

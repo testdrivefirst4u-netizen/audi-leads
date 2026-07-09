@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { DashboardIcon, BellIcon, SettingsIcon, LogoutIcon } from "./icons";
+import { DashboardIcon, UsersIcon, BellIcon, ReportIcon, SettingsIcon, LogoutIcon } from "./icons";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", Icon: DashboardIcon },
+  { href: "/leads", label: "Leads", Icon: UsersIcon },
   { href: "/followups", label: "Follow-ups", Icon: BellIcon },
+  { href: "/reports", label: "Reports", Icon: ReportIcon },
   { href: "/settings", label: "Settings", Icon: SettingsIcon },
 ];
 

@@ -35,8 +35,9 @@ export default function LeadStatsPanel({ stats }) {
         <BarList rows={stats.showroom} emptyText="No showroom data in this sheet" />
       </div>
       <div className="stats-card">
-        <h3>Leads by Model</h3>
-        <BarList rows={stats.models} emptyText="No data" />
+        <h3>Calls Made</h3>
+        <div className="hero-number">{stats.totalCalls ?? 0}</div>
+        <div className="hint">Total call attempts logged across every lead</div>
       </div>
     </div>
   );

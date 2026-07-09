@@ -8,6 +8,8 @@ import {
   avatarColor,
   initials,
   nextFollowUp,
+  LEAD_STATUSES,
+  statusColor,
 } from "../lib/leadFields";
 
 function formatTime(value) {
@@ -53,6 +55,15 @@ function FollowUpBadge({ lead }) {
   return <span className={`pill followup-${info.status}`}>{label}</span>;
 }
 
+function StatusBadge({ status }) {
+  const { bg, text } = statusColor(status);
+  return (
+    <span className="pill" style={{ background: bg, color: text }}>
+      {status || "New"}
+    </span>
+  );
+}
+
 export default function LeadsTable({
   leads,
   search,
@@ -60,6 +71,8 @@ export default function LeadsTable({
   model,
   onModelChange,
   models,
+  status,
+  onStatusChange,
   page,
   totalPages,
   total,
@@ -103,6 +116,18 @@ export default function LeadsTable({
             {models.map((m) => (
               <option key={m} value={m}>
                 {m}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="toolbar-group">
+          <label className="toolbar-label">Status</label>
+          <select value={status} onChange={(e) => onStatusChange(e.target.value)}>
+            <option value="">All statuses</option>
+            {LEAD_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
               </option>
             ))}
           </select>
@@ -159,6 +184,8 @@ export default function LeadsTable({
                   <th>Name</th>
                   <th>Phone</th>
                   <th>Email</th>
+                  <th>Status</th>
+                  <th>Calls</th>
                   <th>Created</th>
                   <th>Campaign</th>
                   <th>Purchase Timeline</th>
@@ -184,6 +211,10 @@ export default function LeadsTable({
                       </td>
                       <td>{lead.phone || "-"}</td>
                       <td className="text-muted">{lead.email || "-"}</td>
+                      <td>
+                        <StatusBadge status={lead.status} />
+                      </td>
+                      <td className="text-muted">{(lead.calls || []).length}</td>
                       <td>{pickField(lead.data, FIELD_MATCHERS.createdTime) || "-"}</td>
                       <td>{pickField(lead.data, FIELD_MATCHERS.campaign) || "-"}</td>
                       <td>{prettify(pickField(lead.data, FIELD_MATCHERS.purchaseTimeline)) || "-"}</td>

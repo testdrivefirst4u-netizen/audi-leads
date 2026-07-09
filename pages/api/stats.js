@@ -3,6 +3,9 @@ const Lead = require("../../models/Lead");
 const { requireAuth } = require("../../lib/auth");
 const { pickField, FIELD_MATCHERS } = require("../../lib/leadFields");
 
+const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Won", "Lost"];
+const TREND_DAYS = 30;
+
 function normalizeExchange(value) {
   if (!value || !value.trim()) return "Not Filled";
   const v = value.trim().toLowerCase();
@@ -30,15 +33,32 @@ function toSortedArray(obj) {
     .sort((a, b) => b.count - a.count);
 }
 
+function dateKey(d) {
+  return new Date(d).toISOString().slice(0, 10);
+}
+
 async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   await connectDB();
-  const leads = await Lead.find({}).select("model data").lean();
+  const leads = await Lead.find({}).select("model data status createdAt calls").lean();
 
   const exchangeCounts = { Yes: 0, No: 0, "Not Filled": 0 };
   const showroomCounts = {};
   const modelCounts = {};
+  const pipelineCounts = Object.fromEntries(LEAD_STATUSES.map((s) => [s, 0]));
+
+  // Build the last TREND_DAYS days upfront so days with zero leads still show.
+  const trendMap = {};
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (let i = TREND_DAYS - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    trendMap[dateKey(d)] = 0;
+  }
+
+  let totalCalls = 0;
 
   for (const lead of leads) {
     const exchangeValue = pickField(lead.data, FIELD_MATCHERS.exchangePlan);
@@ -49,13 +69,28 @@ async function handler(req, res) {
 
     const modelName = lead.model || "Unknown";
     modelCounts[modelName] = (modelCounts[modelName] || 0) + 1;
+
+    const status = LEAD_STATUSES.includes(lead.status) ? lead.status : "New";
+    pipelineCounts[status]++;
+
+    totalCalls += (lead.calls || []).length;
+
+    if (lead.createdAt) {
+      const key = dateKey(lead.createdAt);
+      if (key in trendMap) trendMap[key]++;
+    }
   }
+
+  const trend = Object.entries(trendMap).map(([date, count]) => ({ date, count }));
 
   res.status(200).json({
     total: leads.length,
+    totalCalls,
     exchange: toSortedArray(exchangeCounts),
     showroom: toSortedArray(showroomCounts),
     models: toSortedArray(modelCounts),
+    pipeline: LEAD_STATUSES.map((label) => ({ label, count: pipelineCounts[label] })),
+    trend,
   });
 }
 

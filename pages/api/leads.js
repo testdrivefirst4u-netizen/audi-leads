@@ -6,7 +6,7 @@ async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   await connectDB();
-  const { search = "", model = "", page = "1", pageSize = "20" } = req.query;
+  const { search = "", model = "", status = "", page = "1", pageSize = "20" } = req.query;
 
   const filter = {};
   if (search) {
@@ -20,6 +20,9 @@ async function handler(req, res) {
   }
   if (model) {
     filter.model = model;
+  }
+  if (status) {
+    filter.status = status;
   }
 
   const pageNum = Math.max(1, Number(page) || 1);

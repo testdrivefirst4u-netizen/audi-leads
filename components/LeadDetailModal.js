@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { apiFetch } from "../lib/apiFetch";
+import { LEAD_STATUSES, statusColor } from "../lib/leadFields";
 
 function formatDate(d) {
   if (!d) return "-";
@@ -17,6 +18,9 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
   const [followDate, setFollowDate] = useState("");
   const [followNote, setFollowNote] = useState("");
   const [savingFollow, setSavingFollow] = useState(false);
+  const [callNote, setCallNote] = useState("");
+  const [savingCall, setSavingCall] = useState(false);
+  const [savingStatus, setSavingStatus] = useState(false);
   const [error, setError] = useState(null);
 
   if (!lead) return null;
@@ -82,8 +86,50 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
     }
   }
 
+  async function logCall(e) {
+    e.preventDefault();
+    setSavingCall(true);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/leads/${lead._id}/calls`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: callNote }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed to log call");
+      const data = await res.json();
+      setCallNote("");
+      onUpdated(data.lead);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingCall(false);
+    }
+  }
+
+  async function changeStatus(newStatus) {
+    setSavingStatus(true);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/leads/${lead._id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed to update status");
+      const data = await res.json();
+      onUpdated(data.lead);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingStatus(false);
+    }
+  }
+
   const sortedFollowUps = [...(lead.followUps || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
   const reversedRemarks = [...(lead.remarks || [])].reverse();
+  const reversedCalls = [...(lead.calls || [])].reverse();
+  const { bg: statusBg, text: statusText } = statusColor(lead.status);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -95,6 +141,25 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
           <button className="btn-icon" onClick={onClose}>
             &times;
           </button>
+        </div>
+
+        <div className="modal-status-bar">
+          <span className="toolbar-label">Status</span>
+          <select
+            value={lead.status || "New"}
+            onChange={(e) => changeStatus(e.target.value)}
+            disabled={savingStatus}
+            style={{ background: statusBg, color: statusText, fontWeight: 700, border: "none" }}
+          >
+            {LEAD_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <span className="hint">
+            Called {(lead.calls || []).length} time{(lead.calls || []).length === 1 ? "" : "s"}
+          </span>
         </div>
 
         <div className="modal-body">
@@ -130,6 +195,29 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
                 </li>
               ))}
               {reversedRemarks.length === 0 && <li className="hint">No remarks yet.</li>}
+            </ul>
+          </section>
+
+          <section>
+            <h3>Calls</h3>
+            <form onSubmit={logCall} className="inline-form">
+              <input
+                value={callNote}
+                onChange={(e) => setCallNote(e.target.value)}
+                placeholder="Note (optional) — e.g. no answer, interested"
+              />
+              <button className="btn" type="submit" disabled={savingCall}>
+                Log a Call
+              </button>
+            </form>
+            <ul className="timeline">
+              {reversedCalls.map((c) => (
+                <li key={c._id}>
+                  <span className="timeline-date">{formatDate(c.calledAt)}</span>
+                  <span>{c.note || "Called"}</span>
+                </li>
+              ))}
+              {reversedCalls.length === 0 && <li className="hint">No calls logged yet.</li>}
             </ul>
           </section>
 

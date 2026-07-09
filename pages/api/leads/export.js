@@ -8,10 +8,11 @@ async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   await connectDB();
-  const { from, to, model = "" } = req.query;
+  const { from, to, model = "", status = "" } = req.query;
 
   const filter = {};
   if (model) filter.model = model;
+  if (status) filter.status = status;
   if (from || to) {
     filter.createdAt = {};
     if (from) filter.createdAt.$gte = new Date(`${from}T00:00:00Z`);
@@ -26,6 +27,8 @@ async function handler(req, res) {
     "Name",
     "Phone",
     "Email",
+    "Status",
+    "Calls Made",
     "Created (Sheet)",
     "Campaign",
     "Purchase Timeline",
@@ -51,6 +54,8 @@ async function handler(req, res) {
       lead.name || "",
       lead.phone || "",
       lead.email || "",
+      lead.status || "New",
+      (lead.calls || []).length,
       pickField(lead.data, FIELD_MATCHERS.createdTime),
       pickField(lead.data, FIELD_MATCHERS.campaign),
       prettify(pickField(lead.data, FIELD_MATCHERS.purchaseTimeline)),
