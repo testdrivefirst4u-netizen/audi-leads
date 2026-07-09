@@ -1,5 +1,6 @@
 import { useRouter } from "next/router";
 import Sidebar from "./Sidebar";
+import TopBar from "./TopBar";
 
 export default function Layout({ children, username }) {
   const router = useRouter();
@@ -13,7 +14,10 @@ export default function Layout({ children, username }) {
     <div className="app-shell">
       <Sidebar username={username} onLogout={handleLogout} />
       <main className="main-content">
-        <div className="main-content-inner">{children}</div>
+        <div className="main-content-inner">
+          <TopBar />
+          {children}
+        </div>
       </main>
     </div>
   );

@@ -31,13 +31,17 @@ function ModelBadge({ model }) {
   );
 }
 
+const NEW_LEAD_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 function NameCell({ lead }) {
+  const isNew = lead.createdAt && Date.now() - new Date(lead.createdAt).getTime() < NEW_LEAD_WINDOW_MS;
   return (
     <div className="lead-name-cell">
       <div className="avatar-sm" style={{ background: avatarColor(lead.name) }}>
         {initials(lead.name)}
       </div>
       <span>{lead.name || "-"}</span>
+      {isNew && <span className="pill pill-new">New</span>}
     </div>
   );
 }
