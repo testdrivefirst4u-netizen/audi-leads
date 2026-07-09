@@ -3,7 +3,7 @@ const Lead = require("../../models/Lead");
 const { requireAuth } = require("../../lib/auth");
 const { pickField, FIELD_MATCHERS, isUrgentTimeline } = require("../../lib/leadFields");
 
-const SORTABLE_FIELDS = new Set(["name", "canonicalModel", "status", "createdAt", "updatedAt"]);
+const SORTABLE_FIELDS = new Set(["name", "canonicalModel", "status", "sheetCreatedAt"]);
 
 async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -14,9 +14,11 @@ async function handler(req, res) {
     model = "",
     status = "",
     hot = "",
+    from = "",
+    to = "",
     page = "1",
     pageSize = "20",
-    sortBy = "updatedAt",
+    sortBy = "sheetCreatedAt",
     sortDir = "desc",
   } = req.query;
 
@@ -37,10 +39,17 @@ async function handler(req, res) {
   if (status) {
     filter.status = status;
   }
+  // Filters on sheetCreatedAt — the date the lead actually came in on the
+  // sheet (its own create_time column), not when we happened to sync it.
+  if (from || to) {
+    filter.sheetCreatedAt = {};
+    if (from) filter.sheetCreatedAt.$gte = new Date(`${from}T00:00:00.000Z`);
+    if (to) filter.sheetCreatedAt.$lte = new Date(`${to}T23:59:59.999Z`);
+  }
 
   const pageNum = Math.max(1, Number(page) || 1);
   const pageSizeNum = Math.min(Math.max(1, Number(pageSize) || 20), 200);
-  const sortField = SORTABLE_FIELDS.has(sortBy) ? sortBy : "updatedAt";
+  const sortField = SORTABLE_FIELDS.has(sortBy) ? sortBy : "sheetCreatedAt";
   const sortDirection = sortDir === "asc" ? 1 : -1;
 
   // "Hot" leads (urgent purchase timeline + nobody's touched them yet) can't
@@ -54,8 +63,9 @@ async function handler(req, res) {
       "remarks.0": { $exists: false },
       "calls.0": { $exists: false },
       ...(model ? { canonicalModel: model } : {}),
+      ...(filter.sheetCreatedAt ? { sheetCreatedAt: filter.sheetCreatedAt } : {}),
     })
-      .sort({ createdAt: -1 })
+      .sort({ sheetCreatedAt: -1 })
       .lean();
 
     const searchLower = search.toLowerCase();

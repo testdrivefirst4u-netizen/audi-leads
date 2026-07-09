@@ -33,7 +33,7 @@ export default function LeadsPage({ username, initialHot }) {
   const [model, setModel] = useState("");
   const [status, setStatus] = useState("");
   const [hotOnly, setHotOnly] = useState(!!initialHot);
-  const [sortBy, setSortBy] = useState("updatedAt");
+  const [sortBy, setSortBy] = useState("sheetCreatedAt");
   const [sortDir, setSortDir] = useState("desc");
   const [models, setModels] = useState([]);
   const [page, setPage] = useState(1);
@@ -44,11 +44,14 @@ export default function LeadsPage({ username, initialHot }) {
   const [exporting, setExporting] = useState(false);
 
   const fetchLeads = useCallback((filters) => {
+    const { from, to } = resolveExportRange(filters.datePreset, filters.customRange);
     const params = new URLSearchParams({
       search: filters.search || "",
       model: filters.model || "",
       status: filters.status || "",
       hot: filters.hotOnly ? "true" : "",
+      from: from || "",
+      to: to || "",
       sortBy: filters.sortBy || "updatedAt",
       sortDir: filters.sortDir || "desc",
       page: String(filters.page || 1),
@@ -64,19 +67,19 @@ export default function LeadsPage({ username, initialHot }) {
       });
   }, []);
 
-  const filters = { search, model, status, hotOnly, sortBy, sortDir, page };
+  const filters = { search, model, status, hotOnly, sortBy, sortDir, page, datePreset: exportPreset, customRange };
 
   useEffect(() => {
     const timeout = setTimeout(() => fetchLeads(filters), 250);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, model, status, hotOnly, sortBy, sortDir, page, fetchLeads]);
+  }, [search, model, status, hotOnly, sortBy, sortDir, page, exportPreset, customRange, fetchLeads]);
 
   useEffect(() => {
     const interval = setInterval(() => fetchLeads(filters), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, model, status, hotOnly, sortBy, sortDir, page, fetchLeads]);
+  }, [search, model, status, hotOnly, sortBy, sortDir, page, exportPreset, customRange, fetchLeads]);
 
   function handleSearchChange(value) {
     setSearch(value);
@@ -95,6 +98,16 @@ export default function LeadsPage({ username, initialHot }) {
 
   function handleHotOnlyChange(value) {
     setHotOnly(value);
+    setPage(1);
+  }
+
+  function handleExportPresetChange(value) {
+    setExportPreset(value);
+    setPage(1);
+  }
+
+  function handleCustomRangeChange(value) {
+    setCustomRange(value);
     setPage(1);
   }
 
@@ -163,9 +176,9 @@ export default function LeadsPage({ username, initialHot }) {
         pageSize={PAGE_SIZE}
         onPageChange={setPage}
         exportPreset={exportPreset}
-        onExportPresetChange={setExportPreset}
+        onExportPresetChange={handleExportPresetChange}
         customRange={customRange}
-        onCustomRangeChange={setCustomRange}
+        onCustomRangeChange={handleCustomRangeChange}
         onExport={handleExport}
         exporting={exporting}
         onLeadUpdated={handleLeadUpdated}

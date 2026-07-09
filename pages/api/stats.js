@@ -48,10 +48,12 @@ async function handler(req, res) {
     const start = new Date(`${month}-01T00:00:00Z`);
     const end = new Date(start);
     end.setUTCMonth(end.getUTCMonth() + 1);
-    filter.createdAt = { $gte: start, $lt: end };
+    filter.sheetCreatedAt = { $gte: start, $lt: end };
   }
 
-  const leads = await Lead.find(filter).select("model canonicalModel data status createdAt calls remarks").lean();
+  const leads = await Lead.find(filter)
+    .select("model canonicalModel data status sheetCreatedAt calls remarks")
+    .lean();
 
   const exchangeCounts = { Yes: 0, No: 0, "Not Filled": 0 };
   const showroomCounts = {};
@@ -62,9 +64,9 @@ async function handler(req, res) {
   // selected month's calendar days if one was picked, otherwise a rolling
   // last-TREND_DAYS window.
   const trendMap = {};
-  if (filter.createdAt) {
-    const cursor = new Date(filter.createdAt.$gte);
-    while (cursor < filter.createdAt.$lt) {
+  if (filter.sheetCreatedAt) {
+    const cursor = new Date(filter.sheetCreatedAt.$gte);
+    while (cursor < filter.sheetCreatedAt.$lt) {
       trendMap[dateKey(cursor)] = 0;
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
@@ -102,8 +104,8 @@ async function handler(req, res) {
 
     totalCalls += (lead.calls || []).length;
 
-    if (lead.createdAt) {
-      const key = dateKey(lead.createdAt);
+    if (lead.sheetCreatedAt) {
+      const key = dateKey(lead.sheetCreatedAt);
       if (key in trendMap) trendMap[key]++;
     }
   }

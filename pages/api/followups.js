@@ -7,10 +7,13 @@ async function handler(req, res) {
 
   await connectDB();
 
-  const pending = await Lead.aggregate([
+  const includeAll = req.query.all === "true";
+  const match = includeAll ? {} : { "followUps.completed": false };
+
+  const followUps = await Lead.aggregate([
     { $match: { "followUps.0": { $exists: true } } },
     { $unwind: "$followUps" },
-    { $match: { "followUps.completed": false } },
+    ...(Object.keys(match).length ? [{ $match: match }] : []),
     {
       $project: {
         _id: 0,
@@ -22,12 +25,14 @@ async function handler(req, res) {
         followUpId: "$followUps._id",
         date: "$followUps.date",
         note: "$followUps.note",
+        completed: "$followUps.completed",
+        completedAt: "$followUps.completedAt",
       },
     },
     { $sort: { date: 1 } },
   ]);
 
-  res.status(200).json({ followUps: pending });
+  res.status(200).json({ followUps });
 }
 
 export default requireAuth(handler);

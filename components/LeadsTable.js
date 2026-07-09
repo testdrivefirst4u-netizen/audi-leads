@@ -13,9 +13,9 @@ import {
 } from "../lib/leadFields";
 import { WhatsAppIcon, SortIcon, FireIcon } from "./icons";
 
-function formatTime(value) {
+function formatDate(value) {
   if (!value) return "-";
-  return new Date(value).toLocaleString();
+  return new Date(value).toLocaleDateString();
 }
 
 function latestRemarkText(lead) {
@@ -38,7 +38,7 @@ function ModelBadge({ lead }) {
 const NEW_LEAD_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function NameCell({ lead }) {
-  const isNew = lead.createdAt && Date.now() - new Date(lead.createdAt).getTime() < NEW_LEAD_WINDOW_MS;
+  const isNew = lead.sheetCreatedAt && Date.now() - new Date(lead.sheetCreatedAt).getTime() < NEW_LEAD_WINDOW_MS;
   return (
     <div className="lead-name-cell">
       <div className="avatar-sm" style={{ background: avatarColor(lead.name) }}>
@@ -174,7 +174,7 @@ export default function LeadsTable({
         </div>
 
         <div className="toolbar-group">
-          <label className="toolbar-label">Export Range</label>
+          <label className="toolbar-label">Created Date</label>
           <select value={exportPreset} onChange={(e) => onExportPresetChange(e.target.value)}>
             <option value="all">All time</option>
             <option value="1m">Last 1 month</option>
@@ -234,7 +234,6 @@ export default function LeadsTable({
                   <SortableHeader label="Name" field="name" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th>Phone</th>
                   <th>Email</th>
-                  <th>created_time</th>
                   <SortableHeader label="Status" field="status" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th>Calls</th>
                   <th>Campaign</th>
@@ -243,8 +242,7 @@ export default function LeadsTable({
                   <th>Showroom</th>
                   <th>Latest Remark</th>
                   <th>Next Follow-up</th>
-                  <SortableHeader label="Created" field="createdAt" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
-                  <SortableHeader label="Updated At" field="updatedAt" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
+                  <SortableHeader label="Created" field="sheetCreatedAt" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th></th>
                 </tr>
               </thead>
@@ -264,7 +262,6 @@ export default function LeadsTable({
                         <PhoneCell phone={lead.phone} />
                       </td>
                       <td className="text-muted">{lead.email || "-"}</td>
-                      <td >{lead.created_time}</td>
                       <td>
                         <StatusBadge status={lead.status} />
                       </td>
@@ -279,8 +276,7 @@ export default function LeadsTable({
                       <td>
                         <FollowUpBadge lead={lead} />
                       </td>
-                      <td className="text-muted">{formatTime(lead.createdAt)}</td>
-                      <td className="text-muted">{formatTime(lead.updatedAt)}</td>
+                      <td className="text-muted">{formatDate(lead.sheetCreatedAt)}</td>
                       <td>
                         <button className="btn-sm" onClick={() => setSelected(lead)}>
                           Manage

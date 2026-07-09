@@ -33,8 +33,8 @@ async function handler(req, res) {
   const end = new Date(start);
   end.setUTCMonth(end.getUTCMonth() + 1);
 
-  const leads = await Lead.find({ createdAt: { $gte: start, $lt: end } })
-    .select("model canonicalModel data status calls createdAt")
+  const leads = await Lead.find({ sheetCreatedAt: { $gte: start, $lt: end } })
+    .select("model canonicalModel data status calls sheetCreatedAt")
     .lean();
 
   const modelCounts = {};

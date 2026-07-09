@@ -13,7 +13,15 @@ function formatDateOnly(d) {
   return new Date(d).toLocaleDateString();
 }
 
+const TABS = [
+  { key: "details", label: "Details" },
+  { key: "remarks", label: "Remarks" },
+  { key: "calls", label: "Calls" },
+  { key: "followups", label: "Follow-ups" },
+];
+
 export default function LeadDetailModal({ lead, onClose, onUpdated }) {
+  const [activeTab, setActiveTab] = useState("details");
   const [remarkText, setRemarkText] = useState("");
   const [savingRemark, setSavingRemark] = useState(false);
   const [followDate, setFollowDate] = useState("");
@@ -128,8 +136,8 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
   }
 
   const sortedFollowUps = [...(lead.followUps || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
-  const reversedRemarks = [...(lead.remarks || [])].reverse();
-  const reversedCalls = [...(lead.calls || [])].reverse();
+  const sortedRemarks = [...(lead.remarks || [])].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const sortedCalls = [...(lead.calls || [])].sort((a, b) => new Date(a.calledAt) - new Date(b.calledAt));
   const { bg: statusBg, text: statusText } = statusColor(lead.status);
 
   return (
@@ -179,9 +187,31 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
           )}
         </div>
 
+        <div className="modal-tabs">
+          {TABS.map((t) => {
+            const count =
+              t.key === "remarks"
+                ? sortedRemarks.length
+                : t.key === "calls"
+                ? sortedCalls.length
+                : t.key === "followups"
+                ? sortedFollowUps.length
+                : null;
+            return (
+              <button
+                key={t.key}
+                className={`modal-tab ${activeTab === t.key ? "active" : ""}`}
+                onClick={() => setActiveTab(t.key)}
+              >
+                {t.label}
+                {count !== null && <span className="modal-tab-count">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="modal-body">
-          <section>
-            <h3>Details</h3>
+          {activeTab === "details" && (
             <div className="kv-grid">
               {Object.entries(lead.data || {}).map(([k, v]) => (
                 <div key={k} className="kv-row">
@@ -190,86 +220,92 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
                 </div>
               ))}
             </div>
-          </section>
+          )}
 
-          <section>
-            <h3>Remarks</h3>
-            <form onSubmit={addRemark} className="inline-form">
-              <input
-                value={remarkText}
-                onChange={(e) => setRemarkText(e.target.value)}
-                placeholder="Add a remark..."
-              />
-              <button className="btn" type="submit" disabled={savingRemark}>
-                Add
-              </button>
-            </form>
-            <ul className="timeline">
-              {reversedRemarks.map((r) => (
-                <li key={r._id}>
-                  <span className="timeline-date">{formatDate(r.createdAt)}</span>
-                  <span>{r.text}</span>
-                </li>
-              ))}
-              {reversedRemarks.length === 0 && <li className="hint">No remarks yet.</li>}
-            </ul>
-          </section>
+          {activeTab === "remarks" && (
+            <section>
+              <form onSubmit={addRemark} className="inline-form">
+                <input
+                  value={remarkText}
+                  onChange={(e) => setRemarkText(e.target.value)}
+                  placeholder="Add a remark..."
+                />
+                <button className="btn" type="submit" disabled={savingRemark}>
+                  Add
+                </button>
+              </form>
+              <ul className="timeline">
+                {sortedRemarks.map((r, i) => (
+                  <li key={r._id}>
+                    <span className="timeline-num">{i + 1}</span>
+                    <span className="timeline-date">{formatDate(r.createdAt)}</span>
+                    <span>{r.text}</span>
+                  </li>
+                ))}
+                {sortedRemarks.length === 0 && <li className="hint">No remarks yet.</li>}
+              </ul>
+            </section>
+          )}
 
-          <section>
-            <h3>Calls</h3>
-            <form onSubmit={logCall} className="inline-form">
-              <input
-                value={callNote}
-                onChange={(e) => setCallNote(e.target.value)}
-                placeholder="Note (optional) — e.g. no answer, interested"
-              />
-              <button className="btn" type="submit" disabled={savingCall}>
-                Log a Call
-              </button>
-            </form>
-            <ul className="timeline">
-              {reversedCalls.map((c) => (
-                <li key={c._id}>
-                  <span className="timeline-date">{formatDate(c.calledAt)}</span>
-                  <span>{c.note || "Called"}</span>
-                </li>
-              ))}
-              {reversedCalls.length === 0 && <li className="hint">No calls logged yet.</li>}
-            </ul>
-          </section>
+          {activeTab === "calls" && (
+            <section>
+              <form onSubmit={logCall} className="inline-form">
+                <input
+                  value={callNote}
+                  onChange={(e) => setCallNote(e.target.value)}
+                  placeholder="Note (optional) — e.g. no answer, interested"
+                />
+                <button className="btn" type="submit" disabled={savingCall}>
+                  Log a Call
+                </button>
+              </form>
+              <ul className="timeline">
+                {sortedCalls.map((c, i) => (
+                  <li key={c._id}>
+                    <span className="timeline-num">{i + 1}</span>
+                    <span className="timeline-date">{formatDate(c.calledAt)}</span>
+                    <span>{c.note || "Called"}</span>
+                  </li>
+                ))}
+                {sortedCalls.length === 0 && <li className="hint">No calls logged yet.</li>}
+              </ul>
+            </section>
+          )}
 
-          <section>
-            <h3>Follow-ups</h3>
-            <form onSubmit={addFollowUp} className="inline-form">
-              <input type="date" value={followDate} onChange={(e) => setFollowDate(e.target.value)} required />
-              <input
-                value={followNote}
-                onChange={(e) => setFollowNote(e.target.value)}
-                placeholder="Note (optional)"
-              />
-              <button className="btn" type="submit" disabled={savingFollow}>
-                Schedule
-              </button>
-            </form>
-            <ul className="timeline">
-              {sortedFollowUps.map((f) => (
-                <li key={f._id}>
-                  <label className="followup-row">
-                    <input
-                      type="checkbox"
-                      checked={f.completed}
-                      onChange={(e) => toggleFollowUp(f._id, e.target.checked)}
-                    />
-                    <span className={f.completed ? "done" : ""}>
-                      {formatDateOnly(f.date)}
-                      {f.note ? ` — ${f.note}` : ""}
-                    </span>
-                  </label>
-                </li>
-              ))}
-              {sortedFollowUps.length === 0 && <li className="hint">No follow-ups scheduled.</li>}
-            </ul>
-          </section>
+          {activeTab === "followups" && (
+            <section>
+              <form onSubmit={addFollowUp} className="inline-form">
+                <input type="date" value={followDate} onChange={(e) => setFollowDate(e.target.value)} required />
+                <input
+                  value={followNote}
+                  onChange={(e) => setFollowNote(e.target.value)}
+                  placeholder="Note (optional)"
+                />
+                <button className="btn" type="submit" disabled={savingFollow}>
+                  Schedule
+                </button>
+              </form>
+              <ul className="timeline">
+                {sortedFollowUps.map((f, i) => (
+                  <li key={f._id}>
+                    <label className="followup-row">
+                      <span className="timeline-num">{i + 1}</span>
+                      <input
+                        type="checkbox"
+                        checked={f.completed}
+                        onChange={(e) => toggleFollowUp(f._id, e.target.checked)}
+                      />
+                      <span className={f.completed ? "done" : ""}>
+                        {formatDateOnly(f.date)}
+                        {f.note ? ` — ${f.note}` : ""}
+                      </span>
+                    </label>
+                  </li>
+                ))}
+                {sortedFollowUps.length === 0 && <li className="hint">No follow-ups scheduled.</li>}
+              </ul>
+            </section>
+          )}
 
           {error && <div className="save-msg err">{error}</div>}
         </div>

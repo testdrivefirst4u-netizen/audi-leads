@@ -14,12 +14,12 @@ async function handler(req, res) {
   if (model) filter.canonicalModel = model;
   if (status) filter.status = status;
   if (from || to) {
-    filter.createdAt = {};
-    if (from) filter.createdAt.$gte = new Date(`${from}T00:00:00Z`);
-    if (to) filter.createdAt.$lte = new Date(`${to}T23:59:59Z`);
+    filter.sheetCreatedAt = {};
+    if (from) filter.sheetCreatedAt.$gte = new Date(`${from}T00:00:00Z`);
+    if (to) filter.sheetCreatedAt.$lte = new Date(`${to}T23:59:59Z`);
   }
 
-  const leads = await Lead.find(filter).sort({ createdAt: -1 }).lean();
+  const leads = await Lead.find(filter).sort({ sheetCreatedAt: -1 }).lean();
 
   const header = [
     "Model",
@@ -30,15 +30,13 @@ async function handler(req, res) {
     "Email",
     "Status",
     "Calls Made",
-    "Created (Sheet)",
+    "Created",
     "Campaign",
     "Purchase Timeline",
     "Exchange Plan",
     "Showroom",
     "Latest Remark",
     "Next Follow-up",
-    "Synced At",
-    "Updated At",
   ];
 
   const rows = leads.map((lead) => {
@@ -58,15 +56,13 @@ async function handler(req, res) {
       lead.email || "",
       lead.status || "New",
       (lead.calls || []).length,
-      pickField(lead.data, FIELD_MATCHERS.createdTime),
+      lead.sheetCreatedAt ? new Date(lead.sheetCreatedAt).toLocaleDateString() : "",
       pickField(lead.data, FIELD_MATCHERS.campaign),
       prettify(pickField(lead.data, FIELD_MATCHERS.purchaseTimeline)),
       prettify(pickField(lead.data, FIELD_MATCHERS.exchangePlan)),
       prettify(pickField(lead.data, FIELD_MATCHERS.showroom)),
       latestRemark,
       nextFollowUp,
-      lead.createdAt ? new Date(lead.createdAt).toLocaleString() : "",
-      lead.updatedAt ? new Date(lead.updatedAt).toLocaleString() : "",
     ];
   });
 
