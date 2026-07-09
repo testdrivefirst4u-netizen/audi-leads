@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { DashboardIcon, BellIcon, SettingsIcon, LogoutIcon, CarIcon } from "./icons";
+import { DashboardIcon, BellIcon, SettingsIcon, LogoutIcon } from "./icons";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", Icon: DashboardIcon },
@@ -14,7 +14,8 @@ export default function Sidebar({ username, onLogout }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <CarIcon />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/audi-logo.png" alt="Audi" className="sidebar-brand-logo" />
         <span>Audi Leads</span>
       </div>
 
@@ -41,6 +42,11 @@ export default function Sidebar({ username, onLogout }) {
           <LogoutIcon />
           <span>Logout</span>
         </button>
+        <div className="sidebar-credit">
+          <span>Developed by</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/broaddcast-logo.svg" alt="Broaddcast" className="sidebar-credit-logo" />
+        </div>
       </div>
     </aside>
   );

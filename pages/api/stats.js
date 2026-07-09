@@ -1,0 +1,62 @@
+const connectDB = require("../../lib/db");
+const Lead = require("../../models/Lead");
+const { requireAuth } = require("../../lib/auth");
+const { pickField, FIELD_MATCHERS } = require("../../lib/leadFields");
+
+function normalizeExchange(value) {
+  if (!value || !value.trim()) return "Not Filled";
+  const v = value.trim().toLowerCase();
+  if (v.startsWith("yes")) return "Yes";
+  if (v.startsWith("no")) return "No";
+  return "Not Filled";
+}
+
+// Sheet columns spell "showroom"/"location" fields wildly differently per tab
+// and sometimes hold a Google Maps link instead of a city name — normalize by
+// looking for a known city name in the value rather than trusting its shape.
+function normalizeShowroom(value) {
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return null;
+  const v = value.toLowerCase();
+  if (v.includes("hyderabad")) return "Hyderabad";
+  if (v.includes("vijayawada")) return "Vijayawada";
+  if (v.includes("visakhapatnam") || v.includes("vizag")) return "Visakhapatnam";
+  return "Other";
+}
+
+function toSortedArray(obj) {
+  return Object.entries(obj)
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+async function handler(req, res) {
+  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
+
+  await connectDB();
+  const leads = await Lead.find({}).select("model data").lean();
+
+  const exchangeCounts = { Yes: 0, No: 0, "Not Filled": 0 };
+  const showroomCounts = {};
+  const modelCounts = {};
+
+  for (const lead of leads) {
+    const exchangeValue = pickField(lead.data, FIELD_MATCHERS.exchangePlan);
+    exchangeCounts[normalizeExchange(exchangeValue)]++;
+
+    const showroom = normalizeShowroom(pickField(lead.data, FIELD_MATCHERS.showroom));
+    if (showroom) showroomCounts[showroom] = (showroomCounts[showroom] || 0) + 1;
+
+    const modelName = lead.model || "Unknown";
+    modelCounts[modelName] = (modelCounts[modelName] || 0) + 1;
+  }
+
+  res.status(200).json({
+    total: leads.length,
+    exchange: toSortedArray(exchangeCounts),
+    showroom: toSortedArray(showroomCounts),
+    models: toSortedArray(modelCounts),
+  });
+}
+
+export default requireAuth(handler);

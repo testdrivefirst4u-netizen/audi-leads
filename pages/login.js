@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
 import { getSessionFromCookieHeader } from "../lib/auth";
-import { CarIcon } from "../components/icons";
 
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);
@@ -44,7 +43,10 @@ export default function LoginPage() {
     <div className="login-page">
       <form className="login-card" onSubmit={handleSubmit}>
         <div className="login-brand">
-          <CarIcon />
+          <div className="login-brand-badge">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/audi-logo.png" alt="Audi" />
+          </div>
           <span>Audi Leads</span>
         </div>
         <h1>Welcome back</h1>
@@ -65,6 +67,12 @@ export default function LoginPage() {
         </button>
 
         {error && <div className="save-msg err">{error}</div>}
+
+        <div className="login-credit">
+          <span>Developed by</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/broaddcast-logo.svg" alt="Broaddcast" />
+        </div>
       </form>
     </div>
   );

@@ -61,8 +61,10 @@ export default function LeadsTable({
   total,
   pageSize,
   onPageChange,
-  exportRange,
-  onExportRangeChange,
+  exportPreset,
+  onExportPresetChange,
+  customRange,
+  onCustomRangeChange,
   onExport,
   exporting,
   onLeadUpdated,
@@ -103,22 +105,37 @@ export default function LeadsTable({
         </div>
 
         <div className="toolbar-group">
-          <label className="toolbar-label">From</label>
-          <input
-            type="date"
-            value={exportRange.from}
-            onChange={(e) => onExportRangeChange({ ...exportRange, from: e.target.value })}
-          />
+          <label className="toolbar-label">Export Range</label>
+          <select value={exportPreset} onChange={(e) => onExportPresetChange(e.target.value)}>
+            <option value="all">All time</option>
+            <option value="1m">Last 1 month</option>
+            <option value="2m">Last 2 months</option>
+            <option value="3m">Last 3 months</option>
+            <option value="custom">Custom range</option>
+          </select>
         </div>
 
-        <div className="toolbar-group">
-          <label className="toolbar-label">To</label>
-          <input
-            type="date"
-            value={exportRange.to}
-            onChange={(e) => onExportRangeChange({ ...exportRange, to: e.target.value })}
-          />
-        </div>
+        {exportPreset === "custom" && (
+          <>
+            <div className="toolbar-group">
+              <label className="toolbar-label">From</label>
+              <input
+                type="date"
+                value={customRange.from}
+                onChange={(e) => onCustomRangeChange({ ...customRange, from: e.target.value })}
+              />
+            </div>
+
+            <div className="toolbar-group">
+              <label className="toolbar-label">To</label>
+              <input
+                type="date"
+                value={customRange.to}
+                onChange={(e) => onCustomRangeChange({ ...customRange, to: e.target.value })}
+              />
+            </div>
+          </>
+        )}
 
         <button className="btn-sm btn-export" onClick={onExport} disabled={exporting}>
           {exporting ? "Exporting..." : "Export to Excel"}
