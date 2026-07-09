@@ -9,6 +9,7 @@ const SyncLogSchema = new mongoose.Schema(
     newCount: { type: Number, default: 0 },
     updatedCount: { type: Number, default: 0 },
     unchangedCount: { type: Number, default: 0 },
+    skippedCount: { type: Number, default: 0 },
     errorMessage: { type: String },
   },
   { timestamps: true }

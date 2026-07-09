@@ -4,3 +4,6 @@ node_modules/
 .env.local
 credentials/
 npm-debug.log*
+
+.vercel
+.env*
