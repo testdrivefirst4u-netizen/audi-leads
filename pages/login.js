@@ -71,7 +71,7 @@ export default function LoginPage() {
         <div className="login-credit">
           <span>Developed by</span>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/broaddcast-logo.svg" alt="Broaddcast" />
+          <img src="/broaddcast-logo.svg" alt="Broaddcast" className="h-20" />
         </div>
       </form>
     </div>

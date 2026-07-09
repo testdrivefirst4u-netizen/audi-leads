@@ -19,18 +19,28 @@ export async function getServerSideProps(context) {
   return { props: { username: session.username } };
 }
 
+function currentMonth() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function monthLabel(month) {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
 export default function Dashboard({ username }) {
   const [status, setStatus] = useState(null);
   const [stats, setStats] = useState(null);
   const [pendingFollowUps, setPendingFollowUps] = useState([]);
+  const [month, setMonth] = useState(""); // "" = all time
 
   const fetchStatus = useCallback(async () => {
     const res = await apiFetch("/api/sync-status");
     setStatus(await res.json());
   }, []);
 
-  const fetchStats = useCallback(async () => {
-    const res = await apiFetch("/api/stats");
+  const fetchStats = useCallback(async (m) => {
+    const res = await apiFetch(`/api/stats${m ? `?month=${m}` : ""}`);
     setStats(await res.json());
   }, []);
 
@@ -42,18 +52,18 @@ export default function Dashboard({ username }) {
 
   useEffect(() => {
     fetchStatus();
-    fetchStats();
+    fetchStats(month);
     fetchFollowUps();
-  }, [fetchStatus, fetchStats, fetchFollowUps]);
+  }, [fetchStatus, fetchStats, fetchFollowUps, month]);
 
   useEffect(() => {
     const interval = setInterval(() => {
       fetchStatus();
-      fetchStats();
+      fetchStats(month);
       fetchFollowUps();
     }, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [fetchStatus, fetchStats, fetchFollowUps]);
+  }, [fetchStatus, fetchStats, fetchFollowUps, month]);
 
   return (
     <Layout username={username}>
@@ -64,12 +74,23 @@ export default function Dashboard({ username }) {
 
       <SyncStatusCard status={status} />
 
+      <div className="dashboard-month-filter">
+        <label className="toolbar-label">Month</label>
+        <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} max={currentMonth()} />
+        {month && (
+          <button className="btn-sm" onClick={() => setMonth("")}>
+            All Time
+          </button>
+        )}
+        <span className="hint">{month ? `Showing ${monthLabel(month)}` : "Showing all time"}</span>
+      </div>
+
       <h2 className="section-title">Lead Pipeline</h2>
       <PipelineStats pipeline={stats?.pipeline} />
 
       <div className="chart-row">
         <div className="chart-section">
-          <h3>Leads per day (last 30 days)</h3>
+          <h3>Leads per day {month ? `(${monthLabel(month)})` : "(last 30 days)"}</h3>
           <LeadsTrendChart trend={stats?.trend} />
         </div>
         <div className="chart-section">

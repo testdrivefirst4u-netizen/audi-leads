@@ -212,6 +212,26 @@ a {
   margin: 24px 0 12px;
 }
 
+.dashboard-month-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin: 20px 0;
+}
+
+.dashboard-month-filter input[type="month"] {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+
 /* ---------- Top bar / notifications ---------- */
 
 .topbar {

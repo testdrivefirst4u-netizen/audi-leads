@@ -236,14 +236,13 @@ export default function LeadsTable({
                   <th>Email</th>
                   <SortableHeader label="Status" field="status" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th>Calls</th>
-                  <th>Created (Sheet)</th>
                   <th>Campaign</th>
                   <th>Purchase Timeline</th>
                   <th>Exchange Plan</th>
                   <th>Showroom</th>
                   <th>Latest Remark</th>
                   <th>Next Follow-up</th>
-                  <SortableHeader label="Synced At" field="createdAt" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
+                  <SortableHeader label="Created" field="createdAt" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <SortableHeader label="Updated At" field="updatedAt" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th></th>
                 </tr>
@@ -268,7 +267,6 @@ export default function LeadsTable({
                         <StatusBadge status={lead.status} />
                       </td>
                       <td className="text-muted">{(lead.calls || []).length}</td>
-                      <td>{pickField(lead.data, FIELD_MATCHERS.createdTime) || "-"}</td>
                       <td>{pickField(lead.data, FIELD_MATCHERS.campaign) || "-"}</td>
                       <td>{prettify(pickField(lead.data, FIELD_MATCHERS.purchaseTimeline)) || "-"}</td>
                       <td>{prettify(pickField(lead.data, FIELD_MATCHERS.exchangePlan)) || "-"}</td>

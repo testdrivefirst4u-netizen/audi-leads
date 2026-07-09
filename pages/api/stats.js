@@ -41,21 +41,41 @@ async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   await connectDB();
-  const leads = await Lead.find({}).select("model canonicalModel data status createdAt calls remarks").lean();
+  const { month = "" } = req.query; // optional "YYYY-MM" — blank means all-time
+
+  const filter = {};
+  if (/^\d{4}-\d{2}$/.test(month)) {
+    const start = new Date(`${month}-01T00:00:00Z`);
+    const end = new Date(start);
+    end.setUTCMonth(end.getUTCMonth() + 1);
+    filter.createdAt = { $gte: start, $lt: end };
+  }
+
+  const leads = await Lead.find(filter).select("model canonicalModel data status createdAt calls remarks").lean();
 
   const exchangeCounts = { Yes: 0, No: 0, "Not Filled": 0 };
   const showroomCounts = {};
   const modelCounts = {};
   const pipelineCounts = Object.fromEntries(LEAD_STATUSES.map((s) => [s, 0]));
 
-  // Build the last TREND_DAYS days upfront so days with zero leads still show.
+  // Build the trend days upfront so days with zero leads still show — the
+  // selected month's calendar days if one was picked, otherwise a rolling
+  // last-TREND_DAYS window.
   const trendMap = {};
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  for (let i = TREND_DAYS - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    trendMap[dateKey(d)] = 0;
+  if (filter.createdAt) {
+    const cursor = new Date(filter.createdAt.$gte);
+    while (cursor < filter.createdAt.$lt) {
+      trendMap[dateKey(cursor)] = 0;
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  } else {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = TREND_DAYS - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      trendMap[dateKey(d)] = 0;
+    }
   }
 
   let totalCalls = 0;
@@ -91,6 +111,7 @@ async function handler(req, res) {
   const trend = Object.entries(trendMap).map(([date, count]) => ({ date, count }));
 
   res.status(200).json({
+    month: month || null,
     total: leads.length,
     totalCalls,
     hotCount,
