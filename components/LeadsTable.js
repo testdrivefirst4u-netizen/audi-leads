@@ -234,6 +234,7 @@ export default function LeadsTable({
                   <SortableHeader label="Name" field="name" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th>Phone</th>
                   <th>Email</th>
+                  <th>created_time</th>
                   <SortableHeader label="Status" field="status" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th>Calls</th>
                   <th>Campaign</th>
@@ -263,6 +264,7 @@ export default function LeadsTable({
                         <PhoneCell phone={lead.phone} />
                       </td>
                       <td className="text-muted">{lead.email || "-"}</td>
+                      <td >{lead.created_time}</td>
                       <td>
                         <StatusBadge status={lead.status} />
                       </td>

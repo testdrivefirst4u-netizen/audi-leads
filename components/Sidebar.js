@@ -36,18 +36,27 @@ export default function Sidebar({ username, onLogout }) {
       <div className="sidebar-footer">
         {username && (
           <div className="sidebar-user">
-            <div className="sidebar-user-avatar">{username.charAt(0).toUpperCase()}</div>
+            <div className="sidebar-user-avatar">
+              {username.charAt(0).toUpperCase()}
+            </div>
             <span>{username}</span>
           </div>
         )}
+
         <button className="sidebar-logout" onClick={onLogout}>
           <LogoutIcon />
           <span>Logout</span>
         </button>
+
         <div className="sidebar-credit">
           <span>Developed by</span>
+
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/broaddcast-logo.svg" alt="Broaddcast" className="sidebar-credit-logo" />
+          <img
+            src="/broaddcast-logo.svg"
+            alt="Broaddcast"
+            className="sidebar-credit-logo"
+          />
         </div>
       </div>
     </aside>
