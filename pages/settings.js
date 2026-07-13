@@ -7,6 +7,9 @@ import { apiFetch } from "../lib/apiFetch";
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);
   if (!session) return { redirect: { destination: "/login", permanent: false } };
+  if (session.role && session.role !== "admin") {
+    return { redirect: { destination: "/", permanent: false } };
+  }
   return { props: { username: session.username } };
 }
 
@@ -20,7 +23,7 @@ export default function SettingsPage({ username }) {
   }, []);
 
   return (
-    <Layout username={username}>
+    <Layout username={username} role="admin">
       <h1 className="page-title">Google Sheets Sync Settings</h1>
       {settings ? (
         <SettingsForm initial={settings} onSaved={setSettings} />

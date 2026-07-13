@@ -1,7 +1,7 @@
 const connectDB = require("../../lib/db");
 const Settings = require("../../models/Settings");
 const { runSync, getSettings } = require("../../lib/syncService");
-const { requireAuth } = require("../../lib/auth");
+const { requireAdmin } = require("../../lib/auth");
 
 async function handler(req, res) {
   await connectDB();
@@ -43,4 +43,4 @@ async function handler(req, res) {
   res.status(405).json({ error: "Method not allowed" });
 }
 
-export default requireAuth(handler);
+export default requireAdmin(handler);

@@ -7,7 +7,7 @@ import { apiFetch } from "../lib/apiFetch";
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);
   if (!session) return { redirect: { destination: "/login", permanent: false } };
-  return { props: { username: session.username } };
+  return { props: { username: session.username, role: session.role || "admin" } };
 }
 
 function currentMonth() {
@@ -41,7 +41,7 @@ function BarList({ rows, emptyText }) {
   );
 }
 
-export default function ReportsPage({ username }) {
+export default function ReportsPage({ username, role }) {
   const [month, setMonth] = useState(currentMonth());
   const [report, setReport] = useState(null);
   const [exporting, setExporting] = useState(false);
@@ -83,7 +83,7 @@ export default function ReportsPage({ username }) {
   }
 
   return (
-    <Layout username={username}>
+    <Layout username={username} role={role}>
       <h1 className="page-title">Monthly Reports</h1>
 
       <div className="table-toolbar rounded-xl border border-border mb-5">

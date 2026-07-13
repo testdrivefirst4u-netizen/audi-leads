@@ -1,5 +1,6 @@
 const connectDB = require("../../../lib/db");
 const Admin = require("../../../models/Admin");
+const Agent = require("../../../models/Agent");
 const { verifyPassword, signSessionToken, serializeSessionCookie } = require("../../../lib/auth");
 const { seedAdmin } = require("../../../lib/seedAdmin");
 
@@ -18,18 +19,34 @@ export default async function handler(req, res) {
     await seedAdmin();
 
     const admin = await Admin.findOne({ username });
-    if (!admin) {
+    if (admin) {
+      const valid = await verifyPassword(password, admin.passwordHash);
+      if (!valid) return res.status(401).json({ error: "Invalid username or password" });
+
+      const token = signSessionToken({ sub: String(admin._id), username: admin.username, role: "admin" });
+      res.setHeader("Set-Cookie", serializeSessionCookie(token));
+      return res.status(200).json({ username: admin.username, role: "admin" });
+    }
+
+    const agent = await Agent.findOne({ username, active: true });
+    if (!agent) {
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
-    const valid = await verifyPassword(password, admin.passwordHash);
+    const valid = await verifyPassword(password, agent.passwordHash);
     if (!valid) {
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
-    const token = signSessionToken({ sub: String(admin._id), username: admin.username });
+    const token = signSessionToken({
+      sub: String(agent._id),
+      username: agent.username,
+      name: agent.name,
+      role: "agent",
+      agentId: String(agent._id),
+    });
     res.setHeader("Set-Cookie", serializeSessionCookie(token));
-    res.status(200).json({ username: admin.username });
+    res.status(200).json({ username: agent.username, name: agent.name, role: "agent" });
   } catch (err) {
     // Surface config problems (missing AUTH_SECRET/MONGODB_URI, bad Atlas
     // connection string, etc.) as a clear message instead of a bare 500 —

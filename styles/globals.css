@@ -485,10 +485,6 @@
     @apply text-muted whitespace-nowrap text-xs;
   }
 
-  .timeline-num {
-    @apply flex-none inline-flex items-center justify-center w-5 h-5 rounded-full bg-accent-soft text-accent text-[11px] font-semibold;
-  }
-
   .followup-row {
     @apply flex items-center gap-2 cursor-pointer;
   }

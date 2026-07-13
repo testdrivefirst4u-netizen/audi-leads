@@ -10,7 +10,13 @@ const PAGE_SIZE = 20;
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);
   if (!session) return { redirect: { destination: "/login", permanent: false } };
-  return { props: { username: session.username, initialHot: context.query.hot === "true" } };
+  return {
+    props: {
+      username: session.username,
+      role: session.role || "admin",
+      initialHot: context.query.hot === "true",
+    },
+  };
 }
 
 // Turns an export date-range preset into concrete from/to date strings.
@@ -27,15 +33,17 @@ function resolveExportRange(preset, custom) {
   return { from: toISODate(from), to: toISODate(to) };
 }
 
-export default function LeadsPage({ username, initialHot }) {
+export default function LeadsPage({ username, role, initialHot }) {
   const [leads, setLeads] = useState([]);
   const [search, setSearch] = useState("");
   const [model, setModel] = useState("");
   const [status, setStatus] = useState("");
+  const [agentFilter, setAgentFilter] = useState("");
   const [hotOnly, setHotOnly] = useState(!!initialHot);
   const [sortBy, setSortBy] = useState("sheetCreatedAt");
   const [sortDir, setSortDir] = useState("desc");
   const [models, setModels] = useState([]);
+  const [agents, setAgents] = useState([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -49,6 +57,7 @@ export default function LeadsPage({ username, initialHot }) {
       search: filters.search || "",
       model: filters.model || "",
       status: filters.status || "",
+      agent: filters.agentFilter || "",
       hot: filters.hotOnly ? "true" : "",
       from: from || "",
       to: to || "",
@@ -64,22 +73,34 @@ export default function LeadsPage({ username, initialHot }) {
         setTotal(data.total || 0);
         setTotalPages(data.totalPages || 1);
         setModels(data.models || []);
+        setAgents(data.agents || []);
       });
   }, []);
 
-  const filters = { search, model, status, hotOnly, sortBy, sortDir, page, datePreset: exportPreset, customRange };
+  const filters = {
+    search,
+    model,
+    status,
+    agentFilter,
+    hotOnly,
+    sortBy,
+    sortDir,
+    page,
+    datePreset: exportPreset,
+    customRange,
+  };
 
   useEffect(() => {
     const timeout = setTimeout(() => fetchLeads(filters), 250);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, model, status, hotOnly, sortBy, sortDir, page, exportPreset, customRange, fetchLeads]);
+  }, [search, model, status, agentFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, fetchLeads]);
 
   useEffect(() => {
     const interval = setInterval(() => fetchLeads(filters), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, model, status, hotOnly, sortBy, sortDir, page, exportPreset, customRange, fetchLeads]);
+  }, [search, model, status, agentFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, fetchLeads]);
 
   function handleSearchChange(value) {
     setSearch(value);
@@ -99,6 +120,23 @@ export default function LeadsPage({ username, initialHot }) {
   function handleHotOnlyChange(value) {
     setHotOnly(value);
     setPage(1);
+  }
+
+  function handleAgentFilterChange(value) {
+    setAgentFilter(value);
+    setPage(1);
+  }
+
+  async function handleReassign(leadId, agentId) {
+    const res = await apiFetch(`/api/leads/${leadId}/assign`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentId: agentId || null }),
+    });
+    if (!res.ok) return undefined;
+    const data = await res.json();
+    handleLeadUpdated(data.lead);
+    return data.lead;
   }
 
   function handleExportPresetChange(value) {
@@ -132,6 +170,7 @@ export default function LeadsPage({ username, initialHot }) {
       const params = new URLSearchParams();
       if (model) params.set("model", model);
       if (status) params.set("status", status);
+      if (agentFilter) params.set("agent", agentFilter);
       if (from) params.set("from", from);
       if (to) params.set("to", to);
 
@@ -154,7 +193,7 @@ export default function LeadsPage({ username, initialHot }) {
   }
 
   return (
-    <Layout username={username}>
+    <Layout username={username} role={role}>
       <h1 className="page-title">Leads</h1>
       <LeadsTable
         leads={leads}
@@ -164,6 +203,11 @@ export default function LeadsPage({ username, initialHot }) {
         onModelChange={handleModelChange}
         status={status}
         onStatusChange={handleStatusChange}
+        agentFilter={agentFilter}
+        onAgentFilterChange={handleAgentFilterChange}
+        agents={agents}
+        role={role}
+        onReassign={handleReassign}
         hotOnly={hotOnly}
         onHotOnlyChange={handleHotOnlyChange}
         sortBy={sortBy}

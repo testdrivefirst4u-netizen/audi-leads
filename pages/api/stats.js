@@ -50,6 +50,9 @@ async function handler(req, res) {
     end.setUTCMonth(end.getUTCMonth() + 1);
     filter.sheetCreatedAt = { $gte: start, $lt: end };
   }
+  if (req.session.role === "agent") {
+    filter.assignedTo = req.session.agentId;
+  }
 
   const leads = await Lead.find(filter)
     .select("model canonicalModel data status sheetCreatedAt calls remarks")

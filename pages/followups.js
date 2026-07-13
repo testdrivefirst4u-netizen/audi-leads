@@ -7,7 +7,7 @@ import { apiFetch } from "../lib/apiFetch";
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);
   if (!session) return { redirect: { destination: "/login", permanent: false } };
-  return { props: { username: session.username } };
+  return { props: { username: session.username, role: session.role || "admin" } };
 }
 
 function formatDate(d) {
@@ -71,7 +71,7 @@ function FollowUpGroup({ title, items, onComplete, onReopen, numbered }) {
   );
 }
 
-export default function FollowUpsPage({ username }) {
+export default function FollowUpsPage({ username, role }) {
   const [followUps, setFollowUps] = useState([]);
 
   const load = useCallback(async () => {
@@ -109,7 +109,7 @@ export default function FollowUpsPage({ username }) {
   const { overdue, today, upcoming } = bucketFollowUps(pending);
 
   return (
-    <Layout username={username}>
+    <Layout username={username} role={role}>
       <h1 className="page-title">Follow-up Reminders</h1>
       <FollowUpGroup title="Overdue" items={overdue} onComplete={markDone} />
       <FollowUpGroup title="Due Today" items={today} onComplete={markDone} />

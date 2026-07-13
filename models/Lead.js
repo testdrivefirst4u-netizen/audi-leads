@@ -47,6 +47,7 @@ const LeadSchema = new mongoose.Schema(
     contentHash: { type: String, index: true },
     // CRM fields managed from the dashboard, untouched by the sheet sync.
     status: { type: String, enum: LEAD_STATUSES, default: "New", index: true },
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "Agent", index: true },
     remarks: { type: [RemarkSchema], default: [] },
     followUps: { type: [FollowUpSchema], default: [] },
     calls: { type: [CallLogSchema], default: [] },

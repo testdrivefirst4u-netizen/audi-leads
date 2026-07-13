@@ -52,7 +52,7 @@ export default function LoginPage() {
           </div>
           <span className="text-[15px] font-bold text-ink">Audi Leads</span>
         </div>
-        <h1 className="text-xl font-bold m-0 mb-1 text-ink">Welcome back</h1>
+        <h1 className="m-0 mb-1 text-xl font-bold text-ink">Welcome back</h1>
         <p className="text-[13px] text-muted m-0 mb-6">Sign in to view and manage leads.</p>
 
         <div className="field">
@@ -74,7 +74,7 @@ export default function LoginPage() {
         <div className="flex items-center justify-center gap-1.5 mt-6 pt-4 border-t border-border text-[11px] text-muted uppercase tracking-wide">
           <span>Developed by</span>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/broaddcast-logo.svg" alt="Broaddcast" className="h-3 w-auto object-contain" />
+          <img src="/broaddcast-logo.svg" alt="Broaddcast" className="object-contain w-auto h-12" />
         </div>
       </form>
     </div>

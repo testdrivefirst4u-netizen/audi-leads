@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const connectDB = require("../../lib/db");
 const Lead = require("../../models/Lead");
 const { requireAuth } = require("../../lib/auth");
@@ -9,6 +10,9 @@ async function handler(req, res) {
 
   const includeAll = req.query.all === "true";
   const match = includeAll ? {} : { "followUps.completed": false };
+  if (req.session.role === "agent") {
+    match.assignedTo = new mongoose.Types.ObjectId(req.session.agentId);
+  }
 
   const followUps = await Lead.aggregate([
     { $match: { "followUps.0": { $exists: true } } },

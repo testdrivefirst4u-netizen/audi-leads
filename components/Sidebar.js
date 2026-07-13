@@ -1,17 +1,19 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { DashboardIcon, UsersIcon, BellIcon, ReportIcon, SettingsIcon, LogoutIcon } from "./icons";
+import { DashboardIcon, UsersIcon, BellIcon, ReportIcon, AgentIcon, SettingsIcon, LogoutIcon } from "./icons";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", Icon: DashboardIcon },
   { href: "/leads", label: "Leads", Icon: UsersIcon },
   { href: "/followups", label: "Follow-ups", Icon: BellIcon },
   { href: "/reports", label: "Reports", Icon: ReportIcon },
+  { href: "/agents", label: "Agents", Icon: AgentIcon, adminOnly: true },
   // { href: "/settings", label: "Settings", Icon: SettingsIcon },
 ];
 
-export default function Sidebar({ username, onLogout }) {
+export default function Sidebar({ username, role, onLogout }) {
   const router = useRouter();
+  const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || role === "admin");
 
   return (
     <aside className="sticky top-0 flex flex-col h-screen w-60 shrink-0 bg-sidebar text-sidebar-text">
@@ -22,7 +24,7 @@ export default function Sidebar({ username, onLogout }) {
       </div>
 
       <nav className="flex flex-col flex-1 gap-1 px-3 py-2">
-        {NAV_ITEMS.map(({ href, label, Icon }) => {
+        {navItems.map(({ href, label, Icon }) => {
           const active = router.pathname === href;
           return (
             <Link

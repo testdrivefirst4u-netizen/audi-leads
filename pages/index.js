@@ -16,7 +16,7 @@ const POLL_INTERVAL_MS = 10000;
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);
   if (!session) return { redirect: { destination: "/login", permanent: false } };
-  return { props: { username: session.username } };
+  return { props: { username: session.username, role: session.role || "admin" } };
 }
 
 function currentMonth() {
@@ -28,16 +28,17 @@ function monthLabel(month) {
   return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
-export default function Dashboard({ username }) {
+export default function Dashboard({ username, role }) {
   const [status, setStatus] = useState(null);
   const [stats, setStats] = useState(null);
   const [pendingFollowUps, setPendingFollowUps] = useState([]);
   const [month, setMonth] = useState(""); // "" = all time
 
   const fetchStatus = useCallback(async () => {
+    if (role !== "admin") return;
     const res = await apiFetch("/api/sync-status");
     setStatus(await res.json());
-  }, []);
+  }, [role]);
 
   const fetchStats = useCallback(async (m) => {
     const res = await apiFetch(`/api/stats${m ? `?month=${m}` : ""}`);
@@ -66,13 +67,13 @@ export default function Dashboard({ username }) {
   }, [fetchStatus, fetchStats, fetchFollowUps, month]);
 
   return (
-    <Layout username={username}>
+    <Layout username={username} role={role}>
       <h1 className="page-title">Dashboard</h1>
 
       <DueTodayBanner followUps={pendingFollowUps} />
       <HotLeadsCard count={stats?.hotCount} />
 
-      <SyncStatusCard status={status} />
+      {role === "admin" && <SyncStatusCard status={status} />}
 
       <div className="dashboard-month-filter">
         <label className="toolbar-label">Month</label>

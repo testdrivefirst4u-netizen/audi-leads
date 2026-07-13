@@ -87,6 +87,27 @@ function StatusBadge({ status }) {
   );
 }
 
+function AgentCell({ lead, agents, role, onReassign }) {
+  if (role !== "admin") {
+    return <span className="text-muted">{lead.assignedTo?.name || "Unassigned"}</span>;
+  }
+  return (
+    <select
+      value={lead.assignedTo?._id || ""}
+      onChange={(e) => onReassign(lead._id, e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      className="text-[13px]"
+    >
+      <option value="">Unassigned</option>
+      {agents.map((a) => (
+        <option key={a._id} value={a._id}>
+          {a.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function SortableHeader({ label, field, sortBy, sortDir, onSort }) {
   const active = sortBy === field;
   return (
@@ -108,6 +129,11 @@ export default function LeadsTable({
   models,
   status,
   onStatusChange,
+  agentFilter,
+  onAgentFilterChange,
+  agents,
+  role,
+  onReassign,
   hotOnly,
   onHotOnlyChange,
   sortBy,
@@ -127,6 +153,11 @@ export default function LeadsTable({
   onLeadUpdated,
 }) {
   const [selected, setSelected] = useState(null);
+
+  async function handleReassign(leadId, agentId) {
+    const updated = await onReassign(leadId, agentId);
+    if (updated && selected?._id === leadId) setSelected(updated);
+  }
 
   function handleUpdated(updatedLead) {
     setSelected(updatedLead);
@@ -172,6 +203,21 @@ export default function LeadsTable({
             ))}
           </select>
         </div>
+
+        {role === "admin" && (
+          <div className="toolbar-group">
+            <label className="toolbar-label">Agent</label>
+            <select value={agentFilter} onChange={(e) => onAgentFilterChange(e.target.value)}>
+              <option value="">All agents</option>
+              <option value="unassigned">Unassigned</option>
+              {agents.map((a) => (
+                <option key={a._id} value={a._id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="toolbar-group">
           <label className="toolbar-label">Created Date</label>
@@ -234,6 +280,7 @@ export default function LeadsTable({
                   <SortableHeader label="Name" field="name" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th>Phone</th>
                   <th>Email</th>
+                  <th>Agent</th>
                   <SortableHeader label="Status" field="status" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th>Calls</th>
                   <th>Campaign</th>
@@ -262,6 +309,9 @@ export default function LeadsTable({
                         <PhoneCell phone={lead.phone} />
                       </td>
                       <td className="text-muted">{lead.email || "-"}</td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <AgentCell lead={lead} agents={agents} role={role} onReassign={handleReassign} />
+                      </td>
                       <td>
                         <StatusBadge status={lead.status} />
                       </td>
@@ -308,7 +358,16 @@ export default function LeadsTable({
         </>
       )}
 
-      {selected && <LeadDetailModal lead={selected} onClose={() => setSelected(null)} onUpdated={handleUpdated} />}
+      {selected && (
+        <LeadDetailModal
+          lead={selected}
+          onClose={() => setSelected(null)}
+          onUpdated={handleUpdated}
+          agents={agents}
+          role={role}
+          onReassign={handleReassign}
+        />
+      )}
     </div>
   );
 }

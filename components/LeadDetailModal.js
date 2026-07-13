@@ -15,7 +15,7 @@ function formatDateOnly(d) {
 
 const TYPE_LABELS = { remark: "Remark", call: "Call", followup: "Follow-up" };
 
-export default function LeadDetailModal({ lead, onClose, onUpdated }) {
+export default function LeadDetailModal({ lead, onClose, onUpdated, agents = [], role, onReassign }) {
   const [showDetails, setShowDetails] = useState(false);
   const [remarkText, setRemarkText] = useState("");
   const [logCall, setLogCall] = useState(false);
@@ -118,7 +118,9 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
 
   // Remarks, calls, and follow-ups are three separate sub-collections on the
   // lead, but reps think of them as one activity history — merge them into a
-  // single chronological, numbered timeline instead of splitting into tabs.
+  // single chronological timeline. Each entry is labeled with its own
+  // per-type count ("Remark 1", "Call 1", "Remark 2"...) rather than one
+  // shared position number, so the label reads naturally on its own.
   const history = [
     ...(lead.remarks || []).map((r) => ({ type: "remark", at: r.createdAt, id: r._id, text: r.text })),
     ...(lead.calls || []).map((c) => ({ type: "call", at: c.calledAt, id: c._id, text: c.note || "Called" })),
@@ -131,6 +133,12 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
       completed: f.completed,
     })),
   ].sort((a, b) => new Date(a.at) - new Date(b.at));
+
+  const typeRunningCount = { remark: 0, call: 0, followup: 0 };
+  for (const item of history) {
+    typeRunningCount[item.type] += 1;
+    item.typeIndex = typeRunningCount[item.type];
+  }
 
   const { bg: statusBg, text: statusText } = statusColor(lead.status);
 
@@ -163,6 +171,22 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
           <span className="hint">
             Called {(lead.calls || []).length} time{(lead.calls || []).length === 1 ? "" : "s"}
           </span>
+          {role === "admin" ? (
+            <select
+              value={lead.assignedTo?._id || ""}
+              onChange={(e) => onReassign?.(lead._id, e.target.value)}
+              className="text-[13px]"
+            >
+              <option value="">Unassigned</option>
+              {agents.map((a) => (
+                <option key={a._id} value={a._id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            lead.assignedTo?.name && <span className="pill bg-accent-soft text-accent">{lead.assignedTo.name}</span>
+          )}
           {lead.phone && (
             <span className="phone-cell" style={{ marginLeft: "auto" }}>
               <a href={`tel:+${lead.phone}`} title="Call">
@@ -201,10 +225,11 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
           <section>
             <h3>History</h3>
             <ul className="timeline">
-              {history.map((item, i) => (
+              {history.map((item) => (
                 <li key={`${item.type}-${item.id}`}>
-                  <span className="timeline-num">{i + 1}</span>
-                  <span className={`pill timeline-type timeline-type-${item.type}`}>{TYPE_LABELS[item.type]}</span>
+                  <span className={`pill timeline-type timeline-type-${item.type}`}>
+                    {TYPE_LABELS[item.type]} {item.typeIndex}
+                  </span>
                   {item.type === "followup" ? (
                     <label className="followup-row">
                       <input

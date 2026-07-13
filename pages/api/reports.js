@@ -33,7 +33,12 @@ async function handler(req, res) {
   const end = new Date(start);
   end.setUTCMonth(end.getUTCMonth() + 1);
 
-  const leads = await Lead.find({ sheetCreatedAt: { $gte: start, $lt: end } })
+  const filter = { sheetCreatedAt: { $gte: start, $lt: end } };
+  if (req.session.role === "agent") {
+    filter.assignedTo = req.session.agentId;
+  }
+
+  const leads = await Lead.find(filter)
     .select("model canonicalModel data status calls sheetCreatedAt")
     .lean();
 

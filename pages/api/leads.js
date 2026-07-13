@@ -1,5 +1,6 @@
 const connectDB = require("../../lib/db");
 const Lead = require("../../models/Lead");
+const Agent = require("../../models/Agent");
 const { requireAuth } = require("../../lib/auth");
 const { pickField, FIELD_MATCHERS, isUrgentTimeline } = require("../../lib/leadFields");
 
@@ -16,6 +17,7 @@ async function handler(req, res) {
     hot = "",
     from = "",
     to = "",
+    agent = "",
     page = "1",
     pageSize = "20",
     sortBy = "sheetCreatedAt",
@@ -47,10 +49,20 @@ async function handler(req, res) {
     if (to) filter.sheetCreatedAt.$lte = new Date(`${to}T23:59:59.999Z`);
   }
 
+  // Agents only ever see their own queue. Sessions issued before agent
+  // accounts existed have no role claim — treated as admin (see lib/auth.js).
+  if (req.session.role === "agent") {
+    filter.assignedTo = req.session.agentId;
+  } else if (agent) {
+    filter.assignedTo = agent === "unassigned" ? null : agent;
+  }
+
   const pageNum = Math.max(1, Number(page) || 1);
   const pageSizeNum = Math.min(Math.max(1, Number(pageSize) || 20), 200);
   const sortField = SORTABLE_FIELDS.has(sortBy) ? sortBy : "sheetCreatedAt";
   const sortDirection = sortDir === "asc" ? 1 : -1;
+
+  const agentList = req.session.role === "admin" || !req.session.role ? await Agent.find({ active: true }).select("name").lean() : [];
 
   // "Hot" leads (urgent purchase timeline + nobody's touched them yet) can't
   // be expressed as a simple Mongo filter, since the timeline answer lives
@@ -64,8 +76,10 @@ async function handler(req, res) {
       "calls.0": { $exists: false },
       ...(model ? { canonicalModel: model } : {}),
       ...(filter.sheetCreatedAt ? { sheetCreatedAt: filter.sheetCreatedAt } : {}),
+      ...(filter.assignedTo !== undefined ? { assignedTo: filter.assignedTo } : {}),
     })
       .sort({ sheetCreatedAt: -1 })
+      .populate("assignedTo", "name")
       .lean();
 
     const searchLower = search.toLowerCase();
@@ -97,6 +111,7 @@ async function handler(req, res) {
       pageSize: pageSizeNum,
       totalPages: Math.max(1, Math.ceil(total / pageSizeNum)),
       models: models.filter(Boolean).sort(),
+      agents: agentList,
     });
   }
 
@@ -105,6 +120,7 @@ async function handler(req, res) {
       .sort({ [sortField]: sortDirection })
       .skip((pageNum - 1) * pageSizeNum)
       .limit(pageSizeNum)
+      .populate("assignedTo", "name")
       .lean(),
     Lead.countDocuments(filter),
     Lead.distinct("canonicalModel"),
@@ -117,6 +133,7 @@ async function handler(req, res) {
     pageSize: pageSizeNum,
     totalPages: Math.max(1, Math.ceil(total / pageSizeNum)),
     models: models.filter(Boolean).sort(),
+    agents: agentList,
   });
 }
 

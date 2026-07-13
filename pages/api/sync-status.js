@@ -1,7 +1,7 @@
 const connectDB = require("../../lib/db");
 const SyncLog = require("../../models/SyncLog");
 const { buildStatusPayload } = require("../../lib/syncService");
-const { requireAuth } = require("../../lib/auth");
+const { requireAdmin } = require("../../lib/auth");
 
 async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -25,4 +25,4 @@ async function handler(req, res) {
   res.status(200).json(payload);
 }
 
-export default requireAuth(handler);
+export default requireAdmin(handler);

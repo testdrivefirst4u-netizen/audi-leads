@@ -8,7 +8,8 @@ async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   await connectDB();
-  const leads = await Lead.find({})
+  const filter = req.session.role === "agent" ? { assignedTo: req.session.agentId } : {};
+  const leads = await Lead.find(filter)
     .select("name phone model createdAt")
     .sort({ createdAt: -1 })
     .limit(20)
