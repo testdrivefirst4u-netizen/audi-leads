@@ -18,6 +18,7 @@ async function handler(req, res) {
     from = "",
     to = "",
     agent = "",
+    location = "",
     page = "1",
     pageSize = "20",
     sortBy = "sheetCreatedAt",
@@ -40,6 +41,9 @@ async function handler(req, res) {
   }
   if (status) {
     filter.status = status;
+  }
+  if (location) {
+    filter.location = location === "unfilled" ? { $in: [null, ""] } : location;
   }
   // Filters on sheetCreatedAt — the date the lead actually came in on the
   // sheet (its own create_time column), not when we happened to sync it.
@@ -77,6 +81,7 @@ async function handler(req, res) {
       ...(model ? { canonicalModel: model } : {}),
       ...(filter.sheetCreatedAt ? { sheetCreatedAt: filter.sheetCreatedAt } : {}),
       ...(filter.assignedTo !== undefined ? { assignedTo: filter.assignedTo } : {}),
+      ...(filter.location ? { location: filter.location } : {}),
     })
       .sort({ sheetCreatedAt: -1 })
       .populate("assignedTo", "name")

@@ -39,6 +39,7 @@ export default function LeadsPage({ username, role, initialHot }) {
   const [model, setModel] = useState("");
   const [status, setStatus] = useState("");
   const [agentFilter, setAgentFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
   const [hotOnly, setHotOnly] = useState(!!initialHot);
   const [sortBy, setSortBy] = useState("sheetCreatedAt");
   const [sortDir, setSortDir] = useState("desc");
@@ -58,6 +59,7 @@ export default function LeadsPage({ username, role, initialHot }) {
       model: filters.model || "",
       status: filters.status || "",
       agent: filters.agentFilter || "",
+      location: filters.locationFilter || "",
       hot: filters.hotOnly ? "true" : "",
       from: from || "",
       to: to || "",
@@ -82,6 +84,7 @@ export default function LeadsPage({ username, role, initialHot }) {
     model,
     status,
     agentFilter,
+    locationFilter,
     hotOnly,
     sortBy,
     sortDir,
@@ -94,13 +97,13 @@ export default function LeadsPage({ username, role, initialHot }) {
     const timeout = setTimeout(() => fetchLeads(filters), 250);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, model, status, agentFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, fetchLeads]);
+  }, [search, model, status, agentFilter, locationFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, fetchLeads]);
 
   useEffect(() => {
     const interval = setInterval(() => fetchLeads(filters), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, model, status, agentFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, fetchLeads]);
+  }, [search, model, status, agentFilter, locationFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, fetchLeads]);
 
   function handleSearchChange(value) {
     setSearch(value);
@@ -124,6 +127,11 @@ export default function LeadsPage({ username, role, initialHot }) {
 
   function handleAgentFilterChange(value) {
     setAgentFilter(value);
+    setPage(1);
+  }
+
+  function handleLocationFilterChange(value) {
+    setLocationFilter(value);
     setPage(1);
   }
 
@@ -171,6 +179,7 @@ export default function LeadsPage({ username, role, initialHot }) {
       if (model) params.set("model", model);
       if (status) params.set("status", status);
       if (agentFilter) params.set("agent", agentFilter);
+      if (locationFilter) params.set("location", locationFilter);
       if (from) params.set("from", from);
       if (to) params.set("to", to);
 
@@ -205,6 +214,8 @@ export default function LeadsPage({ username, role, initialHot }) {
         onStatusChange={handleStatusChange}
         agentFilter={agentFilter}
         onAgentFilterChange={handleAgentFilterChange}
+        locationFilter={locationFilter}
+        onLocationFilterChange={handleLocationFilterChange}
         agents={agents}
         role={role}
         onReassign={handleReassign}

@@ -43,6 +43,11 @@ const LeadSchema = new mongoose.Schema(
     // only when *we* first synced the row (can lag behind, e.g. after a
     // full resync every row gets a fresh createdAt even though the lead is old).
     sheetCreatedAt: { type: Date, index: true },
+    // Normalized showroom city (Hyderabad/Vijayawada/Visakhapatnam/Other),
+    // computed from the sheet's raw showroom field at sync time — same
+    // normalizer used for agent auto-assignment (lib/leadFields.js), stored
+    // here too so it can be filtered/indexed instead of recomputed per request.
+    location: { type: String, index: true },
     rowNumber: { type: Number }, // 1-based row number in the sheet (excluding header)
     contentHash: { type: String, index: true },
     // CRM fields managed from the dashboard, untouched by the sheet sync.

@@ -8,11 +8,12 @@ async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   await connectDB();
-  const { from, to, model = "", status = "", agent = "" } = req.query;
+  const { from, to, model = "", status = "", agent = "", location = "" } = req.query;
 
   const filter = {};
   if (model) filter.canonicalModel = model;
   if (status) filter.status = status;
+  if (location) filter.location = location === "unfilled" ? { $in: [null, ""] } : location;
   if (from || to) {
     filter.sheetCreatedAt = {};
     if (from) filter.sheetCreatedAt.$gte = new Date(`${from}T00:00:00Z`);

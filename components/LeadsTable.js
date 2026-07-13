@@ -10,6 +10,7 @@ import {
   nextFollowUp,
   LEAD_STATUSES,
   statusColor,
+  SHOWROOM_LOCATIONS,
 } from "../lib/leadFields";
 import { WhatsAppIcon, SortIcon, FireIcon } from "./icons";
 
@@ -131,6 +132,8 @@ export default function LeadsTable({
   onStatusChange,
   agentFilter,
   onAgentFilterChange,
+  locationFilter,
+  onLocationFilterChange,
   agents,
   role,
   onReassign,
@@ -218,6 +221,20 @@ export default function LeadsTable({
             </select>
           </div>
         )}
+
+        <div className="toolbar-group">
+          <label className="toolbar-label">Location</label>
+          <select value={locationFilter} onChange={(e) => onLocationFilterChange(e.target.value)}>
+            <option value="">All locations</option>
+            {SHOWROOM_LOCATIONS.map((loc) => (
+              <option key={loc} value={loc}>
+                {loc}
+              </option>
+            ))}
+            <option value="Other">Other</option>
+            <option value="unfilled">Not Filled</option>
+          </select>
+        </div>
 
         <div className="toolbar-group">
           <label className="toolbar-label">Created Date</label>
