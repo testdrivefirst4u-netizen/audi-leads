@@ -71,7 +71,7 @@ export default function LeadsTrendChart({ trend }) {
               x2={WIDTH - PAD_RIGHT}
               y1={y}
               y2={y}
-              stroke="var(--border)"
+              stroke="#e5e8f0"
               strokeWidth="1"
             />
           );
@@ -79,18 +79,18 @@ export default function LeadsTrendChart({ trend }) {
 
         <defs>
           <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+            <stop offset="0%" stopColor="#3d5afe" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#3d5afe" stopOpacity="0" />
           </linearGradient>
         </defs>
 
         <path d={areaPath} fill="url(#trendFill)" stroke="none" />
-        <path d={linePath} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={linePath} fill="none" stroke="#3d5afe" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
 
         {points.map(
           (p, i) =>
             i % labelEvery === 0 && (
-              <text key={p.date} x={p.x} y={HEIGHT - 8} fontSize="10" textAnchor="middle" fill="var(--text-muted)">
+              <text key={p.date} x={p.x} y={HEIGHT - 8} fontSize="10" textAnchor="middle" fill="#6b7280">
                 {formatShortDate(p.date)}
               </text>
             )
@@ -103,11 +103,11 @@ export default function LeadsTrendChart({ trend }) {
               x2={hovered.x}
               y1={PAD_TOP}
               y2={PAD_TOP + plotHeight}
-              stroke="var(--text-muted)"
+              stroke="#6b7280"
               strokeWidth="1"
               strokeDasharray="3 3"
             />
-            <circle cx={hovered.x} cy={hovered.y} r="4" fill="var(--accent)" stroke="#fff" strokeWidth="2" />
+            <circle cx={hovered.x} cy={hovered.y} r="4" fill="#3d5afe" stroke="#fff" strokeWidth="2" />
           </>
         )}
       </svg>

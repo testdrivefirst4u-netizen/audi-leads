@@ -88,28 +88,38 @@ export default function NotificationBell() {
   }
 
   return (
-    <div className="notification-bell" ref={dropdownRef}>
-      <button className="bell-button" onClick={handleToggle} aria-label="Notifications">
+    <div className="relative" ref={dropdownRef}>
+      <button
+        className="relative flex items-center justify-center w-[38px] h-[38px] rounded-[10px] border border-border bg-card text-muted cursor-pointer transition-colors duration-150 hover:bg-bg hover:text-ink"
+        onClick={handleToggle}
+        aria-label="Notifications"
+      >
         <BellIcon />
-        {newCount > 0 && <span className="bell-badge">{newCount > 9 ? "9+" : newCount}</span>}
+        {newCount > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center leading-none">
+            {newCount > 9 ? "9+" : newCount}
+          </span>
+        )}
       </button>
 
       {open && (
-        <div className="bell-dropdown">
-          <div className="bell-dropdown-header">New Leads</div>
+        <div className="absolute top-[calc(100%+8px)] right-0 w-80 bg-card border border-border rounded-xl shadow-dropdown z-50 overflow-hidden">
+          <div className="px-4 py-3 text-[13px] font-bold text-ink border-b border-border">New Leads</div>
           {displayedLeads.length === 0 ? (
-            <div className="empty-state" style={{ padding: "20px 16px" }}>
-              No new leads since your last visit.
-            </div>
+            <div className="text-center text-muted text-sm px-4 py-5">No new leads since your last visit.</div>
           ) : (
-            <ul className="bell-list">
+            <ul className="list-none m-0 p-0 max-h-80 overflow-y-auto">
               {displayedLeads.map((lead) => (
-                <li key={lead._id} onClick={goToLead}>
-                  <span className="bell-list-name">{lead.name || "Unknown"}</span>
-                  <span className="bell-list-meta">
+                <li
+                  key={lead._id}
+                  onClick={goToLead}
+                  className="flex flex-col gap-0.5 px-4 py-2.5 border-b border-border last:border-b-0 cursor-pointer hover:bg-bg"
+                >
+                  <span className="text-[13px] font-semibold text-ink">{lead.name || "Unknown"}</span>
+                  <span className="text-xs text-muted">
                     {lead.model} · {lead.phone || "no phone"}
                   </span>
-                  <span className="bell-list-time">{timeAgo(lead.createdAt)}</span>
+                  <span className="text-[11px] text-muted">{timeAgo(lead.createdAt)}</span>
                 </li>
               ))}
             </ul>

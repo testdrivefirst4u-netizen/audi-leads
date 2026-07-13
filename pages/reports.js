@@ -86,7 +86,7 @@ export default function ReportsPage({ username }) {
     <Layout username={username}>
       <h1 className="page-title">Monthly Reports</h1>
 
-      <div className="table-toolbar" style={{ borderRadius: 12, border: "1px solid var(--border)", marginBottom: 20 }}>
+      <div className="table-toolbar rounded-xl border border-border mb-5">
         <div className="toolbar-group">
           <label className="toolbar-label">Month</label>
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} max={currentMonth()} />

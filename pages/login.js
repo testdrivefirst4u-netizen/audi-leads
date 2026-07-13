@@ -40,17 +40,20 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="login-page">
-      <form className="login-card" onSubmit={handleSubmit}>
-        <div className="login-brand">
-          <div className="login-brand-badge">
+    <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-[#eef1fb] via-[#f3f5f9] to-[#eef2ff]">
+      <form
+        className="bg-card border border-border rounded-2xl shadow-login w-full max-w-[380px] px-8 py-9"
+        onSubmit={handleSubmit}
+      >
+        <div className="flex items-center gap-2.5 mb-2">
+          <div className="flex items-center justify-center w-[34px] h-[34px] rounded-[9px] bg-sidebar shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/audi-logo.png" alt="Audi" />
+            <img src="/audi-logo.png" alt="Audi" className="h-[18px] w-auto object-contain" />
           </div>
-          <span>Audi Leads</span>
+          <span className="text-[15px] font-bold text-ink">Audi Leads</span>
         </div>
-        <h1>Welcome back</h1>
-        <p className="subtitle">Sign in to view and manage leads.</p>
+        <h1 className="text-xl font-bold m-0 mb-1 text-ink">Welcome back</h1>
+        <p className="text-[13px] text-muted m-0 mb-6">Sign in to view and manage leads.</p>
 
         <div className="field">
           <label>Username</label>
@@ -62,20 +65,16 @@ export default function LoginPage() {
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </div>
 
-        <button className="btn" type="submit" disabled={loading}>
+        <button className="btn w-full py-2.5 text-sm mt-1" type="submit" disabled={loading}>
           {loading ? "Signing in..." : "Sign in"}
         </button>
 
         {error && <div className="save-msg err">{error}</div>}
 
-        <div className="login-credit">
+        <div className="flex items-center justify-center gap-1.5 mt-6 pt-4 border-t border-border text-[11px] text-muted uppercase tracking-wide">
           <span>Developed by</span>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/broaddcast-logo.svg"
-            alt="Broaddcast"
-            style={{ width: "150px", height: "auto" }}
-          />
+          <img src="/broaddcast-logo.svg" alt="Broaddcast" className="h-3 w-auto object-contain" />
         </div>
       </form>
     </div>

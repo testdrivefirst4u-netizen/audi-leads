@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { apiFetch } from "../lib/apiFetch";
 import { LEAD_STATUSES, statusColor } from "../lib/leadFields";
-import { WhatsAppIcon, PhoneIcon } from "./icons";
+import { WhatsAppIcon, PhoneIcon, NoteIcon, CalendarIcon } from "./icons";
 
 function formatDate(d) {
   if (!d) return "-";
@@ -13,71 +13,20 @@ function formatDateOnly(d) {
   return new Date(d).toLocaleDateString();
 }
 
-const TABS = [
-  { key: "details", label: "Details" },
-  { key: "remarks", label: "Remarks" },
-  { key: "calls", label: "Calls" },
-  { key: "followups", label: "Follow-ups" },
-];
+const TYPE_LABELS = { remark: "Remark", call: "Call", followup: "Follow-up" };
 
 export default function LeadDetailModal({ lead, onClose, onUpdated }) {
-  const [activeTab, setActiveTab] = useState("details");
+  const [showDetails, setShowDetails] = useState(false);
   const [remarkText, setRemarkText] = useState("");
-  const [savingRemark, setSavingRemark] = useState(false);
+  const [logCall, setLogCall] = useState(false);
+  const [callNote, setCallNote] = useState("");
   const [followDate, setFollowDate] = useState("");
   const [followNote, setFollowNote] = useState("");
-  const [savingFollow, setSavingFollow] = useState(false);
-  const [callNote, setCallNote] = useState("");
-  const [savingCall, setSavingCall] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [error, setError] = useState(null);
 
   if (!lead) return null;
-
-  async function addRemark(e) {
-    e.preventDefault();
-    if (!remarkText.trim()) return;
-    setSavingRemark(true);
-    setError(null);
-    try {
-      const res = await apiFetch(`/api/leads/${lead._id}/remarks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: remarkText }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "Failed to add remark");
-      const data = await res.json();
-      setRemarkText("");
-      onUpdated(data.lead);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSavingRemark(false);
-    }
-  }
-
-  async function addFollowUp(e) {
-    e.preventDefault();
-    if (!followDate) return;
-    setSavingFollow(true);
-    setError(null);
-    try {
-      const res = await apiFetch(`/api/leads/${lead._id}/followups`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: followDate, note: followNote }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "Failed to schedule follow-up");
-      const data = await res.json();
-      setFollowDate("");
-      setFollowNote("");
-      onUpdated(data.lead);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSavingFollow(false);
-    }
-  }
 
   async function toggleFollowUp(followUpId, completed) {
     setError(null);
@@ -92,27 +41,6 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
       onUpdated(data.lead);
     } catch (err) {
       setError(err.message);
-    }
-  }
-
-  async function logCall(e) {
-    e.preventDefault();
-    setSavingCall(true);
-    setError(null);
-    try {
-      const res = await apiFetch(`/api/leads/${lead._id}/calls`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note: callNote }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "Failed to log call");
-      const data = await res.json();
-      setCallNote("");
-      onUpdated(data.lead);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSavingCall(false);
     }
   }
 
@@ -135,9 +63,75 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
     }
   }
 
-  const sortedFollowUps = [...(lead.followUps || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
-  const sortedRemarks = [...(lead.remarks || [])].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-  const sortedCalls = [...(lead.calls || [])].sort((a, b) => new Date(a.calledAt) - new Date(b.calledAt));
+  // One Save button covers all three activity fields — only the ones
+  // actually filled in (or the "Log a call" checkbox) get submitted.
+  async function handleSave(e) {
+    e.preventDefault();
+    if (!remarkText.trim() && !logCall && !followDate) return;
+    setSaving(true);
+    setError(null);
+    try {
+      let latestLead = lead;
+
+      if (remarkText.trim()) {
+        const res = await apiFetch(`/api/leads/${lead._id}/remarks`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: remarkText }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Failed to add remark");
+        latestLead = (await res.json()).lead;
+      }
+
+      if (logCall) {
+        const res = await apiFetch(`/api/leads/${lead._id}/calls`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ note: callNote }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Failed to log call");
+        latestLead = (await res.json()).lead;
+      }
+
+      if (followDate) {
+        const res = await apiFetch(`/api/leads/${lead._id}/followups`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date: followDate, note: followNote }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Failed to schedule follow-up");
+        latestLead = (await res.json()).lead;
+      }
+
+      setRemarkText("");
+      setLogCall(false);
+      setCallNote("");
+      setFollowDate("");
+      setFollowNote("");
+      onUpdated(latestLead);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Remarks, calls, and follow-ups are three separate sub-collections on the
+  // lead, but reps think of them as one activity history — merge them into a
+  // single chronological, numbered timeline instead of splitting into tabs.
+  const history = [
+    ...(lead.remarks || []).map((r) => ({ type: "remark", at: r.createdAt, id: r._id, text: r.text })),
+    ...(lead.calls || []).map((c) => ({ type: "call", at: c.calledAt, id: c._id, text: c.note || "Called" })),
+    ...(lead.followUps || []).map((f) => ({
+      type: "followup",
+      at: f.createdAt,
+      id: f._id,
+      date: f.date,
+      note: f.note,
+      completed: f.completed,
+    })),
+  ].sort((a, b) => new Date(a.at) - new Date(b.at));
+
   const { bg: statusBg, text: statusText } = statusColor(lead.status);
 
   return (
@@ -187,125 +181,137 @@ export default function LeadDetailModal({ lead, onClose, onUpdated }) {
           )}
         </div>
 
-        <div className="modal-tabs">
-          {TABS.map((t) => {
-            const count =
-              t.key === "remarks"
-                ? sortedRemarks.length
-                : t.key === "calls"
-                ? sortedCalls.length
-                : t.key === "followups"
-                ? sortedFollowUps.length
-                : null;
-            return (
-              <button
-                key={t.key}
-                className={`modal-tab ${activeTab === t.key ? "active" : ""}`}
-                onClick={() => setActiveTab(t.key)}
-              >
-                {t.label}
-                {count !== null && <span className="modal-tab-count">{count}</span>}
-              </button>
-            );
-          })}
-        </div>
-
         <div className="modal-body">
-          {activeTab === "details" && (
-            <div className="kv-grid">
-              {Object.entries(lead.data || {}).map(([k, v]) => (
-                <div key={k} className="kv-row">
-                  <div className="kv-key">{k}</div>
-                  <div className="kv-value">{v || "-"}</div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === "remarks" && (
-            <section>
-              <form onSubmit={addRemark} className="inline-form">
-                <input
-                  value={remarkText}
-                  onChange={(e) => setRemarkText(e.target.value)}
-                  placeholder="Add a remark..."
-                />
-                <button className="btn" type="submit" disabled={savingRemark}>
-                  Add
-                </button>
-              </form>
-              <ul className="timeline">
-                {sortedRemarks.map((r, i) => (
-                  <li key={r._id}>
-                    <span className="timeline-num">{i + 1}</span>
-                    <span className="timeline-date">{formatDate(r.createdAt)}</span>
-                    <span>{r.text}</span>
-                  </li>
+          <section>
+            <button type="button" className="details-toggle" onClick={() => setShowDetails((v) => !v)}>
+              {showDetails ? "▾" : "▸"} Sheet Details
+            </button>
+            {showDetails && (
+              <div className="kv-grid">
+                {Object.entries(lead.data || {}).map(([k, v]) => (
+                  <div key={k} className="kv-row">
+                    <div className="kv-key">{k}</div>
+                    <div className="kv-value">{v || "-"}</div>
+                  </div>
                 ))}
-                {sortedRemarks.length === 0 && <li className="hint">No remarks yet.</li>}
-              </ul>
-            </section>
-          )}
+              </div>
+            )}
+          </section>
 
-          {activeTab === "calls" && (
-            <section>
-              <form onSubmit={logCall} className="inline-form">
-                <input
-                  value={callNote}
-                  onChange={(e) => setCallNote(e.target.value)}
-                  placeholder="Note (optional) — e.g. no answer, interested"
-                />
-                <button className="btn" type="submit" disabled={savingCall}>
-                  Log a Call
-                </button>
-              </form>
-              <ul className="timeline">
-                {sortedCalls.map((c, i) => (
-                  <li key={c._id}>
-                    <span className="timeline-num">{i + 1}</span>
-                    <span className="timeline-date">{formatDate(c.calledAt)}</span>
-                    <span>{c.note || "Called"}</span>
-                  </li>
-                ))}
-                {sortedCalls.length === 0 && <li className="hint">No calls logged yet.</li>}
-              </ul>
-            </section>
-          )}
-
-          {activeTab === "followups" && (
-            <section>
-              <form onSubmit={addFollowUp} className="inline-form">
-                <input type="date" value={followDate} onChange={(e) => setFollowDate(e.target.value)} required />
-                <input
-                  value={followNote}
-                  onChange={(e) => setFollowNote(e.target.value)}
-                  placeholder="Note (optional)"
-                />
-                <button className="btn" type="submit" disabled={savingFollow}>
-                  Schedule
-                </button>
-              </form>
-              <ul className="timeline">
-                {sortedFollowUps.map((f, i) => (
-                  <li key={f._id}>
+          <section>
+            <h3>History</h3>
+            <ul className="timeline">
+              {history.map((item, i) => (
+                <li key={`${item.type}-${item.id}`}>
+                  <span className="timeline-num">{i + 1}</span>
+                  <span className={`pill timeline-type timeline-type-${item.type}`}>{TYPE_LABELS[item.type]}</span>
+                  {item.type === "followup" ? (
                     <label className="followup-row">
-                      <span className="timeline-num">{i + 1}</span>
                       <input
                         type="checkbox"
-                        checked={f.completed}
-                        onChange={(e) => toggleFollowUp(f._id, e.target.checked)}
+                        checked={item.completed}
+                        onChange={(e) => toggleFollowUp(item.id, e.target.checked)}
                       />
-                      <span className={f.completed ? "done" : ""}>
-                        {formatDateOnly(f.date)}
-                        {f.note ? ` — ${f.note}` : ""}
+                      <span className={item.completed ? "done" : ""}>
+                        {formatDateOnly(item.date)}
+                        {item.note ? ` — ${item.note}` : ""}
                       </span>
                     </label>
-                  </li>
-                ))}
-                {sortedFollowUps.length === 0 && <li className="hint">No follow-ups scheduled.</li>}
-              </ul>
-            </section>
-          )}
+                  ) : (
+                    <>
+                      <span className="timeline-date">{formatDate(item.at)}</span>
+                      <span>{item.text}</span>
+                    </>
+                  )}
+                </li>
+              ))}
+              {history.length === 0 && <li className="hint">No activity yet.</li>}
+            </ul>
+          </section>
+
+          <section>
+            <h3>Add Activity</h3>
+            <form onSubmit={handleSave} className="rounded-xl border border-border bg-bg p-4 flex flex-col gap-3">
+              <div className="flex gap-3 rounded-lg bg-card border border-border px-3.5 py-3 focus-within:border-accent focus-within:ring-[3px] focus-within:ring-accent/15">
+                <NoteIcon className="mt-2 shrink-0 text-muted" />
+                <div className="flex-1">
+                  <label className="block text-[13px] font-semibold text-ink mb-1">Remark</label>
+                  <input
+                    className="w-full border-none bg-transparent p-0 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-0"
+                    value={remarkText}
+                    onChange={(e) => setRemarkText(e.target.value)}
+                    placeholder="What did the customer say?"
+                  />
+                </div>
+              </div>
+
+              <div
+                className={`flex gap-3 rounded-lg bg-card border px-3.5 py-3 transition-colors ${
+                  logCall ? "border-accent ring-[3px] ring-accent/15" : "border-border"
+                }`}
+              >
+                <PhoneIcon className="mt-2 shrink-0 text-muted" width={16} height={16} />
+                <div className="flex-1">
+                  <label className="flex items-center gap-2 text-[13px] font-semibold text-ink mb-1 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={logCall}
+                      onChange={(e) => setLogCall(e.target.checked)}
+                      className="accent-accent"
+                    />
+                    Log a call
+                  </label>
+                  <input
+                    className="w-full border-none bg-transparent p-0 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-0 disabled:cursor-not-allowed"
+                    value={callNote}
+                    onChange={(e) => setCallNote(e.target.value)}
+                    placeholder="Note (optional) — e.g. no answer, interested"
+                    disabled={!logCall}
+                  />
+                </div>
+              </div>
+
+              <div
+                className={`flex gap-3 rounded-lg bg-card border px-3.5 py-3 transition-colors ${
+                  followDate ? "border-accent ring-[3px] ring-accent/15" : "border-border"
+                }`}
+              >
+                <CalendarIcon className="mt-2 shrink-0 text-muted" />
+                <div className="flex-1 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[13px] font-semibold text-ink mb-1">Follow-up date</label>
+                    <input
+                      type="date"
+                      className="w-full border-none bg-transparent p-0 text-sm text-ink focus:outline-none focus:ring-0"
+                      value={followDate}
+                      onChange={(e) => setFollowDate(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[13px] font-semibold text-ink mb-1">Note</label>
+                    <input
+                      className="w-full border-none bg-transparent p-0 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-0 disabled:cursor-not-allowed"
+                      value={followNote}
+                      onChange={(e) => setFollowNote(e.target.value)}
+                      placeholder="Optional"
+                      disabled={!followDate}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <span className="hint m-0">Only the fields you fill in get saved.</span>
+                <button
+                  className="btn disabled:opacity-60"
+                  type="submit"
+                  disabled={saving || (!remarkText.trim() && !logCall && !followDate)}
+                >
+                  {saving ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </form>
+          </section>
 
           {error && <div className="save-msg err">{error}</div>}
         </div>

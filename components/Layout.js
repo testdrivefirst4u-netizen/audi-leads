@@ -11,10 +11,10 @@ export default function Layout({ children, username }) {
   }
 
   return (
-    <div className="app-shell">
+    <div className="flex min-h-screen">
       <Sidebar username={username} onLogout={handleLogout} />
-      <main className="main-content">
-        <div className="main-content-inner">
+      <main className="flex-1 min-w-0 p-8">
+        <div className="max-w-[1400px] mx-auto">
           <TopBar />
           {children}
         </div>
