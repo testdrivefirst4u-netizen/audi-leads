@@ -7,21 +7,21 @@ const NAV_ITEMS = [
   { href: "/leads", label: "Leads", Icon: UsersIcon },
   { href: "/followups", label: "Follow-ups", Icon: BellIcon },
   { href: "/reports", label: "Reports", Icon: ReportIcon },
-  { href: "/settings", label: "Settings", Icon: SettingsIcon },
+  // { href: "/settings", label: "Settings", Icon: SettingsIcon },
 ];
 
 export default function Sidebar({ username, onLogout }) {
   const router = useRouter();
 
   return (
-    <aside className="w-60 shrink-0 bg-sidebar text-sidebar-text flex flex-col sticky top-0 h-screen">
+    <aside className="sticky top-0 flex flex-col h-screen w-60 shrink-0 bg-sidebar text-sidebar-text">
       <div className="flex items-center gap-2.5 px-5 py-[22px] text-white text-base font-bold tracking-wide border-b border-white/[0.08] mb-2">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/audi-logo.png" alt="Audi" className="h-[26px] w-auto object-contain" />
         <span>Audi Leads</span>
       </div>
 
-      <nav className="flex flex-col gap-1 px-3 py-2 flex-1">
+      <nav className="flex flex-col flex-1 gap-1 px-3 py-2">
         {NAV_ITEMS.map(({ href, label, Icon }) => {
           const active = router.pathname === href;
           return (
