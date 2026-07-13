@@ -6,6 +6,10 @@ const AgentSchema = new mongoose.Schema(
     username: { type: String, required: true, unique: true },
     passwordHash: { type: String, required: true },
     active: { type: Boolean, default: true, index: true },
+    // Which showroom this agent covers ("" = any/unassigned — falls back to
+    // the general pool for auto-assignment). One of leadFields.js's
+    // SHOWROOM_LOCATIONS, kept as a free string here since that list can grow.
+    location: { type: String, default: "", index: true },
   },
   { timestamps: true }
 );

@@ -1,7 +1,7 @@
 const connectDB = require("../../lib/db");
 const Lead = require("../../models/Lead");
 const { requireAuth } = require("../../lib/auth");
-const { pickField, FIELD_MATCHERS, isUrgentTimeline } = require("../../lib/leadFields");
+const { pickField, FIELD_MATCHERS, isUrgentTimeline, normalizeShowroom } = require("../../lib/leadFields");
 
 const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Won", "Lost"];
 const TREND_DAYS = 30;
@@ -12,19 +12,6 @@ function normalizeExchange(value) {
   if (v.startsWith("yes")) return "Yes";
   if (v.startsWith("no")) return "No";
   return "Not Filled";
-}
-
-// Sheet columns spell "showroom"/"location" fields wildly differently per tab
-// and sometimes hold a Google Maps link instead of a city name — normalize by
-// looking for a known city name in the value rather than trusting its shape.
-function normalizeShowroom(value) {
-  if (!value) return null;
-  if (/^https?:\/\//i.test(value)) return null;
-  const v = value.toLowerCase();
-  if (v.includes("hyderabad")) return "Hyderabad";
-  if (v.includes("vijayawada")) return "Vijayawada";
-  if (v.includes("visakhapatnam") || v.includes("vizag")) return "Visakhapatnam";
-  return "Other";
 }
 
 function toSortedArray(obj) {

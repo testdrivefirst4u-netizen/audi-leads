@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { BellIcon } from "./icons";
 import Toast from "./Toast";
 import { apiFetch } from "../lib/apiFetch";
+import { playNotificationSound } from "../lib/notificationSound";
 
 const POLL_MS = 10000;
 const LAST_SEEN_KEY = "audi-leads:notifications-last-seen";
@@ -48,6 +49,7 @@ export default function NotificationBell() {
       if (prevNewCountRef.current !== null && newCount > prevNewCountRef.current) {
         const delta = newCount - prevNewCountRef.current;
         setToastMessage(`${delta} new lead${delta > 1 ? "s" : ""} added`);
+        playNotificationSound();
       }
       prevNewCountRef.current = newCount;
     }

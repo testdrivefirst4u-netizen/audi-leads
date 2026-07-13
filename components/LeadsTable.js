@@ -277,7 +277,15 @@ export default function LeadsTable({
                 <tr>
                   <th>#</th>
                   <SortableHeader label="Model" field="canonicalModel" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
-                  <SortableHeader label="Name" field="name" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
+                  <th
+                    className="sortable-th sticky left-0 z-[1] bg-[#fafbfd]"
+                    onClick={() => onSortChange("name")}
+                  >
+                    <span className="sortable-th-inner">
+                      Name
+                      <SortIcon direction={sortBy === "name" ? sortDir : null} />
+                    </span>
+                  </th>
                   <th>Phone</th>
                   <th>Email</th>
                   <th>Agent</th>
@@ -302,7 +310,7 @@ export default function LeadsTable({
                       <td>
                         <ModelBadge lead={lead} />
                       </td>
-                      <td>
+                      <td className="sticky left-0 z-[1] bg-card">
                         <NameCell lead={lead} />
                       </td>
                       <td>

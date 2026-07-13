@@ -1,17 +1,7 @@
 const connectDB = require("../../lib/db");
 const Lead = require("../../models/Lead");
 const { requireAuth } = require("../../lib/auth");
-const { pickField, FIELD_MATCHERS } = require("../../lib/leadFields");
-
-function normalizeShowroom(value) {
-  if (!value) return null;
-  if (/^https?:\/\//i.test(value)) return null;
-  const v = value.toLowerCase();
-  if (v.includes("hyderabad")) return "Hyderabad";
-  if (v.includes("vijayawada")) return "Vijayawada";
-  if (v.includes("visakhapatnam") || v.includes("vizag")) return "Visakhapatnam";
-  return "Other";
-}
+const { pickField, FIELD_MATCHERS, normalizeShowroom } = require("../../lib/leadFields");
 
 function toSortedArray(obj) {
   return Object.entries(obj)

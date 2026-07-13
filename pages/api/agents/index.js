@@ -33,6 +33,7 @@ async function handler(req, res) {
           name: a.name,
           username: a.username,
           active: a.active,
+          location: a.location || "",
           createdAt: a.createdAt,
           leadCount: total,
           contacted: p?.contacted || 0,
@@ -46,7 +47,7 @@ async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    const { name, username, password } = req.body || {};
+    const { name, username, password, location = "" } = req.body || {};
     if (!name || !username || !password) {
       return res.status(400).json({ error: "Name, username, and password are required" });
     }
@@ -57,8 +58,10 @@ async function handler(req, res) {
     }
 
     const passwordHash = await hashPassword(password);
-    const agent = await Agent.create({ name, username, passwordHash, active: true });
-    return res.status(201).json({ agent: { _id: agent._id, name: agent.name, username: agent.username, active: true } });
+    const agent = await Agent.create({ name, username, passwordHash, active: true, location });
+    return res.status(201).json({
+      agent: { _id: agent._id, name: agent.name, username: agent.username, active: true, location: agent.location },
+    });
   }
 
   res.status(405).json({ error: "Method not allowed" });

@@ -1,11 +1,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "../lib/apiFetch";
+import { SHOWROOM_LOCATIONS } from "../lib/leadFields";
 
 export default function AgentsPanel() {
   const [agents, setAgents] = useState([]);
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [location, setLocation] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -28,7 +30,7 @@ export default function AgentsPanel() {
       const res = await apiFetch("/api/agents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, username, password }),
+        body: JSON.stringify({ name, username, password, location }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -37,6 +39,7 @@ export default function AgentsPanel() {
       setName("");
       setUsername("");
       setPassword("");
+      setLocation("");
       setMessage({ type: "ok", text: "Agent added." });
       load();
     } catch (err) {
@@ -55,6 +58,15 @@ export default function AgentsPanel() {
     load();
   }
 
+  async function changeLocation(agent, newLocation) {
+    await apiFetch(`/api/agents/${agent._id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ location: newLocation }),
+    });
+    load();
+  }
+
   return (
     <div className="panel mt-6">
       <div className="panel-header">
@@ -62,7 +74,7 @@ export default function AgentsPanel() {
       </div>
 
       <div className="p-5">
-        <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end mb-5">
+        <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end mb-5">
           <div className="field mb-0">
             <label>Name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ravi Kumar" required />
@@ -81,7 +93,18 @@ export default function AgentsPanel() {
               required
             />
           </div>
-          <div className="sm:col-span-3">
+          <div className="field mb-0">
+            <label>Showroom Location</label>
+            <select value={location} onChange={(e) => setLocation(e.target.value)}>
+              <option value="">Any (general pool)</option>
+              {SHOWROOM_LOCATIONS.map((loc) => (
+                <option key={loc} value={loc}>
+                  {loc}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="sm:col-span-4">
             <button className="btn" type="submit" disabled={saving}>
               {saving ? "Adding..." : "Add Agent"}
             </button>
@@ -94,6 +117,7 @@ export default function AgentsPanel() {
             <tr>
               <th>Name</th>
               <th>Username</th>
+              <th>Location</th>
               <th>Leads Assigned</th>
               <th>Status</th>
               <th></th>
@@ -104,6 +128,16 @@ export default function AgentsPanel() {
               <tr key={a._id}>
                 <td>{a.name}</td>
                 <td className="text-muted">{a.username}</td>
+                <td>
+                  <select value={a.location || ""} onChange={(e) => changeLocation(a, e.target.value)}>
+                    <option value="">Any (general pool)</option>
+                    {SHOWROOM_LOCATIONS.map((loc) => (
+                      <option key={loc} value={loc}>
+                        {loc}
+                      </option>
+                    ))}
+                  </select>
+                </td>
                 <td>{a.leadCount}</td>
                 <td>
                   <span className={`pill ${a.active ? "bg-success/10 text-success" : "bg-danger/10 text-danger"}`}>
@@ -119,7 +153,7 @@ export default function AgentsPanel() {
             ))}
             {agents.length === 0 && (
               <tr>
-                <td colSpan={5} className="empty-state">
+                <td colSpan={6} className="empty-state">
                   No agents yet — add one above.
                 </td>
               </tr>
@@ -127,8 +161,10 @@ export default function AgentsPanel() {
           </tbody>
         </table>
         <div className="hint mt-3">
-          New leads auto-assign to whichever active agent currently has the fewest, so the queue stays even.
-          Deactivating an agent stops new assignments but keeps their existing leads with them.
+          New leads auto-assign to the least-loaded active agent covering that lead's showroom location. If no agent
+          covers that location (or the lead has no location filled in), it falls back to the least-loaded agent from
+          the general pool ("Any"). Deactivating an agent stops new assignments but keeps their existing leads with
+          them.
         </div>
       </div>
 
@@ -140,6 +176,7 @@ export default function AgentsPanel() {
           <thead>
             <tr>
               <th>Agent</th>
+              <th>Location</th>
               <th>Leads</th>
               <th>Contacted</th>
               <th>Won</th>
@@ -152,6 +189,7 @@ export default function AgentsPanel() {
             {agents.map((a) => (
               <tr key={a._id}>
                 <td>{a.name}</td>
+                <td className="text-muted">{a.location || "Any"}</td>
                 <td>{a.leadCount}</td>
                 <td>{a.contacted}</td>
                 <td className="text-success font-semibold">{a.won}</td>
@@ -169,7 +207,7 @@ export default function AgentsPanel() {
             ))}
             {agents.length === 0 && (
               <tr>
-                <td colSpan={7} className="empty-state">
+                <td colSpan={8} className="empty-state">
                   No agent activity yet.
                 </td>
               </tr>
