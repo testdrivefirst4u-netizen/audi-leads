@@ -27,6 +27,12 @@ async function handler(req, res) {
 
   const leads = await Lead.find(filter).sort({ sheetCreatedAt: -1 }).populate("assignedTo", "name").lean();
 
+  // Remark counts vary per lead, but a CSV needs one fixed set of columns —
+  // so the number of "Remark N" columns is sized to whichever lead in this
+  // export has the most, and shorter leads just leave the extra cells blank.
+  const maxRemarks = leads.reduce((max, lead) => Math.max(max, (lead.remarks || []).length), 0);
+  const remarkHeaders = Array.from({ length: maxRemarks }, (_, i) => `Remark ${i + 1}`);
+
   const header = [
     "Model",
     "Sheet Tab",
@@ -42,13 +48,15 @@ async function handler(req, res) {
     "Purchase Timeline",
     "Exchange Plan",
     "Showroom",
-    "Latest Remark",
+    ...remarkHeaders,
     "Next Follow-up",
   ];
 
   const rows = leads.map((lead) => {
-    const remarks = lead.remarks || [];
-    const latestRemark = remarks.length ? remarks[remarks.length - 1].text : "";
+    const remarks = [...(lead.remarks || [])].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    const remarkCells = Array.from({ length: maxRemarks }, (_, i) =>
+      remarks[i] ? `${new Date(remarks[i].createdAt).toLocaleDateString()}: ${remarks[i].text}` : ""
+    );
     const pendingFollowUps = (lead.followUps || [])
       .filter((f) => !f.completed)
       .sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -69,7 +77,7 @@ async function handler(req, res) {
       prettify(pickField(lead.data, FIELD_MATCHERS.purchaseTimeline)),
       prettify(pickField(lead.data, FIELD_MATCHERS.exchangePlan)),
       prettify(pickField(lead.data, FIELD_MATCHERS.showroom)),
-      latestRemark,
+      ...remarkCells,
       nextFollowUp,
     ];
   });

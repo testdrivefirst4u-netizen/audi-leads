@@ -27,7 +27,26 @@ const CallLogSchema = new mongoose.Schema(
   { _id: true }
 );
 
+// One entry per raw sheet row that was folded into this lead as a repeat
+// enquiry for the same customer + same vehicle model (see Rule 1 in
+// lib/syncService.js's dedup logic). The first enquiry that created the
+// lead is also recorded here, so `enquiryHistory.length` is always the true
+// total submission count for this customer+model pair.
+const EnquiryHistoryEntrySchema = new mongoose.Schema(
+  {
+    model: { type: String }, // raw sheet tab this specific submission came from
+    rowNumber: { type: Number },
+    date: { type: Date },
+  },
+  { _id: false }
+);
+
 const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Won", "Lost"];
+// Set once at creation and never changed afterward — whether this was the
+// customer's first-ever enquiry (any model) or they already had a lead for a
+// different model. Independent of `duplicateCount`, which tracks repeat
+// enquiries for THIS SAME model and can grow after creation.
+const LEAD_TYPES = ["new", "new_model_existing_customer"];
 
 const LeadSchema = new mongoose.Schema(
   {
@@ -53,6 +72,14 @@ const LeadSchema = new mongoose.Schema(
     // CRM fields managed from the dashboard, untouched by the sheet sync.
     status: { type: String, enum: LEAD_STATUSES, default: "New", index: true },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "Agent", index: true },
+    // Duplicate-detection fields (see lib/syncService.js). A "duplicate" is a
+    // repeat sheet submission from the same customer (phone/email) for the
+    // same canonicalModel — it never becomes its own Lead document, it just
+    // updates these fields on the original.
+    leadType: { type: String, enum: LEAD_TYPES, default: "new", index: true },
+    duplicateCount: { type: Number, default: 0, index: true }, // enquiryHistory.length - 1
+    lastEnquiryAt: { type: Date, index: true },
+    enquiryHistory: { type: [EnquiryHistoryEntrySchema], default: [] },
     remarks: { type: [RemarkSchema], default: [] },
     followUps: { type: [FollowUpSchema], default: [] },
     calls: { type: [CallLogSchema], default: [] },
@@ -60,13 +87,17 @@ const LeadSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Sync dedupes by (model, rowNumber) — see lib/syncService.js. Repeat
-// submissions from the same phone/lead ID are kept as separate leads, so
-// these indexes exist only to speed up search/filtering by phone or ID,
-// not for uniqueness.
+// A raw sheet row is uniquely identified by (model, rowNumber) — sync uses
+// this first to check "have I already ingested this exact row" (whether it
+// became a lead's primary row or got folded into someone's enquiryHistory).
+// Customer-level matching for the actual dedup decision (same phone/email +
+// same canonicalModel = repeat enquiry) happens in lib/syncService.js against
+// the phone/email indexes below, not against these.
 LeadSchema.index({ model: 1, leadId: 1 });
 LeadSchema.index({ model: 1, phone: 1 });
 LeadSchema.index({ model: 1, rowNumber: 1 });
+LeadSchema.index({ "enquiryHistory.model": 1, "enquiryHistory.rowNumber": 1 });
 
 module.exports = mongoose.models.Lead || mongoose.model("Lead", LeadSchema);
 module.exports.LEAD_STATUSES = LEAD_STATUSES;
+module.exports.LEAD_TYPES = LEAD_TYPES;

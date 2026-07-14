@@ -222,6 +222,25 @@ export default function LeadDetailModal({ lead, onClose, onUpdated, agents = [],
             )}
           </section>
 
+          {(lead.enquiryHistory || []).length > 1 && (
+            <section>
+              <h3>Enquiry History ({lead.enquiryHistory.length} total, {lead.duplicateCount || 0} repeat)</h3>
+              <ul className="timeline">
+                {[...lead.enquiryHistory]
+                  .sort((a, b) => new Date(a.date) - new Date(b.date))
+                  .map((e, i) => (
+                    <li key={`${e.model}-${e.rowNumber}-${i}`}>
+                      <span className={`pill ${i === 0 ? "bg-[#ecfdf5] text-[#047857]" : "bg-[#fef2f2] text-[#b91c1c]"}`}>
+                        {i === 0 ? "🟢 Original" : "🔴 Duplicate Lead"}
+                      </span>
+                      <span className="timeline-date">{formatDate(e.date)}</span>
+                      <span className="text-muted">{e.model}</span>
+                    </li>
+                  ))}
+              </ul>
+            </section>
+          )}
+
           <section>
             <h3>History</h3>
             <ul className="timeline">

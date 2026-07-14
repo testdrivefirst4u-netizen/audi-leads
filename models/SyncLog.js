@@ -10,6 +10,7 @@ const SyncLogSchema = new mongoose.Schema(
     updatedCount: { type: Number, default: 0 },
     unchangedCount: { type: Number, default: 0 },
     skippedCount: { type: Number, default: 0 },
+    duplicateCount: { type: Number, default: 0 }, // repeat enquiries folded into an existing lead, not created as new
     errorMessage: { type: String },
   },
   { timestamps: true }

@@ -25,7 +25,7 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [displayedLeads, setDisplayedLeads] = useState([]);
   const [toastMessage, setToastMessage] = useState(null);
-  const prevNewCountRef = useRef(null);
+  const seenFreshIdsRef = useRef(null);
   const dropdownRef = useRef(null);
 
   // Initialize "last seen" once — defaults to now, so leads that already
@@ -45,13 +45,21 @@ export default function NotificationBell() {
       const leads = data.leads || [];
       setRecentLeads(leads);
 
-      const newCount = leads.filter((l) => new Date(l.createdAt) > lastSeenAt).length;
-      if (prevNewCountRef.current !== null && newCount > prevNewCountRef.current) {
-        const delta = newCount - prevNewCountRef.current;
-        setToastMessage(`${delta} new lead${delta > 1 ? "s" : ""} added`);
-        playNotificationSound();
+      const freshLeads = leads.filter((l) => new Date(l.activityAt) > lastSeenAt);
+
+      if (seenFreshIdsRef.current !== null) {
+        const arrived = freshLeads.filter((l) => !seenFreshIdsRef.current.has(l._id));
+        if (arrived.length > 0) {
+          const repeats = arrived.filter((l) => l.isRepeat).length;
+          const brandNew = arrived.length - repeats;
+          const parts = [];
+          if (brandNew > 0) parts.push(`${brandNew} new lead${brandNew > 1 ? "s" : ""}`);
+          if (repeats > 0) parts.push(`${repeats} repeat enquir${repeats > 1 ? "ies" : "y"}`);
+          setToastMessage(parts.join(" · "));
+          playNotificationSound();
+        }
       }
-      prevNewCountRef.current = newCount;
+      seenFreshIdsRef.current = new Set(freshLeads.map((l) => l._id));
     }
 
     poll();
@@ -69,17 +77,17 @@ export default function NotificationBell() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  const newCount = lastSeenAt ? recentLeads.filter((l) => new Date(l.createdAt) > lastSeenAt).length : 0;
+  const newCount = lastSeenAt ? recentLeads.filter((l) => new Date(l.activityAt) > lastSeenAt).length : 0;
 
   function handleToggle() {
     if (!open) {
       // Snapshot what's new right now so the dropdown still shows them after
       // the badge clears, then mark everything as seen.
-      setDisplayedLeads(recentLeads.filter((l) => new Date(l.createdAt) > lastSeenAt));
+      setDisplayedLeads(recentLeads.filter((l) => new Date(l.activityAt) > lastSeenAt));
       const now = new Date();
       setLastSeenAt(now);
       localStorage.setItem(LAST_SEEN_KEY, now.toISOString());
-      prevNewCountRef.current = 0;
+      seenFreshIdsRef.current = new Set();
     }
     setOpen((o) => !o);
   }
@@ -106,9 +114,11 @@ export default function NotificationBell() {
 
       {open && (
         <div className="absolute top-[calc(100%+8px)] right-0 w-80 bg-card border border-border rounded-xl shadow-dropdown z-50 overflow-hidden">
-          <div className="px-4 py-3 text-[13px] font-bold text-ink border-b border-border">New Leads</div>
+          <div className="px-4 py-3 text-[13px] font-bold text-ink border-b border-border">
+            New Leads &amp; Repeat Enquiries
+          </div>
           {displayedLeads.length === 0 ? (
-            <div className="text-center text-muted text-sm px-4 py-5">No new leads since your last visit.</div>
+            <div className="text-center text-muted text-sm px-4 py-5">Nothing new since your last visit.</div>
           ) : (
             <ul className="list-none m-0 p-0 max-h-80 overflow-y-auto">
               {displayedLeads.map((lead) => (
@@ -117,11 +127,16 @@ export default function NotificationBell() {
                   onClick={goToLead}
                   className="flex flex-col gap-0.5 px-4 py-2.5 border-b border-border last:border-b-0 cursor-pointer hover:bg-bg"
                 >
-                  <span className="text-[13px] font-semibold text-ink">{lead.name || "Unknown"}</span>
+                  <span className="flex items-center gap-1.5 text-[13px] font-semibold text-ink">
+                    {lead.name || "Unknown"}
+                    {lead.isRepeat && (
+                      <span className="pill bg-[#fffbeb] text-[#b45309] text-[10px] px-1.5 py-0">🟡 Repeat</span>
+                    )}
+                  </span>
                   <span className="text-xs text-muted">
                     {lead.model} · {lead.phone || "no phone"}
                   </span>
-                  <span className="text-[11px] text-muted">{timeAgo(lead.createdAt)}</span>
+                  <span className="text-[11px] text-muted">{timeAgo(lead.activityAt)}</span>
                 </li>
               ))}
             </ul>

@@ -8,6 +8,7 @@ import PipelineStats from "../components/PipelineStats";
 import LeadsTrendChart from "../components/LeadsTrendChart";
 import ModelBarChart from "../components/ModelBarChart";
 import LeadStatsPanel from "../components/LeadStatsPanel";
+import DuplicateStatsPanel from "../components/DuplicateStatsPanel";
 import { getSessionFromCookieHeader } from "../lib/auth";
 import { apiFetch } from "../lib/apiFetch";
 
@@ -101,6 +102,8 @@ export default function Dashboard({ username, role }) {
       </div>
 
       <LeadStatsPanel stats={stats} />
+
+      <DuplicateStatsPanel stats={stats} />
 
       <FollowUpsCard followUps={pendingFollowUps} />
     </Layout>

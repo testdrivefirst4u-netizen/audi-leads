@@ -42,7 +42,7 @@ async function handler(req, res) {
   }
 
   const leads = await Lead.find(filter)
-    .select("model canonicalModel data status sheetCreatedAt calls remarks")
+    .select("model canonicalModel data status sheetCreatedAt calls remarks leadType duplicateCount enquiryHistory")
     .lean();
 
   const exchangeCounts = { Yes: 0, No: 0, "Not Filled": 0 };
@@ -72,6 +72,10 @@ async function handler(req, res) {
 
   let totalCalls = 0;
   let hotCount = 0;
+  let totalEnquiries = 0;
+  let repeatEnquiryLeads = 0;
+  let duplicateEnquiries = 0;
+  let customersAcrossModels = 0;
 
   for (const lead of leads) {
     const exchangeValue = pickField(lead.data, FIELD_MATCHERS.exchangePlan);
@@ -94,6 +98,14 @@ async function handler(req, res) {
 
     totalCalls += (lead.calls || []).length;
 
+    const enquiryCount = (lead.enquiryHistory || []).length || 1;
+    totalEnquiries += enquiryCount;
+    if ((lead.duplicateCount || 0) > 0) {
+      repeatEnquiryLeads++;
+      duplicateEnquiries += lead.duplicateCount;
+    }
+    if (lead.leadType === "new_model_existing_customer") customersAcrossModels++;
+
     if (lead.sheetCreatedAt) {
       const key = dateKey(lead.sheetCreatedAt);
       if (key in trendMap) trendMap[key]++;
@@ -110,6 +122,14 @@ async function handler(req, res) {
     exchange: toSortedArray(exchangeCounts),
     showroom: toSortedArray(showroomCounts),
     models: toSortedArray(modelCounts),
+    duplicateDetection: {
+      totalEnquiries,
+      uniqueLeads: leads.length,
+      duplicateEnquiries,
+      repeatEnquiryLeads,
+      customersAcrossModels,
+      vehicleWise: toSortedArray(modelCounts),
+    },
     pipeline: LEAD_STATUSES.map((label) => ({ label, count: pipelineCounts[label] })),
     trend,
   });

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import LeadDetailModal from "./LeadDetailModal";
+import { FaWhatsapp } from "react-icons/fa6";
 import {
   pickField,
   FIELD_MATCHERS,
@@ -36,6 +37,29 @@ function ModelBadge({ lead }) {
   );
 }
 
+// Classification badge for duplicate detection — repeat enquiries take
+// priority over the original new/existing-customer classification since
+// it's the more actionable signal for a rep looking at the table.
+function LeadTypeBadge({ lead }) {
+  if ((lead.duplicateCount || 0) > 0) {
+    return (
+      <span className="pill bg-[#fffbeb] text-[#b45309]" title={`${lead.duplicateCount + 1} total enquiries for this model`}>
+        🟡 Repeat Enquiry ({lead.duplicateCount + 1}x)
+      </span>
+    );
+  }
+  if (lead.leadType === "new_model_existing_customer") {
+    return (
+      <span className="pill bg-[#eff6ff] text-[#1d4ed8]" title="This customer already has a lead for a different model">
+        🔵 New Model
+      </span>
+    );
+  }
+  return (
+    <span className="pill bg-[#ecfdf5] text-[#047857]">🟢 New Lead</span>
+  );
+}
+
 const NEW_LEAD_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function NameCell({ lead }) {
@@ -66,7 +90,7 @@ function PhoneCell({ phone }) {
         className="whatsapp-link"
         title="Chat on WhatsApp"
       >
-        <WhatsAppIcon />
+        <FaWhatsapp className="text-green-500"/>
       </a>
     </span>
   );
@@ -303,6 +327,7 @@ export default function LeadsTable({
                       <SortIcon direction={sortBy === "name" ? sortDir : null} />
                     </span>
                   </th>
+                  <th>Type</th>
                   <th>Phone</th>
                   <th>Email</th>
                   <th>Agent</th>
@@ -329,6 +354,9 @@ export default function LeadsTable({
                       </td>
                       <td className="sticky left-0 z-[1] bg-card">
                         <NameCell lead={lead} />
+                      </td>
+                      <td>
+                        <LeadTypeBadge lead={lead} />
                       </td>
                       <td>
                         <PhoneCell phone={lead.phone} />
