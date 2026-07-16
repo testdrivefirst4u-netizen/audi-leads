@@ -1,8 +1,8 @@
 const connectDB = require("../../lib/db");
 const Lead = require("../../models/Lead");
 const Agent = require("../../models/Agent");
-const { requireAuth } = require("../../lib/auth");
-const { pickField, FIELD_MATCHERS, isUrgentTimeline } = require("../../lib/leadFields");
+const { requireCompanyMemberOrSuperAdminView } = require("../../lib/auth");
+const { pickField, FIELD_MATCHERS, isUrgentTimeline, nextFollowUp } = require("../../lib/leadFields");
 
 const SORTABLE_FIELDS = new Set(["name", "canonicalModel", "status", "sheetCreatedAt"]);
 
@@ -19,13 +19,15 @@ async function handler(req, res) {
     to = "",
     agent = "",
     location = "",
+    source = "",
+    followUpFilter = "",
     page = "1",
     pageSize = "20",
     sortBy = "sheetCreatedAt",
     sortDir = "desc",
   } = req.query;
 
-  const filter = {};
+  const filter = { companyId: req.session.companyId };
   if (search) {
     filter.$or = [
       { name: { $regex: search, $options: "i" } },
@@ -44,6 +46,9 @@ async function handler(req, res) {
   }
   if (location) {
     filter.location = location === "unfilled" ? { $in: [null, ""] } : location;
+  }
+  if (source) {
+    filter.source = source;
   }
   // Filters on sheetCreatedAt — the date the lead actually came in on the
   // sheet (its own create_time column), not when we happened to sync it.
@@ -66,7 +71,36 @@ async function handler(req, res) {
   const sortField = SORTABLE_FIELDS.has(sortBy) ? sortBy : "sheetCreatedAt";
   const sortDirection = sortDir === "asc" ? 1 : -1;
 
-  const agentList = req.session.role === "admin" || !req.session.role ? await Agent.find({ active: true }).select("name").lean() : [];
+  // Follow-up tabs (Overdue/Due Today/Upcoming/Completed) — like "hot"
+  // leads above, which bucket a lead falls into can't be expressed as a
+  // plain Mongo filter (it depends on the soonest *pending* follow-up's
+  // date, computed in JS by nextFollowUp). Narrow to leads that have any
+  // follow-ups at all (indexed-ish via the array-exists check) then finish
+  // the classification in JS — same low-hundreds-of-leads scale as "hot".
+  const followUpCandidates = await Lead.find({ ...filter, "followUps.0": { $exists: true } })
+    .select("followUps")
+    .lean();
+  const followUpTabs = { overdue: 0, today: 0, upcoming: 0, completed: 0 };
+  const bucketIds = { overdue: [], today: [], upcoming: [], completed: [] };
+  for (const l of followUpCandidates) {
+    const info = nextFollowUp(l);
+    if (info && followUpTabs[info.status] !== undefined) {
+      followUpTabs[info.status]++;
+      bucketIds[info.status].push(l._id);
+    }
+    if ((l.followUps || []).some((f) => f.completed)) {
+      followUpTabs.completed++;
+      bucketIds.completed.push(l._id);
+    }
+  }
+  if (followUpFilter && bucketIds[followUpFilter]) {
+    filter._id = { $in: bucketIds[followUpFilter] };
+  }
+
+  const agentList =
+    req.session.role === "admin" || req.session.role === "super_admin" || !req.session.role
+      ? await Agent.find({ active: true, companyId: req.session.companyId }).select("name").lean()
+      : [];
 
   // "Hot" leads (urgent purchase timeline + nobody's touched them yet) can't
   // be expressed as a simple Mongo filter, since the timeline answer lives
@@ -75,6 +109,7 @@ async function handler(req, res) {
   // the filtered result — fine at this data volume (low hundreds of leads).
   if (hot === "true") {
     const candidates = await Lead.find({
+      companyId: req.session.companyId,
       status: "New",
       "remarks.0": { $exists: false },
       "calls.0": { $exists: false },
@@ -82,6 +117,7 @@ async function handler(req, res) {
       ...(filter.sheetCreatedAt ? { sheetCreatedAt: filter.sheetCreatedAt } : {}),
       ...(filter.assignedTo !== undefined ? { assignedTo: filter.assignedTo } : {}),
       ...(filter.location ? { location: filter.location } : {}),
+      ...(filter.source ? { source: filter.source } : {}),
     })
       .sort({ sheetCreatedAt: -1 })
       .populate("assignedTo", "name")
@@ -107,7 +143,8 @@ async function handler(req, res) {
     const total = hotLeads.length;
     const start = (pageNum - 1) * pageSizeNum;
     const leads = hotLeads.slice(start, start + pageSizeNum);
-    const models = await Lead.distinct("canonicalModel");
+    const models = await Lead.distinct("canonicalModel", { companyId: req.session.companyId });
+    const sources = await Lead.distinct("source", { companyId: req.session.companyId });
 
     return res.status(200).json({
       leads,
@@ -116,11 +153,13 @@ async function handler(req, res) {
       pageSize: pageSizeNum,
       totalPages: Math.max(1, Math.ceil(total / pageSizeNum)),
       models: models.filter(Boolean).sort(),
+      sources: sources.filter(Boolean).sort(),
       agents: agentList,
+      followUpTabs,
     });
   }
 
-  const [leads, total, models] = await Promise.all([
+  const [leads, total, models, sources] = await Promise.all([
     Lead.find(filter)
       .sort({ [sortField]: sortDirection })
       .skip((pageNum - 1) * pageSizeNum)
@@ -128,7 +167,8 @@ async function handler(req, res) {
       .populate("assignedTo", "name")
       .lean(),
     Lead.countDocuments(filter),
-    Lead.distinct("canonicalModel"),
+    Lead.distinct("canonicalModel", { companyId: req.session.companyId }),
+    Lead.distinct("source", { companyId: req.session.companyId }),
   ]);
 
   res.status(200).json({
@@ -138,8 +178,10 @@ async function handler(req, res) {
     pageSize: pageSizeNum,
     totalPages: Math.max(1, Math.ceil(total / pageSizeNum)),
     models: models.filter(Boolean).sort(),
+    sources: sources.filter(Boolean).sort(),
     agents: agentList,
+    followUpTabs,
   });
 }
 
-export default requireAuth(handler);
+export default requireCompanyMemberOrSuperAdminView(handler);

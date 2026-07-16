@@ -48,12 +48,16 @@ export default function LoginPage() {
         <div className="flex items-center gap-2.5 mb-2">
           <div className="flex items-center justify-center w-[34px] h-[34px] rounded-[9px] bg-sidebar shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/audi-logo.png" alt="Audi" className="h-[18px] w-auto object-contain" />
+            <img
+              src="/broaddcast-logo.svg"
+              alt="Broaddcast"
+              className="h-[16px] w-auto object-contain brightness-0 invert"
+            />
           </div>
-          <span className="text-[15px] font-bold text-ink">Audi Leads</span>
+          <span className="text-[15px] font-bold text-ink">Broaddcast Leads Platform</span>
         </div>
         <h1 className="m-0 mb-1 text-xl font-bold text-ink">Welcome back</h1>
-        <p className="text-[13px] text-muted m-0 mb-6">Sign in to view and manage leads.</p>
+        <p className="text-[13px] text-muted m-0 mb-6">Sign in to view and manage your company's leads.</p>
 
         <div className="field">
           <label>Username</label>

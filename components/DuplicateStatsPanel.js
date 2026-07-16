@@ -18,14 +18,7 @@ export default function DuplicateStatsPanel({ stats }) {
           <div className="label">Duplicate Enquiries</div>
           <div className="value">{d.duplicateEnquiries}</div>
         </div>
-        <div className="card">
-          <div className="label">Repeat Enquiry Leads</div>
-          <div className="value">{d.repeatEnquiryLeads}</div>
-        </div>
-        <div className="card">
-          <div className="label">Customers Across Models</div>
-          <div className="value">{d.customersAcrossModels}</div>
-        </div>
+      
       </div>
     </>
   );

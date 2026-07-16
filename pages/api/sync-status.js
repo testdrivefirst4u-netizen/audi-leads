@@ -7,7 +7,8 @@ async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   await connectDB();
-  const latestLog = await SyncLog.findOne().sort({ createdAt: -1 });
+  const { companyId } = req.session;
+  const latestLog = await SyncLog.findOne({ companyId }).sort({ createdAt: -1 });
 
   if (!latestLog) {
     return res.status(200).json({
@@ -21,7 +22,7 @@ async function handler(req, res) {
     });
   }
 
-  const payload = await buildStatusPayload(latestLog);
+  const payload = await buildStatusPayload(latestLog, companyId);
   res.status(200).json(payload);
 }
 

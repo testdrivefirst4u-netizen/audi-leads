@@ -37,6 +37,7 @@ const EnquiryHistoryEntrySchema = new mongoose.Schema(
     model: { type: String }, // raw sheet tab this specific submission came from
     rowNumber: { type: Number },
     date: { type: Date },
+    source: { type: String }, // "Google Sheet", or an external lead source's name (e.g. "CarDekho")
   },
   { _id: false }
 );
@@ -50,6 +51,7 @@ const LEAD_TYPES = ["new", "new_model_existing_customer"];
 
 const LeadSchema = new mongoose.Schema(
   {
+    companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true, index: true },
     leadId: { type: String, index: true, sparse: true },
     phone: { type: String, index: true, sparse: true },
     name: { type: String },
@@ -69,6 +71,9 @@ const LeadSchema = new mongoose.Schema(
     location: { type: String, index: true },
     rowNumber: { type: Number }, // 1-based row number in the sheet (excluding header)
     contentHash: { type: String, index: true },
+    // Where this lead originally came from — the Google Sheet sync, or an
+    // external integration (CarDekho/CarWale/etc.) pushing via its own API key.
+    source: { type: String, default: "Google Sheet", index: true },
     // CRM fields managed from the dashboard, untouched by the sheet sync.
     status: { type: String, enum: LEAD_STATUSES, default: "New", index: true },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "Agent", index: true },
@@ -93,10 +98,10 @@ const LeadSchema = new mongoose.Schema(
 // Customer-level matching for the actual dedup decision (same phone/email +
 // same canonicalModel = repeat enquiry) happens in lib/syncService.js against
 // the phone/email indexes below, not against these.
-LeadSchema.index({ model: 1, leadId: 1 });
-LeadSchema.index({ model: 1, phone: 1 });
-LeadSchema.index({ model: 1, rowNumber: 1 });
-LeadSchema.index({ "enquiryHistory.model": 1, "enquiryHistory.rowNumber": 1 });
+LeadSchema.index({ companyId: 1, model: 1, leadId: 1 });
+LeadSchema.index({ companyId: 1, model: 1, phone: 1 });
+LeadSchema.index({ companyId: 1, model: 1, rowNumber: 1 });
+LeadSchema.index({ companyId: 1, "enquiryHistory.model": 1, "enquiryHistory.rowNumber": 1 });
 
 module.exports = mongoose.models.Lead || mongoose.model("Lead", LeadSchema);
 module.exports.LEAD_STATUSES = LEAD_STATUSES;

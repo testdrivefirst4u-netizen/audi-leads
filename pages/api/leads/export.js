@@ -1,6 +1,6 @@
 const connectDB = require("../../../lib/db");
 const Lead = require("../../../models/Lead");
-const { requireAuth } = require("../../../lib/auth");
+const { requireCompanyMemberOrSuperAdminView } = require("../../../lib/auth");
 const { toCsv } = require("../../../lib/csv");
 const { pickField, FIELD_MATCHERS, prettify } = require("../../../lib/leadFields");
 
@@ -8,12 +8,13 @@ async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   await connectDB();
-  const { from, to, model = "", status = "", agent = "", location = "" } = req.query;
+  const { from, to, model = "", status = "", agent = "", location = "", source = "" } = req.query;
 
-  const filter = {};
+  const filter = { companyId: req.session.companyId };
   if (model) filter.canonicalModel = model;
   if (status) filter.status = status;
   if (location) filter.location = location === "unfilled" ? { $in: [null, ""] } : location;
+  if (source) filter.source = source;
   if (from || to) {
     filter.sheetCreatedAt = {};
     if (from) filter.sheetCreatedAt.$gte = new Date(`${from}T00:00:00Z`);
@@ -40,6 +41,7 @@ async function handler(req, res) {
     "Name",
     "Phone",
     "Email",
+    "Source",
     "Agent",
     "Status",
     "Calls Made",
@@ -69,6 +71,7 @@ async function handler(req, res) {
       lead.name || "",
       lead.phone || "",
       lead.email || "",
+      lead.source || "Google Sheet",
       lead.assignedTo?.name || "Unassigned",
       lead.status || "New",
       (lead.calls || []).length,
@@ -91,4 +94,4 @@ async function handler(req, res) {
   res.status(200).send(`﻿${csv}`);
 }
 
-export default requireAuth(handler);
+export default requireCompanyMemberOrSuperAdminView(handler);

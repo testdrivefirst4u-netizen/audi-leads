@@ -1,7 +1,8 @@
 const connectDB = require("../../../../../lib/db");
 const Lead = require("../../../../../models/Lead");
-const { requireAuth } = require("../../../../../lib/auth");
+const { requireCompanyMember } = require("../../../../../lib/auth");
 const { leadOwnershipFilter } = require("../../../../../lib/leadAccess");
+const { completeDueFollowUps } = require("../../../../../lib/followUps");
 
 async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -20,15 +21,24 @@ async function handler(req, res) {
   }
 
   await connectDB();
+  const filter = leadOwnershipFilter(req.session, id);
+
+  // Same reasoning as remarks.js/calls.js — scheduling a new follow-up is
+  // the agent acting on this lead, so any follow-up already due (overdue or
+  // due today) is resolved by it. Done before the $push below so the
+  // brand-new entry (which could itself be dated today) is never in scope
+  // to be matched and instantly marked complete.
+  const followUpsCleared = await completeDueFollowUps(Lead, filter);
+
   const lead = await Lead.findOneAndUpdate(
-    leadOwnershipFilter(req.session, id),
+    filter,
     { $push: { followUps: { date: parsedDate, note: (note || "").trim(), completed: false } } },
     { new: true }
   );
 
   if (!lead) return res.status(404).json({ error: "Lead not found" });
 
-  res.status(200).json({ lead });
+  res.status(200).json({ lead, followUpsCleared });
 }
 
-export default requireAuth(handler);
+export default requireCompanyMember(handler);

@@ -1,13 +1,22 @@
 import { useEffect, useState, useCallback } from "react";
+import Skeleton from "react-loading-skeleton";
 import Layout from "../components/Layout";
 import ModelBarChart from "../components/ModelBarChart";
+import CompanySwitcher from "../components/CompanySwitcher";
 import { getSessionFromCookieHeader } from "../lib/auth";
+import { getCompanyBranding } from "../lib/companyBranding";
 import { apiFetch } from "../lib/apiFetch";
 
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);
   if (!session) return { redirect: { destination: "/login", permanent: false } };
-  return { props: { username: session.username, role: session.role || "admin" } };
+  // Super admin isn't redirected away anymore — they get a read-only,
+  // company-picker-driven view of this same reports page.
+  if (session.role === "super_admin") {
+    return { props: { username: session.username, role: "super_admin" } };
+  }
+  const branding = await getCompanyBranding(session.companyId);
+  return { props: { username: session.username, role: session.role || "admin", ...branding } };
 }
 
 function currentMonth() {
@@ -41,17 +50,28 @@ function BarList({ rows, emptyText }) {
   );
 }
 
-export default function ReportsPage({ username, role }) {
+export default function ReportsPage({ username, role, companyName, companyLogoUrl, companyBrandColor }) {
+  const isSuperAdminView = role === "super_admin";
+  const [viewCompanyId, setViewCompanyId] = useState("");
   const [month, setMonth] = useState(currentMonth());
   const [report, setReport] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const fetchReport = useCallback(async (m) => {
-    const res = await apiFetch(`/api/reports?month=${m}`);
-    setReport(await res.json());
-  }, []);
+  const fetchReport = useCallback(
+    async (m) => {
+      if (isSuperAdminView && !viewCompanyId) return;
+      const params = new URLSearchParams({ month: m });
+      if (isSuperAdminView) params.set("companyId", viewCompanyId);
+      const res = await apiFetch(`/api/reports?${params.toString()}`);
+      setReport(await res.json());
+      setLoading(false);
+    },
+    [isSuperAdminView, viewCompanyId]
+  );
 
   useEffect(() => {
+    setLoading(true);
     fetchReport(month);
   }, [month, fetchReport]);
 
@@ -64,7 +84,9 @@ export default function ReportsPage({ username, role }) {
       endDate.setUTCDate(endDate.getUTCDate() - 1);
       const end = endDate.toISOString().slice(0, 10);
 
-      const res = await apiFetch(`/api/leads/export?from=${start}&to=${end}`);
+      const params = new URLSearchParams({ from: start, to: end });
+      if (isSuperAdminView) params.set("companyId", viewCompanyId);
+      const res = await apiFetch(`/api/leads/export?${params.toString()}`);
       if (!res.ok) throw new Error("Export failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -83,8 +105,10 @@ export default function ReportsPage({ username, role }) {
   }
 
   return (
-    <Layout username={username} role={role}>
+    <Layout username={username} role={role} companyName={companyName} companyLogoUrl={companyLogoUrl} companyBrandColor={companyBrandColor}>
       <h1 className="page-title">Monthly Reports</h1>
+
+      {isSuperAdminView && <CompanySwitcher companyId={viewCompanyId} onChange={setViewCompanyId} />}
 
       <div className="table-toolbar rounded-xl border border-border mb-5">
         <div className="toolbar-group">
@@ -96,7 +120,37 @@ export default function ReportsPage({ username, role }) {
         </button>
       </div>
 
-      {report && (
+      {loading ? (
+        <>
+          <Skeleton height={28} width={180} className="mb-3" />
+          <div className="status-grid">
+            <div className="card">
+              <div className="label">Total Leads</div>
+              <div className="value"><Skeleton width={60} /></div>
+            </div>
+            <div className="card">
+              <div className="label">Calls Made</div>
+              <div className="value"><Skeleton width={60} /></div>
+            </div>
+          </div>
+          <div className="chart-row">
+            <div className="chart-section">
+              <h3>By Model</h3>
+              <Skeleton height={220} />
+            </div>
+            <div className="chart-section">
+              <h3>By Status</h3>
+              <Skeleton height={220} />
+            </div>
+          </div>
+          <div className="stats-panel">
+            <div className="stats-card">
+              <h3>Showroom</h3>
+              <Skeleton height={140} />
+            </div>
+          </div>
+        </>
+      ) : report && (
         <>
           <h2 className="section-title">{monthLabel(month)}</h2>
           <div className="status-grid">
@@ -125,6 +179,10 @@ export default function ReportsPage({ username, role }) {
             <div className="stats-card">
               <h3>Showroom</h3>
               <BarList rows={report.byShowroom} emptyText="No showroom data" />
+            </div>
+            <div className="stats-card">
+              <h3>Lead Source</h3>
+              <BarList rows={report.bySource} emptyText="No source data" />
             </div>
           </div>
         </>

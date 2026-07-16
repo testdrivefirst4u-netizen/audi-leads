@@ -1,6 +1,6 @@
 const connectDB = require("../../lib/db");
 const Lead = require("../../models/Lead");
-const { requireAuth } = require("../../lib/auth");
+const { requireCompanyMemberOrSuperAdminView } = require("../../lib/auth");
 const { pickField, FIELD_MATCHERS, isUrgentTimeline, normalizeShowroom } = require("../../lib/leadFields");
 
 const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Won", "Lost"];
@@ -30,7 +30,7 @@ async function handler(req, res) {
   await connectDB();
   const { month = "" } = req.query; // optional "YYYY-MM" — blank means all-time
 
-  const filter = {};
+  const filter = { companyId: req.session.companyId };
   if (/^\d{4}-\d{2}$/.test(month)) {
     const start = new Date(`${month}-01T00:00:00Z`);
     const end = new Date(start);
@@ -41,13 +41,29 @@ async function handler(req, res) {
     filter.assignedTo = req.session.agentId;
   }
 
+  // Always-visible "Total Records Imported" / "New Leads Today" — same
+  // company+agent scope as everything else here, but never narrowed by the
+  // month filter, since these two are meant to read as running totals.
+  const baseFilter = { companyId: req.session.companyId };
+  if (req.session.role === "agent") baseFilter.assignedTo = req.session.agentId;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const [totalRecords, newLeadsToday] = await Promise.all([
+    Lead.countDocuments(baseFilter),
+    // The sheet's own create_time, not our DB insert time — a lead entered
+    // on the sheet last week but only just synced today (e.g. after a sync
+    // gap) shouldn't count as "new today".
+    Lead.countDocuments({ ...baseFilter, sheetCreatedAt: { $gte: startOfToday } }),
+  ]);
+
   const leads = await Lead.find(filter)
-    .select("model canonicalModel data status sheetCreatedAt calls remarks leadType duplicateCount enquiryHistory")
+    .select("model canonicalModel data status sheetCreatedAt calls remarks leadType duplicateCount enquiryHistory source")
     .lean();
 
   const exchangeCounts = { Yes: 0, No: 0, "Not Filled": 0 };
   const showroomCounts = {};
   const modelCounts = {};
+  const sourceCounts = {};
   const pipelineCounts = Object.fromEntries(LEAD_STATUSES.map((s) => [s, 0]));
 
   // Build the trend days upfront so days with zero leads still show — the
@@ -93,6 +109,9 @@ async function handler(req, res) {
     const modelName = lead.canonicalModel || lead.model || "Unknown";
     modelCounts[modelName] = (modelCounts[modelName] || 0) + 1;
 
+    const sourceName = lead.source || "Google Sheet";
+    sourceCounts[sourceName] = (sourceCounts[sourceName] || 0) + 1;
+
     const status = LEAD_STATUSES.includes(lead.status) ? lead.status : "New";
     pipelineCounts[status]++;
 
@@ -117,11 +136,14 @@ async function handler(req, res) {
   res.status(200).json({
     month: month || null,
     total: leads.length,
+    totalRecords,
+    newLeadsToday,
     totalCalls,
     hotCount,
     exchange: toSortedArray(exchangeCounts),
     showroom: toSortedArray(showroomCounts),
     models: toSortedArray(modelCounts),
+    sources: toSortedArray(sourceCounts),
     duplicateDetection: {
       totalEnquiries,
       uniqueLeads: leads.length,
@@ -135,4 +157,4 @@ async function handler(req, res) {
   });
 }
 
-export default requireAuth(handler);
+export default requireCompanyMemberOrSuperAdminView(handler);

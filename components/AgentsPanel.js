@@ -1,21 +1,25 @@
 import { useEffect, useState, useCallback } from "react";
+import Skeleton from "react-loading-skeleton";
 import { apiFetch } from "../lib/apiFetch";
+import { useToast } from "./ToastProvider";
 import { SHOWROOM_LOCATIONS } from "../lib/leadFields";
 
 export default function AgentsPanel() {
+  const toast = useToast();
   const [agents, setAgents] = useState([]);
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [location, setLocation] = useState("");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     const res = await apiFetch("/api/agents");
     if (!res.ok) return;
     const data = await res.json();
     setAgents(data.agents || []);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -25,7 +29,6 @@ export default function AgentsPanel() {
   async function handleCreate(e) {
     e.preventDefault();
     setSaving(true);
-    setMessage(null);
     try {
       const res = await apiFetch("/api/agents", {
         method: "POST",
@@ -40,30 +43,34 @@ export default function AgentsPanel() {
       setUsername("");
       setPassword("");
       setLocation("");
-      setMessage({ type: "ok", text: "Agent added." });
+      toast("Agent added");
       load();
     } catch (err) {
-      setMessage({ type: "err", text: err.message });
+      toast(err.message, { type: "err" });
     } finally {
       setSaving(false);
     }
   }
 
   async function toggleActive(agent) {
-    await apiFetch(`/api/agents/${agent._id}`, {
+    const res = await apiFetch(`/api/agents/${agent._id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ active: !agent.active }),
     });
+    if (res.ok) toast(agent.active ? `${agent.name} deactivated` : `${agent.name} reactivated`);
+    else toast("Failed to update agent", { type: "err" });
     load();
   }
 
   async function changeLocation(agent, newLocation) {
-    await apiFetch(`/api/agents/${agent._id}`, {
+    const res = await apiFetch(`/api/agents/${agent._id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ location: newLocation }),
     });
+    if (res.ok) toast(`${agent.name}'s location updated`);
+    else toast("Failed to update location", { type: "err" });
     load();
   }
 
@@ -108,7 +115,6 @@ export default function AgentsPanel() {
             <button className="btn" type="submit" disabled={saving}>
               {saving ? "Adding..." : "Add Agent"}
             </button>
-            {message && <span className={`save-msg ${message.type} ml-3 inline-block`}>{message.text}</span>}
           </div>
         </form>
 
@@ -124,39 +130,51 @@ export default function AgentsPanel() {
             </tr>
           </thead>
           <tbody>
-            {agents.map((a) => (
-              <tr key={a._id}>
-                <td>{a.name}</td>
-                <td className="text-muted">{a.username}</td>
-                <td>
-                  <select value={a.location || ""} onChange={(e) => changeLocation(a, e.target.value)}>
-                    <option value="">Any (general pool)</option>
-                    {SHOWROOM_LOCATIONS.map((loc) => (
-                      <option key={loc} value={loc}>
-                        {loc}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td>{a.leadCount}</td>
-                <td>
-                  <span className={`pill ${a.active ? "bg-success/10 text-success" : "bg-danger/10 text-danger"}`}>
-                    {a.active ? "Active" : "Inactive"}
-                  </span>
-                </td>
-                <td>
-                  <button className="btn-sm" onClick={() => toggleActive(a)}>
-                    {a.active ? "Deactivate" : "Reactivate"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {agents.length === 0 && (
-              <tr>
-                <td colSpan={6} className="empty-state">
-                  No agents yet — add one above.
-                </td>
-              </tr>
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <tr key={i}>
+                  {Array.from({ length: 6 }).map((_, j) => (
+                    <td key={j}><Skeleton /></td>
+                  ))}
+                </tr>
+              ))
+            ) : (
+              <>
+                {agents.map((a) => (
+                  <tr key={a._id}>
+                    <td>{a.name}</td>
+                    <td className="text-muted">{a.username}</td>
+                    <td>
+                      <select value={a.location || ""} onChange={(e) => changeLocation(a, e.target.value)}>
+                        <option value="">Any (general pool)</option>
+                        {SHOWROOM_LOCATIONS.map((loc) => (
+                          <option key={loc} value={loc}>
+                            {loc}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>{a.leadCount}</td>
+                    <td>
+                      <span className={`pill ${a.active ? "bg-success/10 text-success" : "bg-danger/10 text-danger"}`}>
+                        {a.active ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td>
+                      <button className="btn-sm" onClick={() => toggleActive(a)}>
+                        {a.active ? "Deactivate" : "Reactivate"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {agents.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="empty-state">
+                      No agents yet — add one above.
+                    </td>
+                  </tr>
+                )}
+              </>
             )}
           </tbody>
         </table>
@@ -186,31 +204,43 @@ export default function AgentsPanel() {
             </tr>
           </thead>
           <tbody>
-            {agents.map((a) => (
-              <tr key={a._id}>
-                <td>{a.name}</td>
-                <td className="text-muted">{a.location || "Any"}</td>
-                <td>{a.leadCount}</td>
-                <td>{a.contacted}</td>
-                <td className="text-success font-semibold">{a.won}</td>
-                <td className="text-danger font-semibold">{a.lost}</td>
-                <td>
-                  <div className="flex items-center gap-2">
-                    <div className="bar-track w-20">
-                      <div className="bar-fill" style={{ width: `${a.winRate}%` }} />
-                    </div>
-                    <span className="text-muted text-xs">{a.winRate}%</span>
-                  </div>
-                </td>
-                <td>{a.calls}</td>
-              </tr>
-            ))}
-            {agents.length === 0 && (
-              <tr>
-                <td colSpan={8} className="empty-state">
-                  No agent activity yet.
-                </td>
-              </tr>
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <tr key={i}>
+                  {Array.from({ length: 8 }).map((_, j) => (
+                    <td key={j}><Skeleton /></td>
+                  ))}
+                </tr>
+              ))
+            ) : (
+              <>
+                {agents.map((a) => (
+                  <tr key={a._id}>
+                    <td>{a.name}</td>
+                    <td className="text-muted">{a.location || "Any"}</td>
+                    <td>{a.leadCount}</td>
+                    <td>{a.contacted}</td>
+                    <td className="text-success font-semibold">{a.won}</td>
+                    <td className="text-danger font-semibold">{a.lost}</td>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <div className="bar-track w-20">
+                          <div className="bar-fill" style={{ width: `${a.winRate}%` }} />
+                        </div>
+                        <span className="text-muted text-xs">{a.winRate}%</span>
+                      </div>
+                    </td>
+                    <td>{a.calls}</td>
+                  </tr>
+                ))}
+                {agents.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="empty-state">
+                      No agent activity yet.
+                    </td>
+                  </tr>
+                )}
+              </>
             )}
           </tbody>
         </table>

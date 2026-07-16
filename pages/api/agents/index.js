@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const connectDB = require("../../../lib/db");
 const Agent = require("../../../models/Agent");
 const Lead = require("../../../models/Lead");
@@ -6,10 +7,12 @@ const { hashPassword, requireAdmin } = require("../../../lib/auth");
 async function handler(req, res) {
   await connectDB();
 
+  const { companyId } = req.session;
+
   if (req.method === "GET") {
-    const agents = await Agent.find({}).sort({ createdAt: 1 }).lean();
+    const agents = await Agent.find({ companyId }).sort({ createdAt: 1 }).lean();
     const perf = await Lead.aggregate([
-      { $match: { assignedTo: { $ne: null } } },
+      { $match: { companyId: new mongoose.Types.ObjectId(companyId), assignedTo: { $ne: null } } },
       {
         $group: {
           _id: "$assignedTo",
@@ -58,7 +61,7 @@ async function handler(req, res) {
     }
 
     const passwordHash = await hashPassword(password);
-    const agent = await Agent.create({ name, username, passwordHash, active: true, location });
+    const agent = await Agent.create({ name, username, passwordHash, active: true, location, companyId });
     return res.status(201).json({
       agent: { _id: agent._id, name: agent.name, username: agent.username, active: true, location: agent.location },
     });

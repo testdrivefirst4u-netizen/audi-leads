@@ -2,7 +2,7 @@ const connectDB = require("../../../lib/db");
 const Admin = require("../../../models/Admin");
 const Agent = require("../../../models/Agent");
 const { verifyPassword, signSessionToken, serializeSessionCookie } = require("../../../lib/auth");
-const { seedAdmin } = require("../../../lib/seedAdmin");
+const { seedAdmin, seedSuperAdmin } = require("../../../lib/seedAdmin");
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -17,13 +17,26 @@ export default async function handler(req, res) {
     // On Vercel, server.js (which seeds the admin on boot) never runs, so seed
     // it here instead. Idempotent and cheap — safe to run on every login.
     await seedAdmin();
+    await seedSuperAdmin();
 
     const admin = await Admin.findOne({ username });
     if (admin) {
       const valid = await verifyPassword(password, admin.passwordHash);
       if (!valid) return res.status(401).json({ error: "Invalid username or password" });
 
-      const token = signSessionToken({ sub: String(admin._id), username: admin.username, role: "admin" });
+      // No companyId = the platform-level super admin; otherwise a company admin.
+      if (!admin.companyId) {
+        const token = signSessionToken({ sub: String(admin._id), username: admin.username, role: "super_admin" });
+        res.setHeader("Set-Cookie", serializeSessionCookie(token));
+        return res.status(200).json({ username: admin.username, role: "super_admin" });
+      }
+
+      const token = signSessionToken({
+        sub: String(admin._id),
+        username: admin.username,
+        role: "admin",
+        companyId: String(admin.companyId),
+      });
       res.setHeader("Set-Cookie", serializeSessionCookie(token));
       return res.status(200).json({ username: admin.username, role: "admin" });
     }
@@ -44,6 +57,7 @@ export default async function handler(req, res) {
       name: agent.name,
       role: "agent",
       agentId: String(agent._id),
+      companyId: String(agent.companyId),
     });
     res.setHeader("Set-Cookie", serializeSessionCookie(token));
     res.status(200).json({ username: agent.username, name: agent.name, role: "agent" });

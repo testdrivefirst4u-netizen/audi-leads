@@ -5,7 +5,7 @@ import Toast from "./Toast";
 import { apiFetch } from "../lib/apiFetch";
 import { playNotificationSound } from "../lib/notificationSound";
 
-const POLL_MS = 10000;
+const POLL_MS = 3000;
 const LAST_SEEN_KEY = "audi-leads:notifications-last-seen";
 
 function timeAgo(date) {

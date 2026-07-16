@@ -15,7 +15,7 @@ async function handler(req, res) {
   if (location !== undefined) update.location = String(location).trim();
   if (password) update.passwordHash = await hashPassword(password);
 
-  const agent = await Agent.findByIdAndUpdate(id, update, { new: true });
+  const agent = await Agent.findOneAndUpdate({ _id: id, companyId: req.session.companyId }, update, { new: true });
   if (!agent) return res.status(404).json({ error: "Agent not found" });
 
   res.status(200).json({

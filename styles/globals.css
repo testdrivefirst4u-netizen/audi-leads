@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Platform default accent (blue). A company with its own brandColor gets
+     these three overridden inline by Layout.js — see lib/color.js. */
+  --accent-rgb: 61 90 254;
+  --accent-hover-rgb: 48 78 222;
+  --accent-soft-rgb: 238 242 255;
+}
+
 @layer base {
   * {
     box-sizing: border-box;

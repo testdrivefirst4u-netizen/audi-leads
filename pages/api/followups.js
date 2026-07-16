@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const connectDB = require("../../lib/db");
 const Lead = require("../../models/Lead");
-const { requireAuth } = require("../../lib/auth");
+const { requireCompanyMemberOrSuperAdminView } = require("../../lib/auth");
 
 async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -15,7 +15,12 @@ async function handler(req, res) {
   }
 
   const followUps = await Lead.aggregate([
-    { $match: { "followUps.0": { $exists: true } } },
+    {
+      $match: {
+        companyId: new mongoose.Types.ObjectId(req.session.companyId),
+        "followUps.0": { $exists: true },
+      },
+    },
     { $unwind: "$followUps" },
     ...(Object.keys(match).length ? [{ $match: match }] : []),
     {
@@ -39,4 +44,4 @@ async function handler(req, res) {
   res.status(200).json({ followUps });
 }
 
-export default requireAuth(handler);
+export default requireCompanyMemberOrSuperAdminView(handler);

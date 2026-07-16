@@ -9,10 +9,14 @@ module.exports = {
         border: "#e5e8f0",
         ink: "#1c2130",
         muted: "#6b7280",
+        // Values come from CSS custom properties (see :root in
+        // globals.css), overridden per-request by Layout.js when a company
+        // has its own brandColor set — the rgb(... / <alpha-value>) form is
+        // required for opacity-modifier classes like bg-accent/10 to work.
         accent: {
-          DEFAULT: "#3d5afe",
-          hover: "#304ede",
-          soft: "#eef2ff",
+          DEFAULT: "rgb(var(--accent-rgb) / <alpha-value>)",
+          hover: "rgb(var(--accent-hover-rgb) / <alpha-value>)",
+          soft: "rgb(var(--accent-soft-rgb) / <alpha-value>)",
         },
         success: "#12b76a",
         danger: "#e5484d",

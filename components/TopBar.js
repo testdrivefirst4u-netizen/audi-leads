@@ -1,7 +1,13 @@
 import NotificationBell from "./NotificationBell";
+import AutoSyncBadge from "./AutoSyncBadge";
 import { MenuIcon } from "./icons";
 
-export default function TopBar({ onMenuClick }) {
+export default function TopBar({ onMenuClick, role }) {
+  // Neither is meaningful without a company context — super admin has none
+  // of its own, so these would just poll and 403 repeatedly on every
+  // company-scoped page it now visits (Dashboard/Leads/Reports).
+  const showCompanyWidgets = role !== "super_admin";
+
   return (
     <div className="flex items-center justify-between mb-5">
       <button
@@ -11,8 +17,14 @@ export default function TopBar({ onMenuClick }) {
       >
         <MenuIcon />
       </button>
-      <div className="hidden md:block" />
-      <NotificationBell />
+      {showCompanyWidgets && (
+        <>
+          <div className="hidden md:block">
+            <AutoSyncBadge />
+          </div>
+          <NotificationBell />
+        </>
+      )}
     </div>
   );
 }

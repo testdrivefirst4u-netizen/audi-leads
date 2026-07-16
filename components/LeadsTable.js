@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Skeleton from "react-loading-skeleton";
 import LeadDetailModal from "./LeadDetailModal";
 import { FaWhatsapp } from "react-icons/fa6";
 import {
@@ -112,8 +113,8 @@ function StatusBadge({ status }) {
   );
 }
 
-function AgentCell({ lead, agents, role, onReassign }) {
-  if (role !== "admin") {
+function AgentCell({ lead, agents, role, readOnly, onReassign }) {
+  if (role !== "admin" || readOnly) {
     return <span className="text-muted">{lead.assignedTo?.name || "Unassigned"}</span>;
   }
   return (
@@ -147,6 +148,7 @@ function SortableHeader({ label, field, sortBy, sortDir, onSort }) {
 
 export default function LeadsTable({
   leads,
+  loading,
   search,
   onSearchChange,
   model,
@@ -158,8 +160,15 @@ export default function LeadsTable({
   onAgentFilterChange,
   locationFilter,
   onLocationFilterChange,
+  sourceFilter,
+  onSourceFilterChange,
+  sources,
+  followUpFilter,
+  onFollowUpFilterChange,
+  followUpTabs,
   agents,
   role,
+  readOnly,
   onReassign,
   hotOnly,
   onHotOnlyChange,
@@ -194,6 +203,14 @@ export default function LeadsTable({
   const firstRow = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const lastRow = Math.min(page * pageSize, total);
 
+  const followUpTabList = [
+    { key: "", label: "All Leads", count: total },
+    { key: "overdue", label: "Overdue", count: followUpTabs?.overdue || 0 },
+    { key: "today", label: "Due Today", count: followUpTabs?.today || 0 },
+    { key: "upcoming", label: "Upcoming", count: followUpTabs?.upcoming || 0 },
+    { key: "completed", label: "Completed", count: followUpTabs?.completed || 0 },
+  ];
+
   return (
     <div className="panel">
       <div className="panel-header">
@@ -205,6 +222,35 @@ export default function LeadsTable({
           onChange={(e) => onSearchChange(e.target.value)}
         />
       </div>
+
+      {onFollowUpFilterChange && (
+        <div className="flex flex-wrap gap-2 px-5 pt-4">
+          {followUpTabList.map((tab) => {
+            const active = (followUpFilter || "") === tab.key;
+            return (
+              <button
+                key={tab.key || "all"}
+                type="button"
+                onClick={() => onFollowUpFilterChange(tab.key)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition-colors ${
+                  active
+                    ? "bg-accent text-white border-accent"
+                    : "bg-card text-ink border-border hover:border-accent/50"
+                }`}
+              >
+                {tab.label}
+                <span
+                  className={`inline-flex items-center justify-center rounded-full px-1.5 min-w-[20px] text-[11px] font-bold ${
+                    active ? "bg-white/20 text-white" : "bg-bg text-muted"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div className="table-toolbar">
         <div className="toolbar-group">
@@ -261,9 +307,23 @@ export default function LeadsTable({
         </div>
 
         <div className="toolbar-group">
+          <label className="toolbar-label">Source</label>
+          <select value={sourceFilter} onChange={(e) => onSourceFilterChange(e.target.value)}>
+            <option value="">All sources</option>
+            {sources.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="toolbar-group">
           <label className="toolbar-label">Created Date</label>
           <select value={exportPreset} onChange={(e) => onExportPresetChange(e.target.value)}>
             <option value="all">All time</option>
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
             <option value="1m">Last 1 month</option>
             <option value="2m">Last 2 months</option>
             <option value="3m">Last 3 months</option>
@@ -306,13 +366,52 @@ export default function LeadsTable({
         </button>
       </div>
 
-      {leads.length === 0 ? (
+      {loading ? (
+        <div className="p-5">
+          <Skeleton count={8} height={36} className="mb-2" />
+        </div>
+      ) : leads.length === 0 ? (
         <div className="empty-state">
           {hotOnly ? "No hot leads right now." : "No leads yet. Configure your Google Sheet in Settings."}
         </div>
       ) : (
         <>
-          <div className="table-scroll">
+          {/* Mobile card list — the 17-column table below is unusable on a
+              phone even with the sticky action column, so small screens get
+              a stacked card per lead instead (tap anywhere to open). */}
+          <div className="sm:hidden flex flex-col gap-2.5 px-4 pb-3">
+            {leads.map((lead) => {
+              const remark = latestRemarkText(lead);
+              return (
+                <div
+                  key={lead._id}
+                  onClick={() => setSelected(lead)}
+                  className="rounded-xl border border-border bg-card p-3.5 cursor-pointer active:bg-bg transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <NameCell lead={lead} />
+                    <StatusBadge status={lead.status} />
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                    <ModelBadge lead={lead} />
+                    <LeadTypeBadge lead={lead} />
+                  </div>
+                  <div onClick={(e) => e.stopPropagation()} className="mb-2">
+                    <PhoneCell phone={lead.phone} />
+                  </div>
+                  {remark && <div className="remark-cell text-xs text-muted mb-2">{remark}</div>}
+                  <div className="flex items-center justify-between gap-2 text-xs pt-2 border-t border-border">
+                    <span onClick={(e) => e.stopPropagation()}>
+                      <AgentCell lead={lead} agents={agents} role={role} readOnly={readOnly} onReassign={handleReassign} />
+                    </span>
+                    <FollowUpBadge lead={lead} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="table-scroll hidden sm:block">
             <table>
               <thead>
                 <tr>
@@ -328,6 +427,7 @@ export default function LeadsTable({
                     </span>
                   </th>
                   <th>Type</th>
+                  <th>Source</th>
                   <th>Phone</th>
                   <th>Email</th>
                   <th>Agent</th>
@@ -340,14 +440,18 @@ export default function LeadsTable({
                   <th>Latest Remark</th>
                   <th>Next Follow-up</th>
                   <SortableHeader label="Created" field="sheetCreatedAt" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
-                  <th></th>
+                  <th className="sticky right-0 z-[1] bg-[#fafbfd]"></th>
                 </tr>
               </thead>
               <tbody>
                 {leads.map((lead, index) => {
                   const remark = latestRemarkText(lead);
                   return (
-                    <tr key={lead._id}>
+                    <tr
+                      key={lead._id}
+                      onClick={() => setSelected(lead)}
+                      className="cursor-pointer hover:bg-bg transition-colors"
+                    >
                       <td className="text-muted">{(page - 1) * pageSize + index + 1}</td>
                       <td>
                         <ModelBadge lead={lead} />
@@ -358,12 +462,13 @@ export default function LeadsTable({
                       <td>
                         <LeadTypeBadge lead={lead} />
                       </td>
+                      <td className="text-muted">{lead.source || "Google Sheet"}</td>
                       <td>
                         <PhoneCell phone={lead.phone} />
                       </td>
                       <td className="text-muted">{lead.email || "-"}</td>
                       <td onClick={(e) => e.stopPropagation()}>
-                        <AgentCell lead={lead} agents={agents} role={role} onReassign={handleReassign} />
+                        <AgentCell lead={lead} agents={agents} role={role} readOnly={readOnly} onReassign={handleReassign} />
                       </td>
                       <td>
                         <StatusBadge status={lead.status} />
@@ -380,9 +485,9 @@ export default function LeadsTable({
                         <FollowUpBadge lead={lead} />
                       </td>
                       <td className="text-muted">{formatDate(lead.sheetCreatedAt)}</td>
-                      <td>
+                      <td className="sticky right-0 z-[1] bg-card" onClick={(e) => e.stopPropagation()}>
                         <button className="btn-sm" onClick={() => setSelected(lead)}>
-                          Manage
+                          {readOnly ? "View" : "Manage"}
                         </button>
                       </td>
                     </tr>
@@ -418,6 +523,7 @@ export default function LeadsTable({
           onUpdated={handleUpdated}
           agents={agents}
           role={role}
+          readOnly={readOnly}
           onReassign={handleReassign}
         />
       )}

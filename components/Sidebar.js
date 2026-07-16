@@ -9,20 +9,33 @@ import {
   SettingsIcon,
   LogoutIcon,
   CloseIcon,
+  UploadIcon,
 } from "./icons";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Dashboard", Icon: DashboardIcon },
-  { href: "/leads", label: "Leads", Icon: UsersIcon },
+  { href: "/", label: "Dashboard", Icon: DashboardIcon, superAdminVisible: true },
+  { href: "/leads", label: "Leads", Icon: UsersIcon, superAdminVisible: true },
   { href: "/followups", label: "Follow-ups", Icon: BellIcon },
-  { href: "/reports", label: "Reports", Icon: ReportIcon },
+  { href: "/reports", label: "Reports", Icon: ReportIcon, superAdminVisible: true },
   { href: "/agents", label: "Agents", Icon: AgentIcon, adminOnly: true },
   // { href: "/settings", label: "Settings", Icon: SettingsIcon },
+  { href: "/import", label: "Import Leads", Icon: UploadIcon, superAdminOnly: true },
+  { href: "/companies", label: "Companies", Icon: AgentIcon, superAdminOnly: true },
 ];
 
-export default function Sidebar({ username, role, onLogout, open, onClose }) {
+export default function Sidebar({ username, role, companyName, companyLogoUrl, onLogout, open, onClose }) {
   const router = useRouter();
-  const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || role === "admin");
+  const brandName = role === "super_admin" ? "Broaddcast Platform" : companyName || "Leads";
+  const brandLogo = role === "super_admin" ? "/broaddcast-logo.svg" : companyLogoUrl || "/audi-logo.png";
+  // Super admin gets Dashboard/Leads/Reports too (read-only monitoring across
+  // every company via the CompanySwitcher on those pages) plus its own
+  // superAdminOnly items (Import Leads, Companies) — but never Follow-ups or
+  // Agents, which stay company-admin-only management tools.
+  const navItems = NAV_ITEMS.filter((item) =>
+    role === "super_admin"
+      ? item.superAdminOnly || item.superAdminVisible
+      : !item.superAdminOnly && (!item.adminOnly || role === "admin")
+  );
 
   return (
     <>
@@ -38,8 +51,8 @@ export default function Sidebar({ username, role, onLogout, open, onClose }) {
       >
         <div className="flex items-center gap-2.5 px-5 py-[22px] text-white text-base font-bold tracking-wide border-b border-white/[0.08] mb-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/audi-logo.png" alt="Audi" className="h-[26px] w-auto object-contain" />
-          <span className="flex-1">Audi Leads</span>
+          <img src={brandLogo} alt={brandName} className="h-[26px] w-auto object-contain" />
+          <span className="flex-1">{brandName}</span>
           <button className="md:hidden text-sidebar-text hover:text-white" onClick={onClose} aria-label="Close menu">
             <CloseIcon />
           </button>
