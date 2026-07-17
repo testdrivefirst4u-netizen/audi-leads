@@ -306,7 +306,7 @@ export default function LeadsTable({
           </select>
         </div>
 
-        <div className="toolbar-group">
+        {/* <div className="toolbar-group">
           <label className="toolbar-label">Source</label>
           <select value={sourceFilter} onChange={(e) => onSourceFilterChange(e.target.value)}>
             <option value="">All sources</option>
@@ -316,7 +316,7 @@ export default function LeadsTable({
               </option>
             ))}
           </select>
-        </div>
+        </div> */}
 
         <div className="toolbar-group">
           <label className="toolbar-label">Created Date</label>
@@ -392,15 +392,15 @@ export default function LeadsTable({
                     <NameCell lead={lead} />
                     <StatusBadge status={lead.status} />
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
                     <ModelBadge lead={lead} />
                     <LeadTypeBadge lead={lead} />
                   </div>
                   <div onClick={(e) => e.stopPropagation()} className="mb-2">
                     <PhoneCell phone={lead.phone} />
                   </div>
-                  {remark && <div className="remark-cell text-xs text-muted mb-2">{remark}</div>}
-                  <div className="flex items-center justify-between gap-2 text-xs pt-2 border-t border-border">
+                  {remark && <div className="mb-2 text-xs remark-cell text-muted">{remark}</div>}
+                  <div className="flex items-center justify-between gap-2 pt-2 text-xs border-t border-border">
                     <span onClick={(e) => e.stopPropagation()}>
                       <AgentCell lead={lead} agents={agents} role={role} readOnly={readOnly} onReassign={handleReassign} />
                     </span>
@@ -411,7 +411,7 @@ export default function LeadsTable({
             })}
           </div>
 
-          <div className="table-scroll hidden sm:block">
+          <div className="hidden table-scroll sm:block">
             <table>
               <thead>
                 <tr>
@@ -450,7 +450,7 @@ export default function LeadsTable({
                     <tr
                       key={lead._id}
                       onClick={() => setSelected(lead)}
-                      className="cursor-pointer hover:bg-bg transition-colors"
+                      className="transition-colors cursor-pointer hover:bg-bg"
                     >
                       <td className="text-muted">{(page - 1) * pageSize + index + 1}</td>
                       <td>
@@ -462,7 +462,7 @@ export default function LeadsTable({
                       <td>
                         <LeadTypeBadge lead={lead} />
                       </td>
-                      <td className="text-muted">{lead.source || "Google Sheet"}</td>
+                      <td className="text-muted">{lead.source || "Meta Ads"}</td>
                       <td>
                         <PhoneCell phone={lead.phone} />
                       </td>

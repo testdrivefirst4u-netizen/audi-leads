@@ -8,15 +8,14 @@ import HotLeadsCard from "../components/HotLeadsCard";
 import PipelineStats from "../components/PipelineStats";
 import LeadsTrendChart from "../components/LeadsTrendChart";
 import ModelBarChart from "../components/ModelBarChart";
+import StatusPieChart from "../components/StatusPieChart";
+import VerticalBarChart from "../components/VerticalBarChart";
 import LeadStatsPanel from "../components/LeadStatsPanel";
 import { getSessionFromCookieHeader } from "../lib/auth";
 import { getCompanyBranding } from "../lib/companyBranding";
 import { apiFetch } from "../lib/apiFetch";
 
-// Near-real-time feel for the lead lists/stats without hitting Google Sheets
-// at all — this only re-reads our own database, which is cheap, so polling
-// every few seconds is safe (the actual Sheets->DB sync runs separately, on
-// its own schedule — see /api/cron/sync).
+
 const POLL_INTERVAL_MS = 3000;
 
 export async function getServerSideProps(context) {
@@ -94,17 +93,10 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
       )}
       {loading ? <Skeleton height={44} className="mb-5" /> : <HotLeadsCard count={stats?.hotCount} />}
 
+      <h2 className="section-title">Lead Pipeline Dashboard</h2>
       <div className="status-grid">
         <div className="card">
-          <div className="label">Total Records Imported</div>
-          <div className="value">{loading ? <Skeleton width={60} /> : stats?.totalRecords ?? 0}</div>
-        </div>
-        <div className="card">
-          <div className="label">New Leads Today</div>
-          <div className="value">{loading ? <Skeleton width={60} /> : stats?.newLeadsToday ?? 0}</div>
-        </div>
-        <div className="card">
-          <div className="label">Total Enquiries</div>
+          <div className="label">Total Leads</div>
           <div className="value">{loading ? <Skeleton width={60} /> : stats?.duplicateDetection?.totalEnquiries ?? 0}</div>
         </div>
         <div className="card">
@@ -112,8 +104,37 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
           <div className="value">{loading ? <Skeleton width={60} /> : stats?.duplicateDetection?.uniqueLeads ?? 0}</div>
         </div>
         <div className="card">
-          <div className="label">Duplicate Enquiries</div>
+          <div className="label">Duplicate Leads</div>
           <div className="value">{loading ? <Skeleton width={60} /> : stats?.duplicateDetection?.duplicateEnquiries ?? 0}</div>
+          {/* <div className="hint">Leads with 1+ repeat enquiry</div> */}
+        </div>
+        {/* <div className="card">
+          <div className="label">Repeat Submissions</div>
+          <div className="value">{loading ? <Skeleton width={60} /> : stats?.duplicateDetection?.duplicateEnquiries ?? 0}</div>
+           <div className="hint">Unique + this = Total Leads</div> 
+        </div> */}
+        <div className="card">
+          <div className="label">Today's Leads</div>
+          <div className="value">{loading ? <Skeleton width={60} /> : stats?.newLeadsToday ?? 0}</div>
+        </div>
+        <div className="card">
+          <div className="label">Yesterday's Leads</div>
+          <div className="value">{loading ? <Skeleton width={60} /> : stats?.newLeadsYesterday ?? 0}</div>
+        </div>
+      </div>
+
+      <div className="chart-row-3">
+        <div className="chart-section">
+          <h3>Lead Status Distribution</h3>
+          {loading ? <Skeleton height={200} /> : <StatusPieChart pipeline={stats?.pipeline} />}
+        </div>
+        <div className="chart-section">
+          <h3>Pipeline Funnel</h3>
+          {loading ? <Skeleton height={200} /> : <PipelineStats pipeline={stats?.pipeline} />}
+        </div>
+        <div className="chart-section">
+          <h3>Lead Source Distribution</h3>
+          {loading ? <Skeleton height={200} /> : <VerticalBarChart data={stats?.sources} />}
         </div>
       </div>
 
@@ -128,9 +149,6 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
         <span className="hint">{month ? `Showing ${monthLabel(month)}` : "Showing all time"}</span>
       </div>
 
-      <h2 className="section-title">Lead Pipeline</h2>
-      {loading ? <Skeleton height={90} /> : <PipelineStats pipeline={stats?.pipeline} />}
-
       <div className="chart-row">
         <div className="chart-section">
           <h3>Leads per day {month ? `(${monthLabel(month)})` : "(last 30 days)"}</h3>
@@ -139,13 +157,6 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
         <div className="chart-section">
           <h3>Leads by Model</h3>
           {loading ? <Skeleton height={220} /> : <ModelBarChart models={stats?.models} />}
-        </div>
-      </div>
-
-      <div className="chart-row">
-        <div className="chart-section">
-          <h3>Leads by Source</h3>
-          {loading ? <Skeleton height={160} /> : <ModelBarChart models={stats?.sources} />}
         </div>
       </div>
 

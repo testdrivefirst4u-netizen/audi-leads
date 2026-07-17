@@ -17,7 +17,7 @@ async function handler(req, res) {
         $group: {
           _id: "$assignedTo",
           total: { $sum: 1 },
-          won: { $sum: { $cond: [{ $eq: ["$status", "Won"] }, 1, 0] } },
+          won: { $sum: { $cond: [{ $eq: ["$status", "Retail (Converted)"] }, 1, 0] } },
           lost: { $sum: { $cond: [{ $eq: ["$status", "Lost"] }, 1, 0] } },
           contacted: { $sum: { $cond: [{ $ne: ["$status", "New"] }, 1, 0] } },
           calls: { $sum: { $size: "$calls" } },

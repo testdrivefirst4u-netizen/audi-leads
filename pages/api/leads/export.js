@@ -1,7 +1,7 @@
+const XLSX = require("xlsx");
 const connectDB = require("../../../lib/db");
 const Lead = require("../../../models/Lead");
 const { requireCompanyMemberOrSuperAdminView } = require("../../../lib/auth");
-const { toCsv } = require("../../../lib/csv");
 const { pickField, FIELD_MATCHERS, prettify } = require("../../../lib/leadFields");
 
 async function handler(req, res) {
@@ -28,16 +28,16 @@ async function handler(req, res) {
 
   const leads = await Lead.find(filter).sort({ sheetCreatedAt: -1 }).populate("assignedTo", "name").lean();
 
-  // Remark counts vary per lead, but a CSV needs one fixed set of columns —
-  // so the number of "Remark N" columns is sized to whichever lead in this
-  // export has the most, and shorter leads just leave the extra cells blank.
+  // Remark counts vary per lead, but a spreadsheet needs one fixed set of
+  // columns — so the number of "Remark N" columns is sized to whichever lead
+  // in this export has the most, and shorter leads just leave the extra cells blank.
   const maxRemarks = leads.reduce((max, lead) => Math.max(max, (lead.remarks || []).length), 0);
   const remarkHeaders = Array.from({ length: maxRemarks }, (_, i) => `Remark ${i + 1}`);
 
   const header = [
+    "Created",
+    "Campaign",
     "Model",
-    "Sheet Tab",
-    "Lead ID",
     "Name",
     "Phone",
     "Email",
@@ -45,8 +45,6 @@ async function handler(req, res) {
     "Agent",
     "Status",
     "Calls Made",
-    "Created",
-    "Campaign",
     "Purchase Timeline",
     "Exchange Plan",
     "Showroom",
@@ -65,18 +63,16 @@ async function handler(req, res) {
     const nextFollowUp = pendingFollowUps.length ? new Date(pendingFollowUps[0].date).toLocaleDateString() : "";
 
     return [
+      lead.sheetCreatedAt ? new Date(lead.sheetCreatedAt).toLocaleDateString() : "",
+      pickField(lead.data, FIELD_MATCHERS.campaign),
       lead.canonicalModel || lead.model || "",
-      lead.model || "",
-      lead.leadId || "",
       lead.name || "",
       lead.phone || "",
       lead.email || "",
-      lead.source || "Google Sheet",
+      lead.source || "Meta Ads",
       lead.assignedTo?.name || "Unassigned",
       lead.status || "New",
       (lead.calls || []).length,
-      lead.sheetCreatedAt ? new Date(lead.sheetCreatedAt).toLocaleDateString() : "",
-      pickField(lead.data, FIELD_MATCHERS.campaign),
       prettify(pickField(lead.data, FIELD_MATCHERS.purchaseTimeline)),
       prettify(pickField(lead.data, FIELD_MATCHERS.exchangePlan)),
       prettify(pickField(lead.data, FIELD_MATCHERS.showroom)),
@@ -85,13 +81,33 @@ async function handler(req, res) {
     ];
   });
 
-  const csv = toCsv([header, ...rows]);
-  const filename = `leads-export-${new Date().toISOString().slice(0, 10)}.csv`;
+  const sheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  sheet["!cols"] = [
+    { wch: 14 }, // Created
+    { wch: 18 }, // Campaign
+    { wch: 14 }, // Model
+    { wch: 22 }, // Name
+    { wch: 14 }, // Phone
+    { wch: 26 }, // Email
+    { wch: 14 }, // Source
+    { wch: 18 }, // Agent
+    { wch: 18 }, // Status
+    { wch: 11 }, // Calls Made
+    { wch: 20 }, // Purchase Timeline
+    { wch: 16 }, // Exchange Plan
+    { wch: 16 }, // Showroom
+    ...remarkHeaders.map(() => ({ wch: 30 })),
+    { wch: 14 }, // Next Follow-up
+  ];
 
-  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, "Leads");
+  const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+  const filename = `leads-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  // Excel needs a UTF-8 BOM to render non-ASCII characters correctly.
-  res.status(200).send(`﻿${csv}`);
+  res.status(200).send(buffer);
 }
 
 export default requireCompanyMemberOrSuperAdminView(handler);

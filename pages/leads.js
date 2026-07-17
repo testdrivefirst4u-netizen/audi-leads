@@ -256,7 +256,7 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `leads-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `leads-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
       document.body.appendChild(a);
       a.click();
       a.remove();

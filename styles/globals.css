@@ -16,7 +16,7 @@
   }
 
   body {
-    @apply m-0 bg-bg text-ink font-sans;
+    @apply m-0 font-sans bg-bg text-ink;
   }
 
   a {
@@ -56,7 +56,7 @@
   }
 
   .card:hover {
-    @apply shadow-card-hover -translate-y-px;
+    @apply -translate-y-px shadow-card-hover;
   }
 
   .btn {
@@ -68,7 +68,7 @@
   }
 
   .btn-icon {
-    @apply bg-transparent border-none text-muted text-xl leading-none cursor-pointer px-2 py-1 rounded-md hover:text-ink hover:bg-bg;
+    @apply px-2 py-1 text-xl leading-none bg-transparent border-none rounded-md cursor-pointer text-muted hover:text-ink hover:bg-bg;
   }
 
   .pill {
@@ -112,7 +112,7 @@
   /* ---------- Page chrome ---------- */
 
   .page-title {
-    @apply text-xl font-bold m-0 mb-5 text-ink;
+    @apply m-0 mb-5 text-xl font-bold text-ink;
   }
 
   .section-title {
@@ -135,7 +135,7 @@
   }
 
   .card .label {
-    @apply text-xs text-muted uppercase tracking-wide mb-2 font-semibold;
+    @apply mb-2 text-xs font-semibold tracking-wide uppercase text-muted;
   }
 
   .card .value {
@@ -161,7 +161,7 @@
   /* ---------- Panels / tables ---------- */
 
   .panel {
-    @apply bg-card border border-border rounded-xl overflow-hidden shadow-card;
+    @apply overflow-hidden border bg-card border-border rounded-xl shadow-card;
   }
 
   .panel-header {
@@ -230,7 +230,7 @@
   }
 
   .btn-export {
-    @apply bg-accent text-white border-accent hover:bg-accent-hover;
+    @apply text-white bg-accent border-accent hover:bg-accent-hover;
   }
 
   .btn-hot {
@@ -306,11 +306,11 @@
   }
 
   .bar-label {
-    @apply text-ink overflow-hidden text-ellipsis whitespace-nowrap;
+    @apply overflow-hidden text-ink text-ellipsis whitespace-nowrap;
   }
 
   .bar-track {
-    @apply bg-bg rounded-full h-2 overflow-hidden;
+    @apply h-2 overflow-hidden rounded-full bg-bg;
   }
 
   .bar-fill {
@@ -318,7 +318,7 @@
   }
 
   .bar-count {
-    @apply text-right font-bold text-ink;
+    @apply font-bold text-right text-ink;
   }
 
   /* ---------- Charts ---------- */
@@ -332,7 +332,7 @@
   }
 
   .chart-row {
-    @apply grid gap-4 mb-6 items-stretch;
+    @apply grid items-stretch gap-4 mb-6;
     grid-template-columns: 2fr 1fr;
   }
 
@@ -342,12 +342,53 @@
     }
   }
 
+  .chart-row-3 {
+    @apply grid items-stretch gap-4 mb-6;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  @media (max-width: 1200px) {
+    .chart-row-3 {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  @media (max-width: 700px) {
+    .chart-row-3 {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .report-type-tabs {
+    @apply flex flex-wrap gap-2 mb-5;
+  }
+
+  .report-type-tab {
+    @apply bg-card border border-border rounded-[7px] px-3.5 py-2 text-[13px] font-semibold text-muted cursor-pointer hover:bg-bg hover:text-ink;
+  }
+
+  .report-type-tab.active {
+    @apply bg-accent text-white border-accent;
+  }
+
+  .chart-section-header {
+    @apply flex items-center justify-between mb-3.5;
+  }
+
+  .chart-section-header h3 {
+    @apply m-0;
+  }
+
+  .chart-image-actions {
+    @apply flex gap-1.5;
+  }
+
   .trend-chart-wrap {
     @apply relative w-full;
   }
 
   .trend-chart {
-    @apply w-full h-auto block;
+    @apply block w-full h-auto;
   }
 
   .trend-tooltip {
@@ -369,7 +410,31 @@
   }
 
   .model-bar-label {
-    @apply text-ink overflow-hidden text-ellipsis whitespace-nowrap;
+    @apply overflow-hidden text-ink text-ellipsis whitespace-nowrap;
+  }
+
+  .pie-chart-layout {
+    @apply flex flex-wrap items-center justify-center gap-6 w-full;
+  }
+
+  .chart-legend {
+    @apply flex flex-col gap-2 min-w-[160px];
+  }
+
+  .chart-legend-item {
+    @apply flex items-center gap-2 text-[13px] cursor-default;
+  }
+
+  .chart-legend-swatch {
+    @apply w-2.5 h-2.5 rounded-full shrink-0;
+  }
+
+  .chart-legend-label {
+    @apply flex-1 text-ink;
+  }
+
+  .chart-legend-count {
+    @apply font-bold text-ink;
   }
 
   /* ---------- Forms ---------- */
@@ -402,7 +467,7 @@
   }
 
   .modal-header h2 {
-    @apply text-base font-bold m-0 text-ink;
+    @apply m-0 text-base font-bold text-ink;
   }
 
   .details-toggle {
@@ -448,7 +513,7 @@
   }
 
   .modal-body {
-    @apply p-5 overflow-y-auto flex-1;
+    @apply flex-1 p-5 overflow-y-auto;
     min-height: 0;
   }
 
@@ -490,7 +555,7 @@
   }
 
   .timeline-date {
-    @apply text-muted whitespace-nowrap text-xs;
+    @apply text-xs text-muted whitespace-nowrap;
   }
 
   .followup-row {

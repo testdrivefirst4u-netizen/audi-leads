@@ -37,12 +37,12 @@ const EnquiryHistoryEntrySchema = new mongoose.Schema(
     model: { type: String }, // raw sheet tab this specific submission came from
     rowNumber: { type: Number },
     date: { type: Date },
-    source: { type: String }, // "Google Sheet", or an external lead source's name (e.g. "CarDekho")
+    source: { type: String }, // "Meta Ads", or an external lead source's name (e.g. "CarDekho")
   },
   { _id: false }
 );
 
-const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Won", "Lost"];
+const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Test Drive", "Booking", "Retail (Converted)", "Lost"];
 // Set once at creation and never changed afterward — whether this was the
 // customer's first-ever enquiry (any model) or they already had a lead for a
 // different model. Independent of `duplicateCount`, which tracks repeat
@@ -73,7 +73,7 @@ const LeadSchema = new mongoose.Schema(
     contentHash: { type: String, index: true },
     // Where this lead originally came from — the Google Sheet sync, or an
     // external integration (CarDekho/CarWale/etc.) pushing via its own API key.
-    source: { type: String, default: "Google Sheet", index: true },
+    source: { type: String, default: "Meta Ads", index: true },
     // CRM fields managed from the dashboard, untouched by the sheet sync.
     status: { type: String, enum: LEAD_STATUSES, default: "New", index: true },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "Agent", index: true },

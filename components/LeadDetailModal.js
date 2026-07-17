@@ -320,7 +320,7 @@ export default function LeadDetailModal({ lead, onClose, onUpdated, agents = [],
               <Section title="Lead Details">
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
                   <Field label="Model" value={lead.canonicalModel || lead.model} />
-                  <Field label="Source" value={lead.source || "Google Sheet"} />
+                  <Field label="Source" value={lead.source || "Meta Ads"} />
                   <Field label="Showroom" value={prettify(pickField(data, FIELD_MATCHERS.showroom))} />
                   <Field label="Campaign" value={pickField(data, FIELD_MATCHERS.campaign)} />
                   <Field label="Purchase Timeline" value={prettify(pickField(data, FIELD_MATCHERS.purchaseTimeline))} />

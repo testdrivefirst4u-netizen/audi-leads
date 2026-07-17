@@ -3,7 +3,7 @@ const Lead = require("../../models/Lead");
 const { requireCompanyMemberOrSuperAdminView } = require("../../lib/auth");
 const { pickField, FIELD_MATCHERS, isUrgentTimeline, normalizeShowroom } = require("../../lib/leadFields");
 
-const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Won", "Lost"];
+const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Test Drive", "Booking", "Retail (Converted)", "Lost"];
 const TREND_DAYS = 30;
 
 function normalizeExchange(value) {
@@ -48,12 +48,15 @@ async function handler(req, res) {
   if (req.session.role === "agent") baseFilter.assignedTo = req.session.agentId;
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
-  const [totalRecords, newLeadsToday] = await Promise.all([
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  const [totalRecords, newLeadsToday, newLeadsYesterday] = await Promise.all([
     Lead.countDocuments(baseFilter),
     // The sheet's own create_time, not our DB insert time — a lead entered
     // on the sheet last week but only just synced today (e.g. after a sync
     // gap) shouldn't count as "new today".
     Lead.countDocuments({ ...baseFilter, sheetCreatedAt: { $gte: startOfToday } }),
+    Lead.countDocuments({ ...baseFilter, sheetCreatedAt: { $gte: startOfYesterday, $lt: startOfToday } }),
   ]);
 
   const leads = await Lead.find(filter)
@@ -109,7 +112,7 @@ async function handler(req, res) {
     const modelName = lead.canonicalModel || lead.model || "Unknown";
     modelCounts[modelName] = (modelCounts[modelName] || 0) + 1;
 
-    const sourceName = lead.source || "Google Sheet";
+    const sourceName = lead.source || "Meta Ads";
     sourceCounts[sourceName] = (sourceCounts[sourceName] || 0) + 1;
 
     const status = LEAD_STATUSES.includes(lead.status) ? lead.status : "New";
@@ -138,6 +141,7 @@ async function handler(req, res) {
     total: leads.length,
     totalRecords,
     newLeadsToday,
+    newLeadsYesterday,
     totalCalls,
     hotCount,
     exchange: toSortedArray(exchangeCounts),
