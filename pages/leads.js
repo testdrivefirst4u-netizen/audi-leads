@@ -236,6 +236,13 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
     setLeads((prev) => prev.map((l) => (l._id === updatedLead._id ? updatedLead : l)));
   }
 
+  function handleLeadDeleted(leadId) {
+    // LeadDetailModal already toasts on a successful delete — this just
+    // removes the row from the currently-loaded page without waiting for
+    // the next poll.
+    setLeads((prev) => prev.filter((l) => l._id !== leadId));
+  }
+
   async function handleExport() {
     setExporting(true);
     try {
@@ -313,6 +320,9 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
         onExport={handleExport}
         exporting={exporting}
         onLeadUpdated={handleLeadUpdated}
+        onLeadDeleted={handleLeadDeleted}
+        canManageLead={isSuperAdminView}
+        manageCompanyId={viewCompanyId}
       />
     </Layout>
   );

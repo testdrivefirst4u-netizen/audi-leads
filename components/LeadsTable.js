@@ -187,6 +187,9 @@ export default function LeadsTable({
   onExport,
   exporting,
   onLeadUpdated,
+  onLeadDeleted,
+  canManageLead,
+  manageCompanyId,
 }) {
   const [selected, setSelected] = useState(null);
 
@@ -198,6 +201,11 @@ export default function LeadsTable({
   function handleUpdated(updatedLead) {
     setSelected(updatedLead);
     onLeadUpdated?.(updatedLead);
+  }
+
+  function handleDeleted(leadId) {
+    setSelected(null);
+    onLeadDeleted?.(leadId);
   }
 
   const firstRow = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -521,10 +529,13 @@ export default function LeadsTable({
           lead={selected}
           onClose={() => setSelected(null)}
           onUpdated={handleUpdated}
+          onDeleted={handleDeleted}
           agents={agents}
           role={role}
           readOnly={readOnly}
           onReassign={handleReassign}
+          canManageLead={canManageLead}
+          manageCompanyId={manageCompanyId}
         />
       )}
     </div>

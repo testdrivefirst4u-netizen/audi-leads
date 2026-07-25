@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { apiFetch } from "../lib/apiFetch";
 import { useToast } from "./ToastProvider";
-import { LEAD_STATUSES, statusColor, pickField, FIELD_MATCHERS, prettify } from "../lib/leadFields";
+import { LEAD_STATUSES, CANONICAL_MODELS, statusColor, pickField, FIELD_MATCHERS, prettify } from "../lib/leadFields";
 import { WhatsAppIcon, PhoneIcon, NoteIcon, CalendarIcon } from "./icons";
 
 function formatDate(d) {
@@ -93,7 +93,29 @@ function Field({ label, value }) {
   );
 }
 
-export default function LeadDetailModal({ lead, onClose, onUpdated, agents = [], role, readOnly, onReassign }) {
+function EditableField({ label, children }) {
+  return (
+    <div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-0.5">{label}</div>
+      {children}
+    </div>
+  );
+}
+
+const editInputClass = "w-full bg-bg border border-border rounded-md px-2 py-1 text-sm text-ink focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/15";
+
+export default function LeadDetailModal({
+  lead,
+  onClose,
+  onUpdated,
+  onDeleted,
+  agents = [],
+  role,
+  readOnly,
+  onReassign,
+  canManageLead,
+  manageCompanyId,
+}) {
   const toast = useToast();
   const [remarkText, setRemarkText] = useState("");
   const [logCall, setLogCall] = useState(false);
@@ -102,8 +124,62 @@ export default function LeadDetailModal({ lead, onClose, onUpdated, agents = [],
   const [followNote, setFollowNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   if (!lead) return null;
+
+  function startEdit() {
+    setEditForm({
+      name: lead.name || "",
+      phone: lead.phone || "",
+      email: lead.email || "",
+      canonicalModel: lead.canonicalModel || lead.model || CANONICAL_MODELS[0],
+    });
+    setEditing(true);
+  }
+
+  async function saveEdit() {
+    setSavingEdit(true);
+    try {
+      const res = await apiFetch(`/api/leads/${lead._id}?companyId=${manageCompanyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editForm),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed to update lead");
+      const data = await res.json();
+      onUpdated(data.lead);
+      setEditing(false);
+      toast("Lead updated");
+    } catch (err) {
+      toast(err.message, { type: "err" });
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function deleteLead() {
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await apiFetch(`/api/leads/${lead._id}?companyId=${manageCompanyId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed to delete lead");
+      toast("Lead deleted");
+      onDeleted?.(lead._id);
+      onClose();
+    } catch (err) {
+      toast(err.message, { type: "err" });
+      setDeleting(false);
+      setDeleteArmed(false);
+    }
+  }
 
   async function toggleFollowUp(followUpId, completed) {
     try {
@@ -251,9 +327,32 @@ export default function LeadDetailModal({ lead, onClose, onUpdated, agents = [],
           <h2>
             {lead.name || "Lead"} <span className="hint">({lead.model})</span>
           </h2>
-          <button className="btn-icon" onClick={onClose}>
-            &times;
-          </button>
+          <div className="flex items-center gap-2">
+            {canManageLead && !editing && (
+              <>
+                <button type="button" className="btn-sm" onClick={startEdit}>
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="btn-sm"
+                  style={deleteArmed ? { background: "#fef2f2", borderColor: "#fca5a5", color: "#b91c1c" } : undefined}
+                  onClick={deleteLead}
+                  disabled={deleting}
+                >
+                  {deleting ? "Deleting..." : deleteArmed ? "Confirm Delete?" : "Delete Lead"}
+                </button>
+                {deleteArmed && !deleting && (
+                  <button type="button" className="btn-sm" onClick={() => setDeleteArmed(false)}>
+                    Cancel
+                  </button>
+                )}
+              </>
+            )}
+            <button className="btn-icon" onClick={onClose}>
+              &times;
+            </button>
+          </div>
         </div>
 
         <div className="modal-status-bar">
@@ -319,7 +418,23 @@ export default function LeadDetailModal({ lead, onClose, onUpdated, agents = [],
             <div className="min-w-0">
               <Section title="Lead Details">
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
-                  <Field label="Model" value={lead.canonicalModel || lead.model} />
+                  {editing ? (
+                    <EditableField label="Model">
+                      <select
+                        className={editInputClass}
+                        value={editForm.canonicalModel}
+                        onChange={(e) => setEditForm((f) => ({ ...f, canonicalModel: e.target.value }))}
+                      >
+                        {CANONICAL_MODELS.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    </EditableField>
+                  ) : (
+                    <Field label="Model" value={lead.canonicalModel || lead.model} />
+                  )}
                   <Field label="Source" value={lead.source || "Meta Ads"} />
                   <Field label="Showroom" value={prettify(pickField(data, FIELD_MATCHERS.showroom))} />
                   <Field label="Campaign" value={pickField(data, FIELD_MATCHERS.campaign)} />
@@ -335,11 +450,48 @@ export default function LeadDetailModal({ lead, onClose, onUpdated, agents = [],
               </Section>
 
               <Section title="Customer Details">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
-                  <Field label="Name" value={lead.name} />
-                  <Field label="Phone" value={lead.phone} />
-                  <Field label="Email" value={lead.email} />
-                </div>
+                {editing ? (
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+                      <EditableField label="Name">
+                        <input
+                          className={editInputClass}
+                          value={editForm.name}
+                          onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                        />
+                      </EditableField>
+                      <EditableField label="Phone">
+                        <input
+                          className={editInputClass}
+                          value={editForm.phone}
+                          onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+                        />
+                      </EditableField>
+                      <EditableField label="Email">
+                        <input
+                          className={editInputClass}
+                          type="email"
+                          value={editForm.email}
+                          onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+                        />
+                      </EditableField>
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <button type="button" className="btn-sm btn-export" onClick={saveEdit} disabled={savingEdit}>
+                        {savingEdit ? "Saving..." : "Save Changes"}
+                      </button>
+                      <button type="button" className="btn-sm" onClick={() => setEditing(false)} disabled={savingEdit}>
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+                    <Field label="Name" value={lead.name} />
+                    <Field label="Phone" value={lead.phone} />
+                    <Field label="Email" value={lead.email} />
+                  </div>
+                )}
               </Section>
 
               {(lead.enquiryHistory || []).length > 1 && (

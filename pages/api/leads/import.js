@@ -57,7 +57,7 @@ async function handler(req, res) {
     return res.status(400).json({ error: `Too many rows (${rows.length}) — split into files of ${MAX_ROWS} or fewer` });
   }
 
-  const source = (sourceLabel && String(sourceLabel).trim()) || "Bulk Upload";
+  const source = (sourceLabel && String(sourceLabel).trim()) || "Meta Ads";
   const assignNext = await createAgentAssigner(companyId);
 
   let created = 0;

@@ -226,7 +226,7 @@ export default function ImportLeadsPage({ username }) {
             </tbody>
           </table>
           <div className="hint mt-3">
-            Imported leads are tagged with source &quot;Bulk Upload&quot; — visible in that company&apos;s Leads
+            Imported leads are tagged with source &quot;Meta Ads&quot; — visible in that company&apos;s Leads
             Source filter and Dashboard Leads by Source chart.
           </div>
         </div>
