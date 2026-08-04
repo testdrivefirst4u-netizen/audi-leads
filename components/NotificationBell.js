@@ -5,7 +5,11 @@ import Toast from "./Toast";
 import { apiFetch } from "../lib/apiFetch";
 import { playNotificationSound } from "../lib/notificationSound";
 
-const POLL_MS = 3000;
+// Kept shorter than the other pollers (20s) since this drives an audible
+// new-lead alert, which is more time-sensitive than a dashboard number —
+// still a 5x cut from the previous 3s, and the underlying data can't
+// change faster than the sync's own cadence anyway.
+const POLL_MS = 15000;
 const LAST_SEEN_KEY = "audi-leads:notifications-last-seen";
 
 function timeAgo(date) {

@@ -103,6 +103,16 @@ LeadSchema.index({ companyId: 1, model: 1, phone: 1 });
 LeadSchema.index({ companyId: 1, model: 1, rowNumber: 1 });
 LeadSchema.index({ companyId: 1, "enquiryHistory.model": 1, "enquiryHistory.rowNumber": 1 });
 
+// Every read in this app filters on companyId first (multi-tenant scoping),
+// then usually a second field these single-field indexes below can't
+// combine with as efficiently as a compound index prefixed the same way.
+// These back: the Leads table's date-range/status filtering and sorting
+// (pages/api/leads.js, stats.js, reports.js), and the notification bell's
+// "most recently active" query (pages/api/leads/recent.js).
+LeadSchema.index({ companyId: 1, sheetCreatedAt: -1 });
+LeadSchema.index({ companyId: 1, status: 1 });
+LeadSchema.index({ companyId: 1, lastEnquiryAt: -1 });
+
 module.exports = mongoose.models.Lead || mongoose.model("Lead", LeadSchema);
 module.exports.LEAD_STATUSES = LEAD_STATUSES;
 module.exports.LEAD_TYPES = LEAD_TYPES;

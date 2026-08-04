@@ -3,6 +3,7 @@ const Company = require("../../../models/Company");
 const Settings = require("../../../models/Settings");
 const { runSync } = require("../../../lib/syncService");
 const { requireSuperAdmin } = require("../../../lib/auth");
+const { invalidate } = require("../../../lib/serverCache");
 
 function sanitizeSheets(input) {
   if (!Array.isArray(input)) return undefined;
@@ -32,6 +33,9 @@ async function handler(req, res) {
   if (!company) return res.status(404).json({ error: "Company not found" });
   if (Object.keys(update).length > 0) {
     company = await Company.findByIdAndUpdate(id, update, { new: true });
+    // getCompanyBranding() caches name/logo/brandColor for 5 minutes — an
+    // explicit edit here should be visible right away, not after a wait.
+    invalidate(`branding:${id}`);
   }
 
   const sheetUpdate = {};

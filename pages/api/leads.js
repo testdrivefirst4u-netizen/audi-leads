@@ -3,8 +3,53 @@ const Lead = require("../../models/Lead");
 const Agent = require("../../models/Agent");
 const { requireCompanyMemberOrSuperAdminView } = require("../../lib/auth");
 const { pickField, FIELD_MATCHERS, isUrgentTimeline, nextFollowUp } = require("../../lib/leadFields");
+const { withCache } = require("../../lib/serverCache");
 
 const SORTABLE_FIELDS = new Set(["name", "canonicalModel", "status", "sheetCreatedAt"]);
+// The model/source filter-dropdown option lists barely change (only when a
+// genuinely new model tab or lead source shows up) but this endpoint is
+// polled every few seconds — recomputing the full distinct-value scan on
+// every single poll is pure waste. 30s is imperceptible for a filter
+// dropdown's option list.
+const DISTINCT_CACHE_MS = 30000;
+// Much shorter than DISTINCT_CACHE_MS on purpose: the follow-up tab counts
+// and "hot leads" set are driven by user actions (a remark auto-clearing a
+// follow-up, a status change) that people expect to see reflected quickly.
+// 5s is short enough to stay well under the page's own poll interval — it
+// only collapses redundant concurrent computation, it doesn't add a
+// meaningfully longer wait than the poll cadence already imposes.
+const FOLLOWUP_TABS_CACHE_MS = 5000;
+const HOT_CANDIDATES_CACHE_MS = 5000;
+
+async function distinctModelsAndSources(companyId) {
+  return withCache(`leads-distinct:${companyId}`, DISTINCT_CACHE_MS, async () => {
+    const [models, sources] = await Promise.all([
+      Lead.distinct("canonicalModel", { companyId }),
+      Lead.distinct("source", { companyId }),
+    ]);
+    return { models: models.filter(Boolean).sort(), sources: sources.filter(Boolean).sort() };
+  });
+}
+
+// A plain JSON.stringify(filter) won't work as a cache key here: filter.$or
+// embeds a RegExp for `search`, and RegExp serializes to "{}" — every
+// distinct search term would collide onto the same cache entry. Building
+// the key from the raw query inputs instead keeps it accurate.
+function filterSignature(req, { search = "", model = "", status = "", location = "", source = "", from = "", to = "", agent = "" } = {}) {
+  return [
+    req.session.companyId,
+    req.session.role,
+    req.session.agentId || "",
+    search,
+    model,
+    status,
+    location,
+    source,
+    from,
+    to,
+    agent,
+  ].join("|");
+}
 
 async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -77,22 +122,26 @@ async function handler(req, res) {
   // date, computed in JS by nextFollowUp). Narrow to leads that have any
   // follow-ups at all (indexed-ish via the array-exists check) then finish
   // the classification in JS — same low-hundreds-of-leads scale as "hot".
-  const followUpCandidates = await Lead.find({ ...filter, "followUps.0": { $exists: true } })
-    .select("followUps")
-    .lean();
-  const followUpTabs = { overdue: 0, today: 0, upcoming: 0, completed: 0 };
-  const bucketIds = { overdue: [], today: [], upcoming: [], completed: [] };
-  for (const l of followUpCandidates) {
-    const info = nextFollowUp(l);
-    if (info && followUpTabs[info.status] !== undefined) {
-      followUpTabs[info.status]++;
-      bucketIds[info.status].push(l._id);
+  const followUpSig = filterSignature(req, { search, model, status, location, source, from, to, agent });
+  const { followUpTabs, bucketIds } = await withCache(`followup-tabs:${followUpSig}`, FOLLOWUP_TABS_CACHE_MS, async () => {
+    const followUpCandidates = await Lead.find({ ...filter, "followUps.0": { $exists: true } })
+      .select("followUps")
+      .lean();
+    const tabs = { overdue: 0, today: 0, upcoming: 0, completed: 0 };
+    const ids = { overdue: [], today: [], upcoming: [], completed: [] };
+    for (const l of followUpCandidates) {
+      const info = nextFollowUp(l);
+      if (info && tabs[info.status] !== undefined) {
+        tabs[info.status]++;
+        ids[info.status].push(l._id);
+      }
+      if ((l.followUps || []).some((f) => f.completed)) {
+        tabs.completed++;
+        ids.completed.push(l._id);
+      }
     }
-    if ((l.followUps || []).some((f) => f.completed)) {
-      followUpTabs.completed++;
-      bucketIds.completed.push(l._id);
-    }
-  }
+    return { followUpTabs: tabs, bucketIds: ids };
+  });
   if (followUpFilter && bucketIds[followUpFilter]) {
     filter._id = { $in: bucketIds[followUpFilter] };
   }
@@ -108,20 +157,27 @@ async function handler(req, res) {
   // first (untouched, still New), then finish the match in JS and paginate
   // the filtered result — fine at this data volume (low hundreds of leads).
   if (hot === "true") {
-    const candidates = await Lead.find({
-      companyId: req.session.companyId,
-      status: "New",
-      "remarks.0": { $exists: false },
-      "calls.0": { $exists: false },
-      ...(model ? { canonicalModel: model } : {}),
-      ...(filter.sheetCreatedAt ? { sheetCreatedAt: filter.sheetCreatedAt } : {}),
-      ...(filter.assignedTo !== undefined ? { assignedTo: filter.assignedTo } : {}),
-      ...(filter.location ? { location: filter.location } : {}),
-      ...(filter.source ? { source: filter.source } : {}),
-    })
-      .sort({ sheetCreatedAt: -1 })
-      .populate("assignedTo", "name")
-      .lean();
+    // `search` deliberately excluded from the cache key — it's applied as a
+    // JS filter below, against the same underlying candidate set, so every
+    // search term within the cache window can reuse one fetch instead of
+    // triggering its own.
+    const hotSig = filterSignature(req, { model, location, source, from, to, agent });
+    const candidates = await withCache(`hot-candidates:${hotSig}`, HOT_CANDIDATES_CACHE_MS, () =>
+      Lead.find({
+        companyId: req.session.companyId,
+        status: "New",
+        "remarks.0": { $exists: false },
+        "calls.0": { $exists: false },
+        ...(model ? { canonicalModel: model } : {}),
+        ...(filter.sheetCreatedAt ? { sheetCreatedAt: filter.sheetCreatedAt } : {}),
+        ...(filter.assignedTo !== undefined ? { assignedTo: filter.assignedTo } : {}),
+        ...(filter.location ? { location: filter.location } : {}),
+        ...(filter.source ? { source: filter.source } : {}),
+      })
+        .sort({ sheetCreatedAt: -1 })
+        .populate("assignedTo", "name")
+        .lean()
+    );
 
     const searchLower = search.toLowerCase();
     const hotLeads = candidates.filter((lead) => {
@@ -143,8 +199,7 @@ async function handler(req, res) {
     const total = hotLeads.length;
     const start = (pageNum - 1) * pageSizeNum;
     const leads = hotLeads.slice(start, start + pageSizeNum);
-    const models = await Lead.distinct("canonicalModel", { companyId: req.session.companyId });
-    const sources = await Lead.distinct("source", { companyId: req.session.companyId });
+    const { models, sources } = await distinctModelsAndSources(req.session.companyId);
 
     return res.status(200).json({
       leads,
@@ -152,23 +207,24 @@ async function handler(req, res) {
       page: pageNum,
       pageSize: pageSizeNum,
       totalPages: Math.max(1, Math.ceil(total / pageSizeNum)),
-      models: models.filter(Boolean).sort(),
-      sources: sources.filter(Boolean).sort(),
+      models,
+      sources,
       agents: agentList,
       followUpTabs,
     });
   }
 
-  const [leads, total, models, sources] = await Promise.all([
-    Lead.find(filter)
-      .sort({ [sortField]: sortDirection })
-      .skip((pageNum - 1) * pageSizeNum)
-      .limit(pageSizeNum)
-      .populate("assignedTo", "name")
-      .lean(),
-    Lead.countDocuments(filter),
-    Lead.distinct("canonicalModel", { companyId: req.session.companyId }),
-    Lead.distinct("source", { companyId: req.session.companyId }),
+  const [[leads, total], { models, sources }] = await Promise.all([
+    Promise.all([
+      Lead.find(filter)
+        .sort({ [sortField]: sortDirection })
+        .skip((pageNum - 1) * pageSizeNum)
+        .limit(pageSizeNum)
+        .populate("assignedTo", "name")
+        .lean(),
+      Lead.countDocuments(filter),
+    ]),
+    distinctModelsAndSources(req.session.companyId),
   ]);
 
   res.status(200).json({
@@ -177,8 +233,8 @@ async function handler(req, res) {
     page: pageNum,
     pageSize: pageSizeNum,
     totalPages: Math.max(1, Math.ceil(total / pageSizeNum)),
-    models: models.filter(Boolean).sort(),
-    sources: sources.filter(Boolean).sort(),
+    models,
+    sources,
     agents: agentList,
     followUpTabs,
   });

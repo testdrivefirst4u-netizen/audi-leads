@@ -7,10 +7,12 @@ import { getSessionFromCookieHeader } from "../lib/auth";
 import { getCompanyBranding } from "../lib/companyBranding";
 import { apiFetch } from "../lib/apiFetch";
 
-// Polls our own database only (never Google Sheets directly), so a fast
-// interval is cheap — new leads that the separate Sheets->DB sync has
-// already ingested show up here within a few seconds, no page refresh.
-const POLL_INTERVAL_MS = 3000;
+// Polls our own database only (never Google Sheets directly). The sync
+// itself only runs once a day on Vercel (vercel.json), so a new lead can't
+// actually appear faster than that regardless of poll speed — 20s keeps the
+// page feeling current without re-running this endpoint's queries 7x more
+// often than the data can change.
+const POLL_INTERVAL_MS = 20000;
 const PAGE_SIZE = 20;
 
 export async function getServerSideProps(context) {

@@ -8,7 +8,7 @@ async function handler(req, res) {
 
   await connectDB();
   const { companyId } = req.session;
-  const latestLog = await SyncLog.findOne({ companyId }).sort({ createdAt: -1 });
+  const latestLog = await SyncLog.findOne({ companyId }).sort({ createdAt: -1 }).lean();
 
   if (!latestLog) {
     return res.status(200).json({

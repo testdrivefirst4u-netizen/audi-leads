@@ -6,7 +6,9 @@ import { getSessionFromCookieHeader } from "../lib/auth";
 import { getCompanyBranding } from "../lib/companyBranding";
 import { apiFetch } from "../lib/apiFetch";
 
-const STATUS_POLL_MS = 5000;
+// Sync only runs once a day on Vercel (vercel.json's cron), so the status
+// card can't meaningfully change faster than that — 20s is plenty responsive.
+const STATUS_POLL_MS = 20000;
 
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);

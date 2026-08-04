@@ -16,7 +16,10 @@ import { getCompanyBranding } from "../lib/companyBranding";
 import { apiFetch } from "../lib/apiFetch";
 
 
-const POLL_INTERVAL_MS = 3000;
+// The underlying data only actually changes as often as the sync runs (once
+// a day on Vercel, per vercel.json's cron) — 20s still feels responsive for
+// a dashboard while cutting invocation volume ~7x versus the previous 3s.
+const POLL_INTERVAL_MS = 20000;
 
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);

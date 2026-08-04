@@ -2,9 +2,15 @@ const connectDB = require("../../lib/db");
 const Lead = require("../../models/Lead");
 const { requireCompanyMemberOrSuperAdminView } = require("../../lib/auth");
 const { pickField, FIELD_MATCHERS, isUrgentTimeline, normalizeShowroom } = require("../../lib/leadFields");
+const { withCache } = require("../../lib/serverCache");
 
 const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Test Drive", "Booking", "Retail (Converted)", "Lost"];
 const TREND_DAYS = 30;
+// Matches the dashboard's own poll interval (pages/index.js) — this doesn't
+// make any single viewer's data staler than it already is between polls; it
+// only collapses multiple concurrent viewers (or overlapping requests)
+// within the same company into one computation instead of one each.
+const STATS_CACHE_MS = 3000;
 
 function normalizeExchange(value) {
   if (!value || !value.trim()) return "Not Filled";
@@ -24,10 +30,7 @@ function dateKey(d) {
   return new Date(d).toISOString().slice(0, 10);
 }
 
-async function handler(req, res) {
-  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
-
-  await connectDB();
+async function computeStats(req) {
   const { month = "" } = req.query; // optional "YYYY-MM" — blank means all-time
 
   const filter = { companyId: req.session.companyId };
@@ -136,7 +139,7 @@ async function handler(req, res) {
 
   const trend = Object.entries(trendMap).map(([date, count]) => ({ date, count }));
 
-  res.status(200).json({
+  return {
     month: month || null,
     total: leads.length,
     totalRecords,
@@ -158,7 +161,17 @@ async function handler(req, res) {
     },
     pipeline: LEAD_STATUSES.map((label) => ({ label, count: pipelineCounts[label] })),
     trend,
-  });
+  };
+}
+
+async function handler(req, res) {
+  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
+
+  await connectDB();
+  const { month = "" } = req.query;
+  const cacheKey = `stats:${req.session.companyId}:${req.session.role}:${req.session.agentId || ""}:${month}`;
+  const payload = await withCache(cacheKey, STATS_CACHE_MS, () => computeStats(req));
+  res.status(200).json(payload);
 }
 
 export default requireCompanyMemberOrSuperAdminView(handler);

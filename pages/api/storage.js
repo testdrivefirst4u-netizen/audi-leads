@@ -9,6 +9,12 @@ const SyncLog = require("../../models/SyncLog");
 const ApiKey = require("../../models/ApiKey");
 const ApiKeyLog = require("../../models/ApiKeyLog");
 const { requireSuperAdmin } = require("../../lib/auth");
+const { withCache } = require("../../lib/serverCache");
+
+// This computes a $bsonSize over every document in every company-scoped
+// collection — a genuinely heavy full-DB scan. Storage usage doesn't move
+// fast enough to need fresher than this.
+const STORAGE_CACHE_MS = 5 * 60 * 1000;
 
 // MongoDB/Atlas doesn't expose your plan's storage cap via any query — this
 // has to be configured to match whatever cluster tier you're actually on
@@ -34,20 +40,17 @@ function toMB(bytes) {
   return +(bytes / BYTES_PER_MB).toFixed(2);
 }
 
-async function handler(req, res) {
-  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
-
-  await connectDB();
-
-  const dbStats = await mongoose.connection.db.stats();
+async function computeStorage() {
+  const [dbStats, companies, bytesByModel] = await Promise.all([
+    mongoose.connection.db.stats(),
+    Company.find({}).select("name slug").lean(),
+    Promise.all(COMPANY_SCOPED_MODELS.map(bytesByCompany)),
+  ]);
   const usedMB = toMB(dbStats.dataSize);
   const limitMB = STORAGE_LIMIT_MB;
 
-  const companies = await Company.find({}).select("name slug").lean();
-
   const perCompanyBytes = {};
-  for (const Model of COMPANY_SCOPED_MODELS) {
-    const rows = await bytesByCompany(Model);
+  for (const rows of bytesByModel) {
     for (const row of rows) {
       const key = String(row._id);
       perCompanyBytes[key] = (perCompanyBytes[key] || 0) + row.bytes;
@@ -62,7 +65,7 @@ async function handler(req, res) {
     }))
     .sort((a, b) => b.usedMB - a.usedMB);
 
-  res.status(200).json({
+  return {
     usedMB,
     limitMB,
     remainingMB: +(limitMB - usedMB).toFixed(2),
@@ -70,7 +73,15 @@ async function handler(req, res) {
     storageSizeMB: toMB(dbStats.storageSize),
     indexSizeMB: toMB(dbStats.indexSize),
     perCompany,
-  });
+  };
+}
+
+async function handler(req, res) {
+  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
+
+  await connectDB();
+  const payload = await withCache("storage-usage", STORAGE_CACHE_MS, computeStorage);
+  res.status(200).json(payload);
 }
 
 export default requireSuperAdmin(handler);

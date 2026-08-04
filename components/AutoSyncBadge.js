@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../lib/apiFetch";
 
-const POLL_MS = 5000;
+// Renders on every page (via TopBar) for every logged-in user — sync itself
+// only runs once a day on Vercel, so this can't go stale in any way that
+// matters at 20s.
+const POLL_MS = 20000;
 
 function timeAgo(date) {
   if (!date) return null;

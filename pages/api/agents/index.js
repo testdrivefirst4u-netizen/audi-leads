@@ -55,7 +55,7 @@ async function handler(req, res) {
       return res.status(400).json({ error: "Name, username, and password are required" });
     }
 
-    const existing = await Agent.findOne({ username });
+    const existing = await Agent.findOne({ username }).lean();
     if (existing) {
       return res.status(409).json({ error: "That username is already taken" });
     }
