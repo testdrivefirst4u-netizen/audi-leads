@@ -17,7 +17,7 @@ const NAV_ITEMS = [
   { href: "/leads", label: "Leads", Icon: UsersIcon, superAdminVisible: true },
   { href: "/followups", label: "Follow-ups", Icon: BellIcon },
   { href: "/reports", label: "Reports", Icon: ReportIcon, superAdminVisible: true },
-  { href: "/agents", label: "Agents", Icon: AgentIcon, adminOnly: true },
+  { href: "/agents", label: "Agents", Icon: AgentIcon, adminOnly: true, superAdminVisible: true },
   // { href: "/settings", label: "Settings", Icon: SettingsIcon },
   { href: "/import", label: "Import Leads", Icon: UploadIcon, superAdminOnly: true },
   { href: "/companies", label: "Companies", Icon: AgentIcon, superAdminOnly: true },
@@ -27,10 +27,11 @@ export default function Sidebar({ username, role, companyName, companyLogoUrl, o
   const router = useRouter();
   const brandName = role === "super_admin" ? "Broaddcast Platform" : companyName || "Leads";
   const brandLogo = role === "super_admin" ? "/broaddcast-logo.svg" : companyLogoUrl || "/audi-logo.png";
-  // Super admin gets Dashboard/Leads/Reports too (read-only monitoring across
-  // every company via the CompanySwitcher on those pages) plus its own
-  // superAdminOnly items (Import Leads, Companies) — but never Follow-ups or
-  // Agents, which stay company-admin-only management tools.
+  // Super admin gets Dashboard/Leads/Reports/Agents too (read-only monitoring
+  // across every company via the CompanySwitcher on those pages — Agents is
+  // the one exception where super admin can also create, not just view) plus
+  // its own superAdminOnly items (Import Leads, Companies) — but never
+  // Follow-ups, which stays a company-admin/agent-only working queue.
   const navItems = NAV_ITEMS.filter((item) =>
     role === "super_admin"
       ? item.superAdminOnly || item.superAdminVisible

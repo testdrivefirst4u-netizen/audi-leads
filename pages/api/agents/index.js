@@ -2,7 +2,8 @@ const mongoose = require("mongoose");
 const connectDB = require("../../../lib/db");
 const Agent = require("../../../models/Agent");
 const Lead = require("../../../models/Lead");
-const { hashPassword, requireAdmin } = require("../../../lib/auth");
+const { hashPassword, requireCompanyMemberOrSuperAdminView } = require("../../../lib/auth");
+const { invalidate } = require("../../../lib/serverCache");
 
 async function handler(req, res) {
   await connectDB();
@@ -50,6 +51,13 @@ async function handler(req, res) {
   }
 
   if (req.method === "POST") {
+    // Creating an agent is a super-admin-only action — a company's own
+    // admin can no longer add agents themselves, only view/manage the ones
+    // the super admin has created for them (see pages/api/agents/[id].js,
+    // still requireAdmin, for that day-to-day management).
+    if (req.session.role !== "super_admin") {
+      return res.status(403).json({ error: "Only the platform super admin can add new agents" });
+    }
     const { name, username, password, location = "" } = req.body || {};
     if (!name || !username || !password) {
       return res.status(400).json({ error: "Name, username, and password are required" });
@@ -62,6 +70,9 @@ async function handler(req, res) {
 
     const passwordHash = await hashPassword(password);
     const agent = await Agent.create({ name, username, passwordHash, active: true, location, companyId });
+    // /api/leads.js caches the active-agent list for its reassign dropdown —
+    // a newly-created agent should be selectable right away, not after the cache expires.
+    invalidate(`leads-agents:${companyId}`);
     return res.status(201).json({
       agent: { _id: agent._id, name: agent.name, username: agent.username, active: true, location: agent.location },
     });
@@ -70,4 +81,4 @@ async function handler(req, res) {
   res.status(405).json({ error: "Method not allowed" });
 }
 
-export default requireAdmin(handler);
+export default requireCompanyMemberOrSuperAdminView(handler);
