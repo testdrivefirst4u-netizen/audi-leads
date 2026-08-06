@@ -42,4 +42,9 @@ const ApiKeySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// The API-keys management list (pages/api/companies/[id]/api-keys) filters
+// by companyId and sorts by createdAt desc — same unindexed-sort-on-top-of-
+// filter gap as SyncLog above.
+ApiKeySchema.index({ companyId: 1, createdAt: -1 });
+
 module.exports = mongoose.models.ApiKey || mongoose.model("ApiKey", ApiKeySchema);

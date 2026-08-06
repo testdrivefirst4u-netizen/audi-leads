@@ -2,9 +2,10 @@ const connectDB = require("../../../lib/db");
 const Admin = require("../../../models/Admin");
 const Agent = require("../../../models/Agent");
 const { verifyPassword, signSessionToken, serializeSessionCookie } = require("../../../lib/auth");
-const { seedAdmin, seedSuperAdmin } = require("../../../lib/seedAdmin");
+const { ensureSeeded } = require("../../../lib/seedAdmin");
+const { withTiming } = require("../../../lib/perfMonitor");
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const { username, password } = req.body || {};
@@ -14,10 +15,10 @@ export default async function handler(req, res) {
 
   try {
     await connectDB();
-    // On Vercel, server.js (which seeds the admin on boot) never runs, so seed
-    // it here instead. Idempotent and cheap — safe to run on every login.
-    await seedAdmin();
-    await seedSuperAdmin();
+    // On Vercel, server.js (which seeds the admin on boot) never runs, so
+    // seed it here instead — but only once per warm instance (see
+    // ensureSeeded), not on every login request.
+    await ensureSeeded();
 
     const admin = await Admin.findOne({ username });
     if (admin) {
@@ -69,3 +70,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: `Server error: ${err.message}` });
   }
 }
+
+export default withTiming("/api/auth/login", handler);

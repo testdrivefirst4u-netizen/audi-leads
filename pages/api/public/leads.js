@@ -5,6 +5,7 @@ const { createAgentAssigner, normalizePhoneDigits } = require("../../../lib/sync
 const { dedupeAndCreateLead } = require("../../../lib/leadIngest");
 const { canonicalModelFor, normalizeShowroom } = require("../../../lib/leadFields");
 const { hashApiKey, checkRateLimit } = require("../../../lib/apiKeys");
+const { withTiming } = require("../../../lib/perfMonitor");
 
 // Public, unauthenticated-by-cookie endpoint for external lead sources
 // (CarDekho, CarWale, a website form, etc.) — authenticated instead by the
@@ -182,4 +183,4 @@ async function handler(req, res) {
   }
 }
 
-export default handler;
+export default withTiming("/api/public/leads", handler);

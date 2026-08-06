@@ -31,6 +31,14 @@ async function distinctModelsAndSources(companyId) {
   });
 }
 
+// The active-agent list for the reassign dropdown — changes only when an
+// admin adds/deactivates an agent, not worth a fresh query on every poll.
+async function activeAgentList(companyId) {
+  return withCache(`leads-agents:${companyId}`, DISTINCT_CACHE_MS, () =>
+    Agent.find({ active: true, companyId }).select("name").lean()
+  );
+}
+
 // A plain JSON.stringify(filter) won't work as a cache key here: filter.$or
 // embeds a RegExp for `search`, and RegExp serializes to "{}" — every
 // distinct search term would collide onto the same cache entry. Building
@@ -148,7 +156,7 @@ async function handler(req, res) {
 
   const agentList =
     req.session.role === "admin" || req.session.role === "super_admin" || !req.session.role
-      ? await Agent.find({ active: true, companyId: req.session.companyId }).select("name").lean()
+      ? await activeAgentList(req.session.companyId)
       : [];
 
   // "Hot" leads (urgent purchase timeline + nobody's touched them yet) can't

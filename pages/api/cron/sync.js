@@ -1,6 +1,7 @@
 const connectDB = require("../../../lib/db");
 const Company = require("../../../models/Company");
 const { runSync } = require("../../../lib/syncService");
+const { withTiming } = require("../../../lib/perfMonitor");
 
 // The single trigger point for the background sync, on every host. This is
 // a plain Next.js app with no custom server or in-process scheduler — call
@@ -51,4 +52,4 @@ async function handler(req, res) {
   }
 }
 
-export default handler;
+export default withTiming("/api/cron/sync", handler);

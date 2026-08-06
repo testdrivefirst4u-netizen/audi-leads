@@ -55,7 +55,11 @@ const LeadSchema = new mongoose.Schema(
     leadId: { type: String, index: true, sparse: true },
     phone: { type: String, index: true, sparse: true },
     name: { type: String },
-    email: { type: String },
+    // Indexed like phone above — lib/leadIngest.js's dedupeAndCreateLead
+    // does an exact-match $or:[{phone},{email}] lookup on every new-lead
+    // creation (sync + public API), so this was an unindexed field on a
+    // genuinely hot path, not just a display-only one.
+    email: { type: String, index: true, sparse: true },
     model: { type: String, index: true }, // source sheet tab, e.g. "Q3", "A6"
     canonicalModel: { type: String, index: true }, // folded down for filtering/charts, e.g. "Q5 jun" -> "Q5"
     data: { type: mongoose.Schema.Types.Mixed, default: {} }, // full row, keyed by sheet header

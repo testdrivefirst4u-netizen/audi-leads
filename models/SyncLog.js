@@ -17,4 +17,10 @@ const SyncLogSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Every read of this collection (sync-status, auto-sync-status, sync-logs,
+// buildStatusPayload) filters by companyId and sorts by createdAt desc —
+// measured directly via lib/perfMonitor.js — but only companyId was
+// indexed, leaving the sort unindexed on top of the filter.
+SyncLogSchema.index({ companyId: 1, createdAt: -1 });
+
 module.exports = mongoose.models.SyncLog || mongoose.model("SyncLog", SyncLogSchema);
