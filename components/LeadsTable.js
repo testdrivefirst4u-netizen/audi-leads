@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Skeleton from "react-loading-skeleton";
 import LeadDetailModal from "./LeadDetailModal";
 import { FaWhatsapp } from "react-icons/fa6";
 import {
   pickField,
-  FIELD_MATCHERS,
   prettify,
   modelColor,
   avatarColor,
@@ -183,6 +182,7 @@ export default function LeadsTable({
   followUpFilter,
   onFollowUpFilterChange,
   followUpTabs,
+  leadFieldColumns,
   agents,
   role,
   readOnly,
@@ -209,6 +209,13 @@ export default function LeadsTable({
   manageCompanyId,
 }) {
   const [selected, setSelected] = useState(null);
+
+  // Compiled once per leadFieldColumns change, not per cell render — each
+  // column's `matchers` are regex source strings (see models/Settings.js).
+  const compiledFieldColumns = useMemo(
+    () => (leadFieldColumns || []).map((c) => ({ ...c, patterns: (c.matchers || []).map((m) => new RegExp(m, "i")) })),
+    [leadFieldColumns]
+  );
 
   async function handleReassign(leadId, agentId) {
     const updated = await onReassign(leadId, agentId);
@@ -472,10 +479,9 @@ export default function LeadsTable({
                   <SortableHeader label="Status" field="status" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th>Bucket</th>
                   <th>Calls</th>
-                  <th>Campaign</th>
-                  <th>Purchase Timeline</th>
-                  <th>Exchange Plan</th>
-                  <th>Showroom</th>
+                  {compiledFieldColumns.map((col) => (
+                    <th key={col.key}>{col.label}</th>
+                  ))}
                   <th>Latest Remark</th>
                   <th>Next Follow-up</th>
                   <SortableHeader label="Created" field="sheetCreatedAt" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
@@ -516,10 +522,9 @@ export default function LeadsTable({
                         <BucketBadge lead={lead} />
                       </td>
                       <td className="text-muted">{(lead.calls || []).length}</td>
-                      <td>{pickField(lead.data, FIELD_MATCHERS.campaign) || "-"}</td>
-                      <td>{prettify(pickField(lead.data, FIELD_MATCHERS.purchaseTimeline)) || "-"}</td>
-                      <td>{prettify(pickField(lead.data, FIELD_MATCHERS.exchangePlan)) || "-"}</td>
-                      <td>{prettify(pickField(lead.data, FIELD_MATCHERS.showroom)) || "-"}</td>
+                      {compiledFieldColumns.map((col) => (
+                        <td key={col.key}>{prettify(pickField(lead.data, col.patterns)) || "-"}</td>
+                      ))}
                       <td className="remark-cell" title={remark || ""}>
                         {remark || <span className="hint">-</span>}
                       </td>
@@ -570,6 +575,7 @@ export default function LeadsTable({
           onReassign={handleReassign}
           canManageLead={canManageLead}
           manageCompanyId={manageCompanyId}
+          leadFieldColumns={leadFieldColumns}
         />
       )}
     </div>

@@ -41,6 +41,7 @@ async function handler(req, res) {
           agentCount: agentMap[String(c._id)] || 0,
           sheets: (s?.sheets || []).map((sh) => ({ _id: sh._id, label: sh.label, sheetId: sh.sheetId, sheetName: sh.sheetName })),
           syncIntervalMinutes: s?.syncIntervalMinutes || 1,
+          leadFieldColumns: (s?.leadFieldColumns || []).map((c) => ({ key: c.key, label: c.label, matchers: c.matchers || [] })),
         };
       }),
     });

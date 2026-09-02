@@ -1,8 +1,9 @@
 const XLSX = require("xlsx");
 const connectDB = require("../../../lib/db");
 const Lead = require("../../../models/Lead");
+const Settings = require("../../../models/Settings");
 const { requireCompanyMemberOrSuperAdminView } = require("../../../lib/auth");
-const { pickField, FIELD_MATCHERS, prettify, bucketFilterValue } = require("../../../lib/leadFields");
+const { pickField, prettify, bucketFilterValue } = require("../../../lib/leadFields");
 
 async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -27,7 +28,14 @@ async function handler(req, res) {
     filter.assignedTo = agent === "unassigned" ? null : agent;
   }
 
-  const leads = await Lead.find(filter).sort({ sheetCreatedAt: -1 }).populate("assignedTo", "name").lean();
+  const [leads, settings] = await Promise.all([
+    Lead.find(filter).sort({ sheetCreatedAt: -1 }).populate("assignedTo", "name").lean(),
+    Settings.findOne({ companyId: req.session.companyId }).select("leadFieldColumns").lean(),
+  ]);
+  const fieldColumns = (settings?.leadFieldColumns || []).map((c) => ({
+    ...c,
+    patterns: (c.matchers || []).map((m) => new RegExp(m, "i")),
+  }));
 
   // Remark counts vary per lead, but a spreadsheet needs one fixed set of
   // columns — so the number of "Remark N" columns is sized to whichever lead
@@ -37,7 +45,6 @@ async function handler(req, res) {
 
   const header = [
     "Created",
-    "Campaign",
     "Model",
     "Name",
     "Phone",
@@ -46,9 +53,7 @@ async function handler(req, res) {
     "Agent",
     "Status",
     "Calls Made",
-    "Purchase Timeline",
-    "Exchange Plan",
-    "Showroom",
+    ...fieldColumns.map((c) => c.label),
     ...remarkHeaders,
     "Next Follow-up",
   ];
@@ -65,7 +70,6 @@ async function handler(req, res) {
 
     return [
       lead.sheetCreatedAt ? new Date(lead.sheetCreatedAt).toLocaleDateString() : "",
-      pickField(lead.data, FIELD_MATCHERS.campaign),
       lead.canonicalModel || lead.model || "",
       lead.name || "",
       lead.phone || "",
@@ -74,9 +78,7 @@ async function handler(req, res) {
       lead.assignedTo?.name || "Unassigned",
       lead.status || "New",
       (lead.calls || []).length,
-      prettify(pickField(lead.data, FIELD_MATCHERS.purchaseTimeline)),
-      prettify(pickField(lead.data, FIELD_MATCHERS.exchangePlan)),
-      prettify(pickField(lead.data, FIELD_MATCHERS.showroom)),
+      ...fieldColumns.map((c) => prettify(pickField(lead.data, c.patterns))),
       ...remarkCells,
       nextFollowUp,
     ];
@@ -85,7 +87,6 @@ async function handler(req, res) {
   const sheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
   sheet["!cols"] = [
     { wch: 14 }, // Created
-    { wch: 18 }, // Campaign
     { wch: 14 }, // Model
     { wch: 22 }, // Name
     { wch: 14 }, // Phone
@@ -94,9 +95,7 @@ async function handler(req, res) {
     { wch: 18 }, // Agent
     { wch: 18 }, // Status
     { wch: 11 }, // Calls Made
-    { wch: 20 }, // Purchase Timeline
-    { wch: 16 }, // Exchange Plan
-    { wch: 16 }, // Showroom
+    ...fieldColumns.map(() => ({ wch: 20 })),
     ...remarkHeaders.map(() => ({ wch: 30 })),
     { wch: 14 }, // Next Follow-up
   ];

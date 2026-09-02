@@ -120,6 +120,171 @@ function SheetConfigRow({ company, onClose, onSaved }) {
   );
 }
 
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const EMPTY_COLUMN = { key: "", label: "", matcherSource: "" };
+
+// Lets a super admin pick which raw lead fields (beyond the fixed core
+// columns) show up in this company's Leads table — see
+// pages/api/companies/[id]/lead-fields/discover.js for where the field list
+// comes from, and lib/leadFields.js's FIELD_MATCHERS for why this is stored
+// as a regex (a literal, escaped one here) rather than an exact key: sheet
+// headers vary slightly per tab/export even within one company.
+function LeadFieldColumnsRow({ company, onClose, onSaved }) {
+  const toast = useToast();
+  const [discovered, setDiscovered] = useState([]);
+  const [loadingDiscovered, setLoadingDiscovered] = useState(true);
+  const [columns, setColumns] = useState(
+    (company.leadFieldColumns || []).map((c) => ({ key: c.key, label: c.label, matcherSource: (c.matchers || [])[0] || "" }))
+  );
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch(`/api/companies/${company._id}/lead-fields/discover`)
+      .then((res) => (res.ok ? res.json() : { fields: [] }))
+      .then((data) => {
+        if (!cancelled) {
+          setDiscovered(data.fields || []);
+          setLoadingDiscovered(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [company._id]);
+
+  function updateColumn(index, field, value) {
+    setColumns((prev) => prev.map((c, i) => (i === index ? { ...c, [field]: value } : c)));
+  }
+
+  function addColumn() {
+    setColumns((prev) => [...prev, { ...EMPTY_COLUMN }]);
+  }
+
+  function removeColumn(index) {
+    setColumns((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function moveColumn(index, dir) {
+    setColumns((prev) => {
+      const target = index + dir;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  function handlePickField(index, rawKey) {
+    // Auto-fill a sensible label the first time a field is picked, without
+    // clobbering a label the admin already typed in.
+    const guessedLabel = rawKey.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    setColumns((prev) =>
+      prev.map((c, i) =>
+        i === index ? { ...c, matcherSource: rawKey, key: c.key || rawKey, label: c.label || guessedLabel } : c
+      )
+    );
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const leadFieldColumns = columns
+        .filter((c) => c.matcherSource && c.label)
+        .map((c) => ({ key: c.key || c.matcherSource, label: c.label, matchers: [escapeRegExp(c.matcherSource)] }));
+      const res = await apiFetch(`/api/companies/${company._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadFieldColumns }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to save table columns");
+      }
+      toast("Table columns saved");
+      onSaved();
+    } catch (err) {
+      toast(err.message, { type: "err" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <tr>
+      <td colSpan={7}>
+        <div className="form" style={{ padding: "16px 0" }}>
+          <div className="hint mb-3">
+            Pick which raw fields from this company's leads show up as extra Leads-table columns, beyond the fixed
+            core ones (Name/Phone/Status/Agent/etc).{" "}
+            {loadingDiscovered
+              ? "Scanning recent leads for fields..."
+              : discovered.length === 0
+              ? "No leads synced yet — import or sync at least one lead first, then come back here."
+              : `${discovered.length} field(s) found across this company's recent leads.`}
+          </div>
+          {columns.map((col, i) => (
+            <div className="grid grid-cols-1 sm:grid-cols-[2fr_2fr_auto] gap-3 items-end mb-3" key={i}>
+              <div className="field mb-0">
+                <label>Source field</label>
+                <select value={col.matcherSource} onChange={(e) => handlePickField(i, e.target.value)}>
+                  <option value="">Select a field...</option>
+                  {discovered.map((f) => (
+                    <option key={f.key} value={f.key}>
+                      {f.key} ({f.example})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field mb-0">
+                <label>Column label</label>
+                <input
+                  value={col.label}
+                  onChange={(e) => updateColumn(i, "label", e.target.value)}
+                  placeholder="Preferred Service Location"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button className="btn-sm" type="button" onClick={() => moveColumn(i, -1)} disabled={i === 0} title="Move up">
+                  &uarr;
+                </button>
+                <button
+                  className="btn-sm"
+                  type="button"
+                  onClick={() => moveColumn(i, 1)}
+                  disabled={i === columns.length - 1}
+                  title="Move down"
+                >
+                  &darr;
+                </button>
+                <button className="btn-sm" type="button" onClick={() => removeColumn(i)}>
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+          <div className="flex gap-2 mb-3">
+            <button className="btn-sm" type="button" onClick={addColumn}>
+              + Add Column
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button className="btn" type="button" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : "Save"}
+            </button>
+            <button className="btn-sm" type="button" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 const MAPPING_FIELDS = [
   { key: "name", label: "Name field", placeholder: "e.g. full_name" },
   { key: "phone", label: "Phone field", placeholder: "e.g. mobile" },
@@ -672,6 +837,7 @@ export default function CompaniesPanel() {
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [apiKeysId, setApiKeysId] = useState(null);
+  const [leadFieldsId, setLeadFieldsId] = useState(null);
 
   const load = useCallback(async () => {
     const res = await apiFetch("/api/companies");
@@ -858,6 +1024,16 @@ export default function CompaniesPanel() {
                           >
                             {apiKeysId === c._id ? "Cancel" : "Lead Source API Keys"}
                           </button>
+                          <button
+                            className="btn-sm"
+                            onClick={() => {
+                              setEditingId(null);
+                              setApiKeysId(null);
+                              setLeadFieldsId(leadFieldsId === c._id ? null : c._id);
+                            }}
+                          >
+                            {leadFieldsId === c._id ? "Cancel" : "Table Columns"}
+                          </button>
                           <button className="btn-sm" onClick={() => toggleActive(c)}>
                             {c.active ? "Deactivate" : "Reactivate"}
                           </button>
@@ -877,6 +1053,17 @@ export default function CompaniesPanel() {
                     )}
                     {apiKeysId === c._id && (
                       <ApiKeysRow key={`${c._id}-keys`} company={c} onClose={() => setApiKeysId(null)} />
+                    )}
+                    {leadFieldsId === c._id && (
+                      <LeadFieldColumnsRow
+                        key={`${c._id}-lead-fields`}
+                        company={c}
+                        onClose={() => setLeadFieldsId(null)}
+                        onSaved={() => {
+                          setLeadFieldsId(null);
+                          load();
+                        }}
+                      />
                     )}
                   </Fragment>
                 ))}

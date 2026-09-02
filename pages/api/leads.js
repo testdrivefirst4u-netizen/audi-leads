@@ -1,6 +1,7 @@
 const connectDB = require("../../lib/db");
 const Lead = require("../../models/Lead");
 const Agent = require("../../models/Agent");
+const Settings = require("../../models/Settings");
 const { requireCompanyMemberOrSuperAdminView } = require("../../lib/auth");
 const { pickField, FIELD_MATCHERS, isUrgentTimeline, nextFollowUp, bucketFilterValue } = require("../../lib/leadFields");
 const { withCache } = require("../../lib/serverCache");
@@ -37,6 +38,16 @@ async function activeAgentList(companyId) {
   return withCache(`leads-agents:${companyId}`, DISTINCT_CACHE_MS, () =>
     Agent.find({ active: true, companyId }).select("name").lean()
   );
+}
+
+// This company's extra Leads-table columns (see models/Settings.js's
+// leadFieldColumns) — changes only when a super admin edits them via
+// CompaniesPanel, not worth a fresh query on every poll.
+async function leadFieldColumnsFor(companyId) {
+  return withCache(`leads-fields:${companyId}`, DISTINCT_CACHE_MS, async () => {
+    const settings = await Settings.findOne({ companyId }).select("leadFieldColumns").lean();
+    return (settings?.leadFieldColumns || []).map((c) => ({ key: c.key, label: c.label, matchers: c.matchers || [] }));
+  });
 }
 
 // A plain JSON.stringify(filter) won't work as a cache key here: filter.$or
@@ -213,6 +224,7 @@ async function handler(req, res) {
     const start = (pageNum - 1) * pageSizeNum;
     const leads = hotLeads.slice(start, start + pageSizeNum);
     const { models, sources } = await distinctModelsAndSources(req.session.companyId);
+    const leadFieldColumns = await leadFieldColumnsFor(req.session.companyId);
 
     return res.status(200).json({
       leads,
@@ -224,10 +236,11 @@ async function handler(req, res) {
       sources,
       agents: agentList,
       followUpTabs,
+      leadFieldColumns,
     });
   }
 
-  const [[leads, total], { models, sources }] = await Promise.all([
+  const [[leads, total], { models, sources }, leadFieldColumns] = await Promise.all([
     Promise.all([
       Lead.find(filter)
         .sort({ [sortField]: sortDirection })
@@ -238,6 +251,7 @@ async function handler(req, res) {
       Lead.countDocuments(filter),
     ]),
     distinctModelsAndSources(req.session.companyId),
+    leadFieldColumnsFor(req.session.companyId),
   ]);
 
   res.status(200).json({
@@ -250,6 +264,7 @@ async function handler(req, res) {
     sources,
     agents: agentList,
     followUpTabs,
+    leadFieldColumns,
   });
 }
 

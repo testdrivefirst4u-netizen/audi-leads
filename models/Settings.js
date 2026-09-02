@@ -16,6 +16,21 @@ const SheetSourceSchema = new mongoose.Schema(
   { _id: true }
 );
 
+// One entry per extra lead-table column a company wants to see, beyond the
+// fixed core fields (name/phone/email/model/status/etc). `matchers` are
+// regex source strings (case-insensitive) matched against each lead's raw
+// `data` keys — the same approach lib/leadFields.js's FIELD_MATCHERS already
+// uses, because sheet headers vary slightly per tab/export even within one
+// company (e.g. "any_plan_to_exchange" vs the longer variant).
+const LeadFieldColumnSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true }, // stable id, e.g. "purchaseTimeline"
+    label: { type: String, required: true }, // display label, e.g. "Preferred Service Location"
+    matchers: { type: [String], default: [] },
+  },
+  { _id: false }
+);
+
 const SettingsSchema = new mongoose.Schema(
   {
     // Legacy single-tenant lookup key — no longer unique (every company's
@@ -29,6 +44,9 @@ const SettingsSchema = new mongoose.Schema(
     sheetId: { type: String, default: "" },
     sheetName: { type: String, default: "" },
     sheets: { type: [SheetSourceSchema], default: [] },
+    // Per-company extra Leads-table columns — see LeadFieldColumnSchema
+    // above. Empty means the table shows only the core fixed columns.
+    leadFieldColumns: { type: [LeadFieldColumnSchema], default: [] },
     // 1440 = "Daily", for hosts (e.g. Vercel Hobby) where the sync can only
     // realistically run once a day — keeps the Online/Offline threshold accurate.
     syncIntervalMinutes: { type: Number, enum: [1, 5, 15, 1440], default: 1 },

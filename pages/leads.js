@@ -77,6 +77,7 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
   const [sortDir, setSortDir] = useState("desc");
   const [models, setModels] = useState([]);
   const [sources, setSources] = useState([]);
+  const [leadFieldColumns, setLeadFieldColumns] = useState([]);
   const [agents, setAgents] = useState([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -116,6 +117,7 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
           setTotalPages(data.totalPages || 1);
           setModels(data.models || []);
           setSources(data.sources || []);
+          setLeadFieldColumns(data.leadFieldColumns || []);
           setAgents(data.agents || []);
           setFollowUpTabs(data.followUpTabs || { overdue: 0, today: 0, upcoming: 0, completed: 0 });
         })
@@ -321,6 +323,7 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
         sortDir={sortDir}
         onSortChange={handleSortChange}
         models={models}
+        leadFieldColumns={leadFieldColumns}
         page={page}
         totalPages={totalPages}
         total={total}

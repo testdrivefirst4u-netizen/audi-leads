@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { apiFetch } from "../lib/apiFetch";
 import { useToast } from "./ToastProvider";
-import { LEAD_STATUSES, CANONICAL_MODELS, statusColor, pickField, FIELD_MATCHERS, prettify, prettyBucket, bucketColor, BUCKET_ACTIONS } from "../lib/leadFields";
+import { LEAD_STATUSES, CANONICAL_MODELS, statusColor, pickField, prettify, prettyBucket, bucketColor, BUCKET_ACTIONS } from "../lib/leadFields";
 import { WhatsAppIcon, PhoneIcon, NoteIcon, CalendarIcon } from "./icons";
 
 function formatDate(d) {
@@ -127,6 +127,7 @@ export default function LeadDetailModal({
   onReassign,
   canManageLead,
   manageCompanyId,
+  leadFieldColumns = [],
 }) {
   const toast = useToast();
   // A toast alone is easy to miss since it appears outside the modal the
@@ -580,10 +581,13 @@ export default function LeadDetailModal({
                     <Field label="Model" value={lead.canonicalModel || lead.model} />
                   )}
                   <Field label="Source" value={lead.source || "Meta Ads"} />
-                  <Field label="Showroom" value={prettify(pickField(data, FIELD_MATCHERS.showroom))} />
-                  <Field label="Campaign" value={pickField(data, FIELD_MATCHERS.campaign)} />
-                  <Field label="Purchase Timeline" value={prettify(pickField(data, FIELD_MATCHERS.purchaseTimeline))} />
-                  <Field label="Exchange Plan" value={prettify(pickField(data, FIELD_MATCHERS.exchangePlan))} />
+                  {leadFieldColumns.map((col) => (
+                    <Field
+                      key={col.key}
+                      label={col.label}
+                      value={prettify(pickField(data, (col.matchers || []).map((m) => new RegExp(m, "i"))))}
+                    />
+                  ))}
                   <Field label="Created" value={formatDate(lead.sheetCreatedAt)} />
                   <Field
                     label="Repeat Enquiries"
