@@ -2,7 +2,7 @@ const connectDB = require("../../lib/db");
 const Lead = require("../../models/Lead");
 const Agent = require("../../models/Agent");
 const { requireCompanyMemberOrSuperAdminView } = require("../../lib/auth");
-const { pickField, FIELD_MATCHERS, isUrgentTimeline, nextFollowUp } = require("../../lib/leadFields");
+const { pickField, FIELD_MATCHERS, isUrgentTimeline, nextFollowUp, bucketFilterValue } = require("../../lib/leadFields");
 const { withCache } = require("../../lib/serverCache");
 
 const SORTABLE_FIELDS = new Set(["name", "canonicalModel", "status", "sheetCreatedAt"]);
@@ -43,7 +43,7 @@ async function activeAgentList(companyId) {
 // embeds a RegExp for `search`, and RegExp serializes to "{}" — every
 // distinct search term would collide onto the same cache entry. Building
 // the key from the raw query inputs instead keeps it accurate.
-function filterSignature(req, { search = "", model = "", status = "", location = "", source = "", from = "", to = "", agent = "" } = {}) {
+function filterSignature(req, { search = "", model = "", status = "", location = "", source = "", bucket = "", from = "", to = "", agent = "" } = {}) {
   return [
     req.session.companyId,
     req.session.role,
@@ -53,6 +53,7 @@ function filterSignature(req, { search = "", model = "", status = "", location =
     status,
     location,
     source,
+    bucket,
     from,
     to,
     agent,
@@ -73,6 +74,7 @@ async function handler(req, res) {
     agent = "",
     location = "",
     source = "",
+    bucket = "",
     followUpFilter = "",
     page = "1",
     pageSize = "20",
@@ -103,6 +105,9 @@ async function handler(req, res) {
   if (source) {
     filter.source = source;
   }
+  if (bucket) {
+    filter.bucket = bucketFilterValue(bucket);
+  }
   // Filters on sheetCreatedAt — the date the lead actually came in on the
   // sheet (its own create_time column), not when we happened to sync it.
   if (from || to) {
@@ -130,7 +135,7 @@ async function handler(req, res) {
   // date, computed in JS by nextFollowUp). Narrow to leads that have any
   // follow-ups at all (indexed-ish via the array-exists check) then finish
   // the classification in JS — same low-hundreds-of-leads scale as "hot".
-  const followUpSig = filterSignature(req, { search, model, status, location, source, from, to, agent });
+  const followUpSig = filterSignature(req, { search, model, status, location, source, bucket, from, to, agent });
   const { followUpTabs, bucketIds } = await withCache(`followup-tabs:${followUpSig}`, FOLLOWUP_TABS_CACHE_MS, async () => {
     const followUpCandidates = await Lead.find({ ...filter, "followUps.0": { $exists: true } })
       .select("followUps")

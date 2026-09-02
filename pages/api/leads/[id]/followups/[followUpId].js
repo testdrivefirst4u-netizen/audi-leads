@@ -2,6 +2,7 @@ const connectDB = require("../../../../../lib/db");
 const Lead = require("../../../../../models/Lead");
 const { requireCompanyMember } = require("../../../../../lib/auth");
 const { leadOwnershipFilter } = require("../../../../../lib/leadAccess");
+const { invalidate } = require("../../../../../lib/serverCache");
 
 async function handler(req, res) {
   if (req.method !== "PATCH") return res.status(405).json({ error: "Method not allowed" });
@@ -34,6 +35,8 @@ async function handler(req, res) {
   }
 
   await lead.save();
+
+  invalidate(`followup-tabs:${req.session.companyId}`);
 
   res.status(200).json({ lead });
 }

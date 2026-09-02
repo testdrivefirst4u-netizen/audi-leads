@@ -2,19 +2,20 @@ const XLSX = require("xlsx");
 const connectDB = require("../../../lib/db");
 const Lead = require("../../../models/Lead");
 const { requireCompanyMemberOrSuperAdminView } = require("../../../lib/auth");
-const { pickField, FIELD_MATCHERS, prettify } = require("../../../lib/leadFields");
+const { pickField, FIELD_MATCHERS, prettify, bucketFilterValue } = require("../../../lib/leadFields");
 
 async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   await connectDB();
-  const { from, to, model = "", status = "", agent = "", location = "", source = "" } = req.query;
+  const { from, to, model = "", status = "", agent = "", location = "", source = "", bucket = "" } = req.query;
 
   const filter = { companyId: req.session.companyId };
   if (model) filter.canonicalModel = model;
   if (status) filter.status = status;
   if (location) filter.location = location === "unfilled" ? { $in: [null, ""] } : location;
   if (source) filter.source = source;
+  if (bucket) filter.bucket = bucketFilterValue(bucket);
   if (from || to) {
     filter.sheetCreatedAt = {};
     if (from) filter.sheetCreatedAt.$gte = new Date(`${from}T00:00:00Z`);

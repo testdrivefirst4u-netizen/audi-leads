@@ -13,6 +13,9 @@ import {
   LEAD_STATUSES,
   statusColor,
   SHOWROOM_LOCATIONS,
+  BUCKETS,
+  prettyBucket,
+  bucketColor,
 } from "../lib/leadFields";
 import { WhatsAppIcon, SortIcon, FireIcon } from "./icons";
 
@@ -113,6 +116,18 @@ function StatusBadge({ status }) {
   );
 }
 
+function BucketBadge({ lead }) {
+  const bucket = lead.bucket || "unassigned";
+  const { bg, text } = bucketColor(bucket);
+  const locked = lead.bucketLocked === true;
+  return (
+    <span className="pill" style={{ background: bg, color: text, fontWeight: locked ? 700 : 500 }}>
+      {locked ? "🔒 " : ""}
+      {prettyBucket(bucket)}
+    </span>
+  );
+}
+
 function AgentCell({ lead, agents, role, readOnly, onReassign }) {
   if (role !== "admin" || readOnly) {
     return <span className="text-muted">{lead.assignedTo?.name || "Unassigned"}</span>;
@@ -162,6 +177,8 @@ export default function LeadsTable({
   onLocationFilterChange,
   sourceFilter,
   onSourceFilterChange,
+  bucketFilter,
+  onBucketFilterChange,
   sources,
   followUpFilter,
   onFollowUpFilterChange,
@@ -285,6 +302,18 @@ export default function LeadsTable({
           </select>
         </div>
 
+        <div className="toolbar-group">
+          <label className="toolbar-label">Bucket</label>
+          <select value={bucketFilter} onChange={(e) => onBucketFilterChange(e.target.value)}>
+            <option value="">All buckets</option>
+            {BUCKETS.map((b) => (
+              <option key={b} value={b}>
+                {prettyBucket(b)}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {role === "admin" && (
           <div className="toolbar-group">
             <label className="toolbar-label">Agent</label>
@@ -403,6 +432,7 @@ export default function LeadsTable({
                   <div className="flex flex-wrap items-center gap-2 mb-2">
                     <ModelBadge lead={lead} />
                     <LeadTypeBadge lead={lead} />
+                    <BucketBadge lead={lead} />
                   </div>
                   <div onClick={(e) => e.stopPropagation()} className="mb-2">
                     <PhoneCell phone={lead.phone} />
@@ -440,6 +470,7 @@ export default function LeadsTable({
                   <th>Email</th>
                   <th>Agent</th>
                   <SortableHeader label="Status" field="status" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
+                  <th>Bucket</th>
                   <th>Calls</th>
                   <th>Campaign</th>
                   <th>Purchase Timeline</th>
@@ -480,6 +511,9 @@ export default function LeadsTable({
                       </td>
                       <td>
                         <StatusBadge status={lead.status} />
+                      </td>
+                      <td>
+                        <BucketBadge lead={lead} />
                       </td>
                       <td className="text-muted">{(lead.calls || []).length}</td>
                       <td>{pickField(lead.data, FIELD_MATCHERS.campaign) || "-"}</td>

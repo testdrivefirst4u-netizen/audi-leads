@@ -5,6 +5,8 @@ const { pickField, FIELD_MATCHERS, isUrgentTimeline, normalizeShowroom } = requi
 const { withCache } = require("../../lib/serverCache");
 
 const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Test Drive", "Booking", "Retail (Converted)", "Lost"];
+// Keep in sync with models/Lead.js's BUCKETS.
+const BUCKETS = ["unassigned", "qualified", "retail", "lost"];
 const TREND_DAYS = 30;
 // Matches the dashboard's own poll interval (pages/index.js) — this doesn't
 // make any single viewer's data staler than it already is between polls; it
@@ -63,7 +65,7 @@ async function computeStats(req) {
   ]);
 
   const leads = await Lead.find(filter)
-    .select("model canonicalModel data status sheetCreatedAt calls remarks leadType duplicateCount enquiryHistory source")
+    .select("model canonicalModel data status bucket sheetCreatedAt calls remarks leadType duplicateCount enquiryHistory source")
     .lean();
 
   const exchangeCounts = { Yes: 0, No: 0, "Not Filled": 0 };
@@ -71,6 +73,7 @@ async function computeStats(req) {
   const modelCounts = {};
   const sourceCounts = {};
   const pipelineCounts = Object.fromEntries(LEAD_STATUSES.map((s) => [s, 0]));
+  const bucketCounts = Object.fromEntries(BUCKETS.map((b) => [b, 0]));
 
   // Build the trend days upfront so days with zero leads still show — the
   // selected month's calendar days if one was picked, otherwise a rolling
@@ -121,6 +124,9 @@ async function computeStats(req) {
     const status = LEAD_STATUSES.includes(lead.status) ? lead.status : "New";
     pipelineCounts[status]++;
 
+    const bucket = BUCKETS.includes(lead.bucket) ? lead.bucket : "unassigned";
+    bucketCounts[bucket]++;
+
     totalCalls += (lead.calls || []).length;
 
     const enquiryCount = (lead.enquiryHistory || []).length || 1;
@@ -160,6 +166,7 @@ async function computeStats(req) {
       vehicleWise: toSortedArray(modelCounts),
     },
     pipeline: LEAD_STATUSES.map((label) => ({ label, count: pipelineCounts[label] })),
+    buckets: BUCKETS.map((key) => ({ key, count: bucketCounts[key] })),
     trend,
   };
 }

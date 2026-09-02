@@ -9,6 +9,7 @@ import PipelineStats from "../components/PipelineStats";
 import LeadsTrendChart from "../components/LeadsTrendChart";
 import ModelBarChart from "../components/ModelBarChart";
 import StatusPieChart from "../components/StatusPieChart";
+import BucketPieChart from "../components/BucketPieChart";
 import VerticalBarChart from "../components/VerticalBarChart";
 import LeadStatsPanel from "../components/LeadStatsPanel";
 import { getSessionFromCookieHeader } from "../lib/auth";
@@ -126,7 +127,7 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
         </div>
       </div>
 
-      <div className="chart-row-3">
+      <div className="chart-row-4">
         <div className="chart-section">
           <h3>Lead Status Distribution</h3>
           {loading ? <Skeleton height={200} /> : <StatusPieChart pipeline={stats?.pipeline} />}
@@ -138,6 +139,10 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
         <div className="chart-section">
           <h3>Lead Source Distribution</h3>
           {loading ? <Skeleton height={200} /> : <VerticalBarChart data={stats?.sources} />}
+        </div>
+        <div className="chart-section">
+          <h3>Lead Bucket Distribution</h3>
+          {loading ? <Skeleton height={200} /> : <BucketPieChart buckets={stats?.buckets} />}
         </div>
       </div>
 

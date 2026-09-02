@@ -359,6 +359,23 @@
     }
   }
 
+  .chart-row-4 {
+    @apply grid items-stretch gap-4 mb-6;
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  @media (max-width: 1400px) {
+    .chart-row-4 {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  @media (max-width: 700px) {
+    .chart-row-4 {
+      grid-template-columns: 1fr;
+    }
+  }
+
   .report-type-tabs {
     @apply flex flex-wrap gap-2 mb-5;
   }

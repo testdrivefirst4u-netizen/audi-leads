@@ -3,6 +3,7 @@ const Lead = require("../../../../models/Lead");
 const { requireCompanyMember } = require("../../../../lib/auth");
 const { leadOwnershipFilter } = require("../../../../lib/leadAccess");
 const { completeDueFollowUps } = require("../../../../lib/followUps");
+const { invalidate } = require("../../../../lib/serverCache");
 
 async function handler(req, res) {
   if (req.method !== "PATCH") return res.status(405).json({ error: "Method not allowed" });
@@ -23,6 +24,8 @@ async function handler(req, res) {
 
   const lead = await Lead.findOneAndUpdate(filter, { status }, { new: true });
   if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+  if (followUpsCleared > 0) invalidate(`followup-tabs:${req.session.companyId}`);
 
   res.status(200).json({ lead, followUpsCleared });
 }

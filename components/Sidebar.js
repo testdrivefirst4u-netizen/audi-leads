@@ -23,7 +23,7 @@ const NAV_ITEMS = [
   { href: "/companies", label: "Companies", Icon: AgentIcon, superAdminOnly: true },
 ];
 
-export default function Sidebar({ username, role, companyName, companyLogoUrl, onLogout, open, onClose }) {
+export default function Sidebar({ username, role, companyName, companyLogoUrl, followUpBadge, onLogout, open, onClose }) {
   const router = useRouter();
   const brandName = role === "super_admin" ? "Broaddcast Platform" : companyName || "Leads";
   const brandLogo = role === "super_admin" ? "/broaddcast-logo.svg" : companyLogoUrl || "/audi-logo.png";
@@ -62,6 +62,11 @@ export default function Sidebar({ username, role, companyName, companyLogoUrl, o
         <nav className="flex flex-col flex-1 gap-1 px-3 py-2">
           {navItems.map(({ href, label, Icon }) => {
             const active = router.pathname === href;
+            // Due/overdue follow-ups need to be seen the moment an agent
+            // opens the app, not just after they happen to click into the
+            // Follow-ups page — matches the count already reflected there.
+            const badgeCount = href === "/followups" && followUpBadge ? followUpBadge.overdue + followUpBadge.today : 0;
+            const badgeUrgent = href === "/followups" && followUpBadge?.overdue > 0;
             return (
               <Link
                 key={href}
@@ -74,7 +79,16 @@ export default function Sidebar({ username, role, companyName, companyLogoUrl, o
                 }`}
               >
                 <Icon />
-                <span>{label}</span>
+                <span className="flex-1">{label}</span>
+                {badgeCount > 0 && (
+                  <span
+                    className={`min-w-[18px] h-[18px] px-1 rounded-full text-white text-[10px] font-bold flex items-center justify-center leading-none ${
+                      badgeUrgent ? "bg-danger" : "bg-white/20"
+                    }`}
+                  >
+                    {badgeCount > 9 ? "9+" : badgeCount}
+                  </span>
+                )}
               </Link>
             );
           })}

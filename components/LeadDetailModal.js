@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { apiFetch } from "../lib/apiFetch";
 import { useToast } from "./ToastProvider";
-import { LEAD_STATUSES, CANONICAL_MODELS, statusColor, pickField, FIELD_MATCHERS, prettify } from "../lib/leadFields";
+import { LEAD_STATUSES, CANONICAL_MODELS, statusColor, pickField, FIELD_MATCHERS, prettify, prettyBucket, bucketColor, BUCKET_ACTIONS } from "../lib/leadFields";
 import { WhatsAppIcon, PhoneIcon, NoteIcon, CalendarIcon } from "./icons";
 
 function formatDate(d) {
@@ -34,7 +34,7 @@ function clearedSuffix(count) {
   return count > 0 ? ` — ${count} overdue follow-up${count === 1 ? "" : "s"} cleared` : "";
 }
 
-const TYPE_LABELS = { remark: "Remark", call: "Call", followup: "Follow-up" };
+const TYPE_LABELS = { remark: "Remark", call: "Call", followup: "Follow-up", bucket: "Bucket" };
 
 // One config per activity type, shared between the timeline icon and its
 // label pill — remark/call/followup each get a distinct color so the
@@ -46,6 +46,18 @@ const TYPE_STYLE = {
 };
 
 function TimelineIcon({ type }) {
+  // Bucket moves render an emoji glyph instead of an svg Icon — matches the
+  // 🔒/🔄 language used everywhere else bucket state is shown.
+  if (type === "bucket") {
+    return (
+      <span
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm"
+        style={{ background: "#f5f3ff", color: "#6d28d9" }}
+      >
+        🎯
+      </span>
+    );
+  }
   const { Icon, bg, color } = TYPE_STYLE[type];
   return (
     <span
@@ -117,6 +129,18 @@ export default function LeadDetailModal({
   manageCompanyId,
 }) {
   const toast = useToast();
+  // A toast alone is easy to miss since it appears outside the modal the
+  // agent is actually looking at — this mirrors the same info inline, right
+  // next to the Save button they just clicked, so cause-and-effect is
+  // obvious without relying on catching a corner toast.
+  const [clearedBanner, setClearedBanner] = useState(null);
+  const clearedBannerTimer = useRef(null);
+  function announceFollowUpsCleared(count) {
+    if (!count) return;
+    setClearedBanner(`${count} overdue follow-up${count === 1 ? "" : "s"} auto-marked done by this update`);
+    clearTimeout(clearedBannerTimer.current);
+    clearedBannerTimer.current = setTimeout(() => setClearedBanner(null), 6000);
+  }
   const [remarkText, setRemarkText] = useState("");
   const [logCall, setLogCall] = useState(false);
   const [callNote, setCallNote] = useState("");
@@ -129,6 +153,11 @@ export default function LeadDetailModal({
   const [savingEdit, setSavingEdit] = useState(false);
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // "Armed" bucket target ("qualified" | "retail") awaiting confirmation —
+  // same two-step pattern as deleteArmed above, since a bucket move to
+  // Qualified/Retail is just as irreversible as a delete.
+  const [bucketArmed, setBucketArmed] = useState(null);
+  const [changingBucket, setChangingBucket] = useState(false);
 
   if (!lead) return null;
 
@@ -213,6 +242,28 @@ export default function LeadDetailModal({
     }
   }
 
+  // "qualified"/"retail" permanently lock the bucket; "lost" doesn't — the
+  // toast wording reflects which one just happened.
+  async function changeBucket(targetBucket) {
+    setChangingBucket(true);
+    try {
+      const res = await apiFetch(`/api/leads/${lead._id}/bucket`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bucket: targetBucket }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed to update bucket");
+      const data = await res.json();
+      onUpdated(data.lead);
+      setBucketArmed(null);
+      toast(targetBucket === "lost" ? "Bucket moved to Lost" : `Bucket locked to ${prettyBucket(targetBucket)}`);
+    } catch (err) {
+      toast(err.message, { type: "err" });
+    } finally {
+      setChangingBucket(false);
+    }
+  }
+
   async function changeStatus(newStatus) {
     setSavingStatus(true);
     try {
@@ -225,6 +276,7 @@ export default function LeadDetailModal({
       const data = await res.json();
       onUpdated(data.lead);
       toast(`Status changed to ${newStatus}${clearedSuffix(data.followUpsCleared)}`);
+      announceFollowUpsCleared(data.followUpsCleared);
     } catch (err) {
       toast(err.message, { type: "err" });
     } finally {
@@ -285,6 +337,7 @@ export default function LeadDetailModal({
       setFollowNote("");
       onUpdated(latestLead);
       toast(`Activity saved${clearedSuffix(followUpsCleared)}`);
+      announceFollowUpsCleared(followUpsCleared);
     } catch (err) {
       toast(err.message, { type: "err" });
     } finally {
@@ -308,9 +361,21 @@ export default function LeadDetailModal({
       note: f.note,
       completed: f.completed,
     })),
+    // Every lead starts in Lost by default — this synthetic entry (not
+    // stored in the DB) anchors the timeline so bucket moves below always
+    // have a starting point to read from.
+    { type: "bucket", at: lead.createdAt, id: "created", text: `Lead created — Bucket: ${prettyBucket(lead.bucket)}` },
+    ...(lead.bucketHistory || []).map((h, idx) => ({
+      type: "bucket",
+      at: h.at,
+      id: `move-${idx}`,
+      text: h.locked
+        ? `Lead moved: ${prettyBucket(h.from)} → ${prettyBucket(h.to)} — 🔒 ${prettyBucket(h.to)} bucket permanently locked${h.by ? ` (by ${h.by})` : ""}`
+        : `Lead moved: ${prettyBucket(h.from)} → ${prettyBucket(h.to)}${h.by ? ` (by ${h.by})` : ""}`,
+    })),
   ].sort((a, b) => new Date(b.at) - new Date(a.at)); // newest first — most relevant activity up top
 
-  const typeRunningCount = { remark: 0, call: 0, followup: 0 };
+  const typeRunningCount = { remark: 0, call: 0, followup: 0, bucket: 0 };
   for (const item of [...history].reverse()) {
     typeRunningCount[item.type] += 1;
     item.typeIndex = typeRunningCount[item.type];
@@ -416,6 +481,85 @@ export default function LeadDetailModal({
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
             {/* Main column — reference info, scrolls normally with the modal body */}
             <div className="min-w-0">
+              <Section title="Bucket">
+                {lead.bucketLocked ? (
+                  <div className="flex flex-col gap-1">
+                    <span
+                      className="pill w-fit"
+                      style={{ background: bucketColor(lead.bucket).bg, color: bucketColor(lead.bucket).text, fontWeight: 700 }}
+                    >
+                      🔒 {prettyBucket(lead.bucket)}
+                    </span>
+                    <span className="text-xs text-muted">
+                      Bucket permanently locked
+                      {lead.bucketLockedBy ? ` by ${lead.bucketLockedBy}` : ""}
+                      {lead.bucketLockedAt ? ` on ${formatDateOnly(lead.bucketLockedAt)}` : ""}.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2.5">
+                    <span className="text-sm text-ink">
+                      Bucket: <span className="font-semibold">{prettyBucket(lead.bucket || "unassigned")}</span>
+                    </span>
+                    {!readOnly && (
+                      <div className="flex flex-wrap gap-2">
+                        {BUCKET_ACTIONS.map((b) => {
+                          const currentBucket = lead.bucket || "unassigned";
+                          const isCurrent = currentBucket === b;
+                          return (
+                            <button
+                              key={b}
+                              type="button"
+                              className="btn-sm"
+                              style={isCurrent ? { background: "var(--accent-soft-rgb, #eef2ff)", fontWeight: 700 } : undefined}
+                              onClick={() => {
+                                // Moving to Lost is reversible, so it applies
+                                // immediately — Qualified/Retail are
+                                // permanent, so they go through the arm +
+                                // confirm step below instead.
+                                if (b === "lost") {
+                                  if (!isCurrent) changeBucket("lost");
+                                } else {
+                                  setBucketArmed(b);
+                                }
+                              }}
+                              disabled={changingBucket || isCurrent}
+                            >
+                              {isCurrent ? "✓ " : ""}
+                              {prettyBucket(b)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {bucketArmed && (
+                      <div className="rounded-lg border border-border bg-bg p-3 flex flex-col gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-ink m-0">Move this lead to {prettyBucket(bucketArmed)}?</p>
+                          <p className="text-xs text-muted m-0 mt-1">
+                            Once assigned to {prettyBucket(bucketArmed)}, this lead cannot be moved to another bucket.
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="button" className="btn-sm" onClick={() => setBucketArmed(null)} disabled={changingBucket}>
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-sm"
+                            style={{ background: "#f5f3ff", borderColor: "#c4b5fd", color: "#6d28d9" }}
+                            onClick={() => changeBucket(bucketArmed)}
+                            disabled={changingBucket}
+                          >
+                            {changingBucket ? "Saving..." : `Confirm ${prettyBucket(bucketArmed)}`}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Section>
+
               <Section title="Lead Details">
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
                   {editing ? (
@@ -611,6 +755,13 @@ export default function LeadDetailModal({
                   >
                     {saving ? "Saving..." : "Save Activity"}
                   </button>
+
+                  {clearedBanner && (
+                    <div className="flex items-center gap-2 rounded-lg bg-success/10 border border-success/30 px-3 py-2 text-[12px] font-semibold text-success">
+                      <CalendarIcon width={13} height={13} className="shrink-0" />
+                      {clearedBanner}
+                    </div>
+                  )}
                 </form>
               )}
 

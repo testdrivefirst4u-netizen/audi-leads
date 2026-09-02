@@ -66,6 +66,15 @@ async function logDelivery({ companyId, apiKeyId, sourceName, status, errorMessa
 }
 
 async function handler(req, res) {
+  // Called directly from browser JS on external landing pages, so it needs
+  // CORS headers on every response plus a preflight OPTIONS response — the
+  // key in the Authorization header (not a cookie) makes a wildcard origin
+  // safe here.
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Api-Key");
+
+  if (req.method === "OPTIONS") return res.status(204).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   await connectDB();

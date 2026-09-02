@@ -69,6 +69,7 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
   const [agentFilter, setAgentFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
+  const [bucketFilter, setBucketFilter] = useState("");
   const [followUpFilter, setFollowUpFilter] = useState("");
   const [followUpTabs, setFollowUpTabs] = useState({ overdue: 0, today: 0, upcoming: 0, completed: 0 });
   const [hotOnly, setHotOnly] = useState(!!initialHot);
@@ -96,6 +97,7 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
         agent: filters.agentFilter || "",
         location: filters.locationFilter || "",
         source: filters.sourceFilter || "",
+        bucket: filters.bucketFilter || "",
         followUpFilter: filters.followUpFilter || "",
         hot: filters.hotOnly ? "true" : "",
         from: from || "",
@@ -129,6 +131,7 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
     agentFilter,
     locationFilter,
     sourceFilter,
+    bucketFilter,
     followUpFilter,
     hotOnly,
     sortBy,
@@ -143,13 +146,13 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
     const timeout = setTimeout(() => fetchLeads(filters), 250);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, model, status, agentFilter, locationFilter, sourceFilter, followUpFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, viewCompanyId, fetchLeads]);
+  }, [search, model, status, agentFilter, locationFilter, sourceFilter, bucketFilter, followUpFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, viewCompanyId, fetchLeads]);
 
   useEffect(() => {
     const interval = setInterval(() => fetchLeads(filters), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, model, status, agentFilter, locationFilter, sourceFilter, followUpFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, viewCompanyId, fetchLeads]);
+  }, [search, model, status, agentFilter, locationFilter, sourceFilter, bucketFilter, followUpFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, viewCompanyId, fetchLeads]);
 
   function handleSearchChange(value) {
     setSearch(value);
@@ -183,6 +186,11 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
 
   function handleSourceFilterChange(value) {
     setSourceFilter(value);
+    setPage(1);
+  }
+
+  function handleBucketFilterChange(value) {
+    setBucketFilter(value);
     setPage(1);
   }
 
@@ -255,6 +263,7 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
       if (agentFilter) params.set("agent", agentFilter);
       if (locationFilter) params.set("location", locationFilter);
       if (sourceFilter) params.set("source", sourceFilter);
+      if (bucketFilter) params.set("bucket", bucketFilter);
       if (from) params.set("from", from);
       if (to) params.set("to", to);
       if (isSuperAdminView) params.set("companyId", viewCompanyId);
@@ -296,6 +305,8 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
         onLocationFilterChange={handleLocationFilterChange}
         sourceFilter={sourceFilter}
         onSourceFilterChange={handleSourceFilterChange}
+        bucketFilter={bucketFilter}
+        onBucketFilterChange={handleBucketFilterChange}
         sources={sources}
         followUpFilter={followUpFilter}
         onFollowUpFilterChange={handleFollowUpFilterChange}
