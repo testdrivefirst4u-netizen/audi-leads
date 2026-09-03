@@ -3,10 +3,12 @@
 // Every response gets these — no external scripts/fonts/analytics are
 // loaded anywhere in this app (verified: no next/image, no Google Fonts
 // link, no third-party <script> tags), so the CSP can stay tight without
-// an allowlist of external domains. 'unsafe-inline' on style-src is the one
-// deliberate loosening: styled-jsx (used for the per-company/super-admin
+// a broad allowlist of external domains. 'unsafe-inline' on style-src is
+// one deliberate loosening: styled-jsx (used for the per-company/super-admin
 // accent color override in components/Layout.js) injects inline <style>
-// tags that a stricter policy would block.
+// tags that a stricter policy would block. img-src allows ik.imagekit.io
+// specifically — company logos (Companies panel, super admin) are uploaded
+// there and rendered as plain <img> tags.
 const SECURITY_HEADERS = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -18,7 +20,7 @@ const SECURITY_HEADERS = [
       "default-src 'self'",
       "script-src 'self'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
+      "img-src 'self' data: blob: https://ik.imagekit.io",
       "font-src 'self' data:",
       "connect-src 'self'",
       "worker-src 'self'",
