@@ -7,6 +7,9 @@ const AdminSchema = new mongoose.Schema(
     // Absent/null = super admin (platform owner, manages Companies).
     // Present = a company admin, scoped to that one company.
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", index: true },
+    // Personal avatar (super admin's self-service Account page) — distinct
+    // from a company's own logoUrl on the Company model.
+    avatarUrl: { type: String, default: "" },
   },
   { timestamps: true }
 );
