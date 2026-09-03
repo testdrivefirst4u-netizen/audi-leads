@@ -4,7 +4,7 @@ const Admin = require("../../../models/Admin");
 const Agent = require("../../../models/Agent");
 const Lead = require("../../../models/Lead");
 const Settings = require("../../../models/Settings");
-const { hashPassword, requireSuperAdmin } = require("../../../lib/auth");
+const { hashPassword, isPasswordStrongEnough, MIN_PASSWORD_LENGTH, requireSuperAdmin } = require("../../../lib/auth");
 
 function slugify(name) {
   return name
@@ -51,6 +51,9 @@ async function handler(req, res) {
     const { name, adminUsername, adminPassword, logoUrl = "", brandColor = "" } = req.body || {};
     if (!name || !adminUsername || !adminPassword) {
       return res.status(400).json({ error: "Company name, admin username, and admin password are required" });
+    }
+    if (!isPasswordStrongEnough(adminPassword)) {
+      return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
     }
 
     const baseSlug = slugify(name) || "company";

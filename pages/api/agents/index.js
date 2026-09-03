@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const connectDB = require("../../../lib/db");
 const Agent = require("../../../models/Agent");
 const Lead = require("../../../models/Lead");
-const { hashPassword, requireCompanyMemberOrSuperAdminView } = require("../../../lib/auth");
+const { hashPassword, isPasswordStrongEnough, MIN_PASSWORD_LENGTH, requireCompanyMemberOrSuperAdminView } = require("../../../lib/auth");
 const { invalidate } = require("../../../lib/serverCache");
 
 async function handler(req, res) {
@@ -61,6 +61,9 @@ async function handler(req, res) {
     const { name, username, password, location = "" } = req.body || {};
     if (!name || !username || !password) {
       return res.status(400).json({ error: "Name, username, and password are required" });
+    }
+    if (!isPasswordStrongEnough(password)) {
+      return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
     }
 
     const existing = await Agent.findOne({ username }).lean();

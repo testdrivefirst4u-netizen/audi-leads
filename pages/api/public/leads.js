@@ -6,6 +6,14 @@ const { dedupeAndCreateLead } = require("../../../lib/leadIngest");
 const { canonicalModelFor, normalizeShowroom } = require("../../../lib/leadFields");
 const { hashApiKey, checkRateLimit } = require("../../../lib/apiKeys");
 const { withTiming } = require("../../../lib/perfMonitor");
+const { isLocked, recordFailure } = require("../../../lib/rateLimit");
+
+// Separate from the per-key checkRateLimit above (which meters an already-
+// valid, already-authenticated key's usage) — this throttles repeated
+// INVALID-key attempts from one IP, since those never reach a real ApiKey
+// document to rate-limit against. Deliberately more permissive than login's
+// limit: legitimate integrations occasionally misfire retries.
+const MAX_INVALID_KEY_ATTEMPTS = 20;
 
 // Public, unauthenticated-by-cookie endpoint for external lead sources
 // (CarDekho, CarWale, a website form, etc.) — authenticated instead by the
@@ -82,13 +90,20 @@ async function handler(req, res) {
   const ip = clientIp(req);
   const body = req.body || {};
 
+  const ipRateLimitKey = `public-leads-invalid:${ip || "unknown"}`;
+  if (ip && (await isLocked(ipRateLimitKey, MAX_INVALID_KEY_ATTEMPTS))) {
+    return res.status(429).json({ error: "Too many invalid API key attempts from this IP. Try again later." });
+  }
+
   const rawKey = extractKey(req);
   if (!rawKey) {
+    if (ip) await recordFailure(ipRateLimitKey);
     return res.status(401).json({ error: "Missing API key. Send it as 'Authorization: Bearer <key>', 'X-Api-Key', or ?key=" });
   }
 
   const apiKey = await ApiKey.findOne({ keyHash: hashApiKey(rawKey), active: true });
   if (!apiKey) {
+    if (ip) await recordFailure(ipRateLimitKey);
     return res.status(401).json({ error: "Invalid or revoked API key" });
   }
 

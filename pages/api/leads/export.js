@@ -5,6 +5,19 @@ const Settings = require("../../../models/Settings");
 const { requireCompanyMemberOrSuperAdminView } = require("../../../lib/auth");
 const { pickField, prettify, bucketFilterValue } = require("../../../lib/leadFields");
 
+// Lead fields (name, remarks, anything from the public API's freeform
+// payload) aren't fully trusted — they can originate from a public lead
+// form or an external integration. Excel/Sheets treats a cell starting with
+// =, +, -, or @ as a formula; prefixing it with a plain quote forces
+// "text", the standard mitigation for CSV/Excel formula injection (an
+// exported file that gets opened by an admin should never be able to run
+// code just because a "customer name" was crafted maliciously).
+const FORMULA_TRIGGER_RE = /^[=+\-@]/;
+function sanitizeCell(value) {
+  if (typeof value !== "string") return value;
+  return FORMULA_TRIGGER_RE.test(value) ? `'${value}` : value;
+}
+
 async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
@@ -81,7 +94,7 @@ async function handler(req, res) {
       ...fieldColumns.map((c) => prettify(pickField(lead.data, c.patterns))),
       ...remarkCells,
       nextFollowUp,
-    ];
+    ].map(sanitizeCell);
   });
 
   const sheet = XLSX.utils.aoa_to_sheet([header, ...rows]);

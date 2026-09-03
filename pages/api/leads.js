@@ -3,7 +3,7 @@ const Lead = require("../../models/Lead");
 const Agent = require("../../models/Agent");
 const Settings = require("../../models/Settings");
 const { requireCompanyMemberOrSuperAdminView } = require("../../lib/auth");
-const { pickField, FIELD_MATCHERS, isUrgentTimeline, nextFollowUp, bucketFilterValue } = require("../../lib/leadFields");
+const { pickField, FIELD_MATCHERS, isUrgentTimeline, nextFollowUp, bucketFilterValue, escapeRegExp } = require("../../lib/leadFields");
 const { withCache } = require("../../lib/serverCache");
 
 const SORTABLE_FIELDS = new Set(["name", "canonicalModel", "status", "sheetCreatedAt"]);
@@ -95,13 +95,17 @@ async function handler(req, res) {
 
   const filter = { companyId: req.session.companyId };
   if (search) {
+    // Escaped so a search term containing regex syntax is matched literally
+    // instead of either erroring or, worse, hanging the query on a crafted
+    // catastrophic-backtracking pattern.
+    const safeSearch = escapeRegExp(search);
     filter.$or = [
-      { name: { $regex: search, $options: "i" } },
-      { phone: { $regex: search, $options: "i" } },
-      { email: { $regex: search, $options: "i" } },
-      { leadId: { $regex: search, $options: "i" } },
-      { model: { $regex: search, $options: "i" } },
-      { canonicalModel: { $regex: search, $options: "i" } },
+      { name: { $regex: safeSearch, $options: "i" } },
+      { phone: { $regex: safeSearch, $options: "i" } },
+      { email: { $regex: safeSearch, $options: "i" } },
+      { leadId: { $regex: safeSearch, $options: "i" } },
+      { model: { $regex: safeSearch, $options: "i" } },
+      { canonicalModel: { $regex: safeSearch, $options: "i" } },
     ];
   }
   if (model) {

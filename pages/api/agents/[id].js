@@ -2,7 +2,7 @@ const connectDB = require("../../../lib/db");
 const Agent = require("../../../models/Agent");
 const Lead = require("../../../models/Lead");
 const Company = require("../../../models/Company");
-const { hashPassword, requireAuth } = require("../../../lib/auth");
+const { hashPassword, isPasswordStrongEnough, MIN_PASSWORD_LENGTH, requireAuth } = require("../../../lib/auth");
 const { invalidate } = require("../../../lib/serverCache");
 
 async function handler(req, res) {
@@ -22,6 +22,9 @@ async function handler(req, res) {
     }
 
     const { active, name, password, location } = req.body || {};
+    if (password && !isPasswordStrongEnough(password)) {
+      return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
+    }
     const update = {};
     if (active !== undefined) update.active = Boolean(active);
     if (name !== undefined) update.name = String(name).trim();

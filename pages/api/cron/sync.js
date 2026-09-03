@@ -20,12 +20,19 @@ async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  // Fail CLOSED, not open: if CRON_SECRET is ever missing (a fresh deploy
+  // where it wasn't configured yet, an env var that got dropped), this must
+  // refuse every request rather than silently becoming a publicly
+  // triggerable sync endpoint. instrumentation.js's local-cron already
+  // requires the same secret when calling this, so a correctly configured
+  // deployment never hits this branch.
   const expected = process.env.CRON_SECRET;
-  if (expected) {
-    const auth = req.headers.authorization;
-    if (auth !== `Bearer ${expected}`) {
-      return res.status(401).json({ error: "Not authorized" });
-    }
+  if (!expected) {
+    console.error("[cron] CRON_SECRET is not set — refusing to run sync (would otherwise be publicly triggerable).");
+    return res.status(500).json({ error: "Server misconfiguration: CRON_SECRET is not set." });
+  }
+  if (req.headers.authorization !== `Bearer ${expected}`) {
+    return res.status(401).json({ error: "Not authorized" });
   }
 
   try {
@@ -48,7 +55,7 @@ async function handler(req, res) {
     res.status(200).json({ companies: results.length, results });
   } catch (err) {
     console.error("[cron] sync failed:", err);
-    res.status(500).json({ error: `Server error: ${err.message}` });
+    res.status(500).json({ error: "Server error during sync — see server logs for detail." });
   }
 }
 
