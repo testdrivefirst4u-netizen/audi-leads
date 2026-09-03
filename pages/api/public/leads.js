@@ -1,9 +1,10 @@
 const connectDB = require("../../../lib/db");
 const ApiKey = require("../../../models/ApiKey");
 const ApiKeyLog = require("../../../models/ApiKeyLog");
+const Settings = require("../../../models/Settings");
 const { createAgentAssigner, normalizePhoneDigits } = require("../../../lib/syncService");
 const { dedupeAndCreateLead } = require("../../../lib/leadIngest");
-const { canonicalModelFor, normalizeShowroom } = require("../../../lib/leadFields");
+const { canonicalModelFor, normalizeShowroom, resolveLocation, applySourceMap } = require("../../../lib/leadFields");
 const { hashApiKey, checkRateLimit } = require("../../../lib/apiKeys");
 const { withTiming } = require("../../../lib/perfMonitor");
 const { isLocked, recordFailure } = require("../../../lib/rateLimit");
@@ -166,7 +167,16 @@ async function handler(req, res) {
     // vehicle naming still shows up meaningfully in filters/charts.
     const matchedModel = canonicalModelFor(modelRaw);
     const canonicalModel = matchedModel === "Other" ? modelRaw : matchedModel;
-    const location = normalizeShowroom(showroomRaw);
+
+    // A company with its own Settings.locationField (raw locations, not
+    // Audi's showroom cities) gets that field's value verbatim instead of
+    // running through normalizeShowroom() — same override syncService.js
+    // applies at sheet-sync time. Empty/unset locationField (every company
+    // without one) keeps today's exact behavior.
+    const settings = await Settings.findOne({ companyId: apiKey.companyId }).select("locationField sourceMap").lean();
+    const location = settings?.locationField ? resolveLocation(body, settings.locationField) : normalizeShowroom(showroomRaw);
+    const source = applySourceMap(apiKey.sourceName, settings?.sourceMap);
+
     const assignNext = await createAgentAssigner(apiKey.companyId);
 
     const { lead, status } = await dedupeAndCreateLead({
@@ -177,7 +187,7 @@ async function handler(req, res) {
       model: modelRaw,
       canonicalModel,
       data: { ...body, message },
-      source: apiKey.sourceName,
+      source,
       sheetCreatedAt: new Date(),
       location,
       assignNext,

@@ -56,6 +56,13 @@ const BucketHistoryEntrySchema = new mongoose.Schema(
   { _id: false }
 );
 
+// App-wide default — a company can override this with its own list via
+// Settings.statusOptions (see lib/leadFields.js's effectiveStatuses). Kept
+// here as the fallback and as documentation of the original shape; `status`
+// below is intentionally NOT `enum`-constrained to this array anymore, since
+// a single global enum can't express "valid values differ per company" —
+// validation instead happens in pages/api/leads/[id]/status.js, against
+// whichever list actually applies to that lead's company.
 const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Test Drive", "Booking", "Retail (Converted)", "Lost"];
 // Independent of `status` above. Qualified/Retail are permanent once set;
 // "unassigned" (the default — every new lead starts untriaged) and "lost"
@@ -90,10 +97,12 @@ const LeadSchema = new mongoose.Schema(
     // only when *we* first synced the row (can lag behind, e.g. after a
     // full resync every row gets a fresh createdAt even though the lead is old).
     sheetCreatedAt: { type: Date, index: true },
-    // Normalized showroom city (Hyderabad/Vijayawada/Visakhapatnam/Other),
-    // computed from the sheet's raw showroom field at sync time — same
-    // normalizer used for agent auto-assignment (lib/leadFields.js), stored
-    // here too so it can be filtered/indexed instead of recomputed per request.
+    // Normalized showroom city (Hyderabad/Vijayawada/Visakhapatnam/Other) for
+    // most companies, computed at sync time via lib/leadFields.js's
+    // normalizeShowroom() — same normalizer used for agent auto-assignment.
+    // A company with Settings.locationField set instead gets its own raw
+    // sheet-field value verbatim here (see resolveLocation()), for a
+    // business whose real locations aren't Audi's showroom cities.
     location: { type: String, index: true },
     rowNumber: { type: Number }, // 1-based row number in the sheet (excluding header)
     contentHash: { type: String, index: true },
@@ -101,7 +110,8 @@ const LeadSchema = new mongoose.Schema(
     // external integration (CarDekho/CarWale/etc.) pushing via its own API key.
     source: { type: String, default: "Meta Ads", index: true },
     // CRM fields managed from the dashboard, untouched by the sheet sync.
-    status: { type: String, enum: LEAD_STATUSES, default: "New", index: true },
+    // No enum here on purpose — see the LEAD_STATUSES comment above.
+    status: { type: String, default: "New", index: true },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "Agent", index: true },
     // Duplicate-detection fields (see lib/syncService.js). A "duplicate" is a
     // repeat sheet submission from the same customer (phone/email) for the

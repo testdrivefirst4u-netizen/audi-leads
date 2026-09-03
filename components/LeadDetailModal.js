@@ -128,7 +128,9 @@ export default function LeadDetailModal({
   canManageLead,
   manageCompanyId,
   leadFieldColumns = [],
+  statuses,
 }) {
+  const statusOptions = statuses && statuses.length > 0 ? statuses : LEAD_STATUSES;
   const toast = useToast();
   // A toast alone is easy to miss since it appears outside the modal the
   // agent is actually looking at — this mirrors the same info inline, right
@@ -434,11 +436,16 @@ export default function LeadDetailModal({
               disabled={savingStatus}
               style={{ background: statusBg, color: statusText, fontWeight: 700, border: "none" }}
             >
-              {LEAD_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
+              {/* If this lead somehow holds a status outside the company's
+                  current list (e.g. set before the list was reconfigured),
+                  show it anyway rather than a silently-mismatched selection. */}
+              {(statusOptions.includes(lead.status) ? statusOptions : [lead.status || "New", ...statusOptions]).map(
+                (s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                )
+              )}
             </select>
           )}
           <span className="hint">

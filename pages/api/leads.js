@@ -3,7 +3,7 @@ const Lead = require("../../models/Lead");
 const Agent = require("../../models/Agent");
 const Settings = require("../../models/Settings");
 const { requireCompanyMemberOrSuperAdminView } = require("../../lib/auth");
-const { pickField, FIELD_MATCHERS, isUrgentTimeline, nextFollowUp, bucketFilterValue, escapeRegExp } = require("../../lib/leadFields");
+const { pickField, FIELD_MATCHERS, isUrgentTimeline, nextFollowUp, bucketFilterValue, escapeRegExp, effectiveStatuses } = require("../../lib/leadFields");
 const { withCache } = require("../../lib/serverCache");
 
 const SORTABLE_FIELDS = new Set(["name", "canonicalModel", "status", "sheetCreatedAt"]);
@@ -22,13 +22,43 @@ const DISTINCT_CACHE_MS = 30000;
 const FOLLOWUP_TABS_CACHE_MS = 5000;
 const HOT_CANDIDATES_CACHE_MS = 5000;
 
-async function distinctModelsAndSources(companyId) {
-  return withCache(`leads-distinct:${companyId}`, DISTINCT_CACHE_MS, async () => {
-    const [models, sources] = await Promise.all([
+// Model is always the plain dynamic distinct-per-company list it always was.
+// Status/Source/Location each fall back to that same dynamic-per-company
+// shape UNLESS the company has configured its own override on Settings (see
+// models/Settings.js) — statusOptions/sourceOptions replace the dynamic
+// list outright; locationField switches location from "no dropdown data at
+// all" (the hardcoded global SHOWROOM_LOCATIONS list in LeadsTable.js) to a
+// real per-company distinct list. A company with none of these configured
+// gets byte-for-byte today's existing response shape.
+async function companyLeadMeta(companyId) {
+  return withCache(`leads-meta:${companyId}`, DISTINCT_CACHE_MS, async () => {
+    const settings = await Settings.findOne({ companyId })
+      .select("statusOptions sourceOptions locationField locationOptions")
+      .lean();
+    const sourceOptions = settings?.sourceOptions || [];
+    const locationField = settings?.locationField || "";
+    const locationOptions = settings?.locationOptions || [];
+    // A fixed locationOptions list always wins — auto-discovering every
+    // distinct value real leads have ever had (locationField set, no fixed
+    // list) is only a fallback for a company that hasn't hand-picked one.
+    const needsDynamicLocations = !locationOptions.length && !!locationField;
+
+    const [models, dynamicSources, dynamicLocations] = await Promise.all([
       Lead.distinct("canonicalModel", { companyId }),
-      Lead.distinct("source", { companyId }),
+      sourceOptions.length ? Promise.resolve(null) : Lead.distinct("source", { companyId }),
+      needsDynamicLocations ? Lead.distinct("location", { companyId }) : Promise.resolve(null),
     ]);
-    return { models: models.filter(Boolean).sort(), sources: sources.filter(Boolean).sort() };
+
+    return {
+      models: models.filter(Boolean).sort(),
+      sources: sourceOptions.length ? sourceOptions : (dynamicSources || []).filter(Boolean).sort(),
+      statuses: effectiveStatuses(settings?.statusOptions),
+      locations: locationOptions.length
+        ? locationOptions
+        : needsDynamicLocations
+        ? (dynamicLocations || []).filter(Boolean).sort()
+        : undefined,
+    };
   });
 }
 
@@ -227,7 +257,7 @@ async function handler(req, res) {
     const total = hotLeads.length;
     const start = (pageNum - 1) * pageSizeNum;
     const leads = hotLeads.slice(start, start + pageSizeNum);
-    const { models, sources } = await distinctModelsAndSources(req.session.companyId);
+    const { models, sources, statuses, locations } = await companyLeadMeta(req.session.companyId);
     const leadFieldColumns = await leadFieldColumnsFor(req.session.companyId);
 
     return res.status(200).json({
@@ -238,13 +268,15 @@ async function handler(req, res) {
       totalPages: Math.max(1, Math.ceil(total / pageSizeNum)),
       models,
       sources,
+      statuses,
+      locations,
       agents: agentList,
       followUpTabs,
       leadFieldColumns,
     });
   }
 
-  const [[leads, total], { models, sources }, leadFieldColumns] = await Promise.all([
+  const [[leads, total], { models, sources, statuses, locations }, leadFieldColumns] = await Promise.all([
     Promise.all([
       Lead.find(filter)
         .sort({ [sortField]: sortDirection })
@@ -254,7 +286,7 @@ async function handler(req, res) {
         .lean(),
       Lead.countDocuments(filter),
     ]),
-    distinctModelsAndSources(req.session.companyId),
+    companyLeadMeta(req.session.companyId),
     leadFieldColumnsFor(req.session.companyId),
   ]);
 
@@ -266,6 +298,8 @@ async function handler(req, res) {
     totalPages: Math.max(1, Math.ceil(total / pageSizeNum)),
     models,
     sources,
+    statuses,
+    locations,
     agents: agentList,
     followUpTabs,
     leadFieldColumns,

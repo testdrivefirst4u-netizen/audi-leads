@@ -1,9 +1,10 @@
 const XLSX = require("xlsx");
 const connectDB = require("../../../lib/db");
 const Company = require("../../../models/Company");
+const Settings = require("../../../models/Settings");
 const { createAgentAssigner, normalizePhoneDigits } = require("../../../lib/syncService");
 const { dedupeAndCreateLead } = require("../../../lib/leadIngest");
-const { canonicalModelFor, normalizeShowroom, parseSheetDate } = require("../../../lib/leadFields");
+const { canonicalModelFor, normalizeShowroom, parseSheetDate, resolveLocation, applySourceMap } = require("../../../lib/leadFields");
 const { requireSuperAdmin } = require("../../../lib/auth");
 
 // Serverless functions have an execution-time ceiling — each row does a
@@ -57,7 +58,8 @@ async function handler(req, res) {
     return res.status(400).json({ error: `Too many rows (${rows.length}) — split into files of ${MAX_ROWS} or fewer` });
   }
 
-  const source = (sourceLabel && String(sourceLabel).trim()) || "Meta Ads";
+  const settings = await Settings.findOne({ companyId }).select("locationField sourceMap").lean();
+  const source = applySourceMap((sourceLabel && String(sourceLabel).trim()) || "Meta Ads", settings?.sourceMap);
   const assignNext = await createAgentAssigner(companyId);
 
   let created = 0;
@@ -85,7 +87,11 @@ async function handler(req, res) {
 
       const matchedModel = canonicalModelFor(modelRaw);
       const canonicalModel = matchedModel === "Other" ? modelRaw : matchedModel;
-      const location = normalizeShowroom(showroomRaw);
+      // A company with its own Settings.locationField (raw locations, not
+      // Audi's showroom cities) gets that field's value verbatim instead of
+      // running through normalizeShowroom() — same override syncService.js
+      // and the public API apply.
+      const location = settings?.locationField ? resolveLocation(row, settings.locationField) : normalizeShowroom(showroomRaw);
       const sheetCreatedAt = (dateRaw && parseSheetDate(dateRaw)) || new Date();
 
       const { status } = await dedupeAndCreateLead({

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LEAD_STATUSES, statusChartColor } from "../lib/leadFields";
+import { statusChartColor } from "../lib/leadFields";
 
 const SIZE = 200;
 const CENTER = 100;
@@ -24,8 +24,12 @@ export default function StatusPieChart({ pipeline }) {
     return <div className="empty-state">No data yet</div>;
   }
 
-  const byLabel = Object.fromEntries(pipeline.map((p) => [p.label, p.count]));
-  const rows = LEAD_STATUSES.map((label) => ({ label, count: byLabel[label] || 0 }));
+  // pipeline already reflects this company's own status list, in order —
+  // computed server-side in pages/api/stats.js from Settings.statusOptions
+  // (or the app-wide default). No re-derivation against a hardcoded global
+  // list here, or a company's custom statuses would silently vanish from
+  // the chart.
+  const rows = pipeline;
   const total = rows.reduce((sum, r) => sum + r.count, 0);
 
   let cursor = 0;

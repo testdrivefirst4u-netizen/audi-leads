@@ -31,6 +31,13 @@ const LeadFieldColumnSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// One entry per raw->normalized source-value remap (e.g. a sheet's literal
+// "Meta Ads" collapsed to a company's own "Meta" vocabulary) — applied at
+// ingest time (see lib/leadFields.js's applySourceMap) so a company's Lead
+// Source filter options actually match what's stored, not just what the
+// dropdown offers.
+const SourceMapEntrySchema = new mongoose.Schema({ from: { type: String }, to: { type: String } }, { _id: false });
+
 const SettingsSchema = new mongoose.Schema(
   {
     // Legacy single-tenant lookup key — no longer unique (every company's
@@ -47,6 +54,27 @@ const SettingsSchema = new mongoose.Schema(
     // Per-company extra Leads-table columns — see LeadFieldColumnSchema
     // above. Empty means the table shows only the core fixed columns.
     leadFieldColumns: { type: [LeadFieldColumnSchema], default: [] },
+    // Per-company Lead Status/Source/Location filter overrides — empty on
+    // every field below means "use the app-wide default," so a company that
+    // never configures these is completely unaffected. See
+    // lib/leadFields.js's effectiveStatuses/resolveLocation/applySourceMap.
+    statusOptions: { type: [String], default: [] },
+    sourceOptions: { type: [String], default: [] },
+    sourceMap: { type: [SourceMapEntrySchema], default: [] },
+    // Raw sheet-data field name (e.g. "city") to read a lead's location from
+    // directly, bypassing normalizeShowroom()'s fixed 3-city classifier —
+    // for a company whose real locations aren't Audi's showroom cities. This
+    // is what a lead's own `location` value actually gets set to at sync
+    // time — separate from locationOptions below, which only curates what
+    // shows in the filter dropdown.
+    locationField: { type: String, default: "" },
+    // A fixed, hand-picked Location filter option list — takes priority over
+    // auto-discovering every distinct value that's ever landed in
+    // `location` (which, for messy raw ad-form data, can include a lot of
+    // junk alongside the real place names). Empty falls back to the
+    // discovered-distinct-value list when locationField is set, else the
+    // app-wide default.
+    locationOptions: { type: [String], default: [] },
     // 1440 = "Daily", for hosts (e.g. Vercel Hobby) where the sync can only
     // realistically run once a day — keeps the Online/Offline threshold accurate.
     syncIntervalMinutes: { type: Number, enum: [1, 5, 15, 1440], default: 1 },

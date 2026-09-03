@@ -77,6 +77,8 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
   const [sortDir, setSortDir] = useState("desc");
   const [models, setModels] = useState([]);
   const [sources, setSources] = useState([]);
+  const [statuses, setStatuses] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [leadFieldColumns, setLeadFieldColumns] = useState([]);
   const [agents, setAgents] = useState([]);
   const [page, setPage] = useState(1);
@@ -117,6 +119,8 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
           setTotalPages(data.totalPages || 1);
           setModels(data.models || []);
           setSources(data.sources || []);
+          setStatuses(data.statuses || []);
+          setLocations(data.locations || []);
           setLeadFieldColumns(data.leadFieldColumns || []);
           setAgents(data.agents || []);
           setFollowUpTabs(data.followUpTabs || { overdue: 0, today: 0, upcoming: 0, completed: 0 });
@@ -203,6 +207,17 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
 
   function handleViewCompanyChange(value) {
     setViewCompanyId(value);
+    // Model/Status/Location/Source/Bucket option lists are all company-
+    // scoped (some companies configure their own, per models/Settings.js) —
+    // a selection valid for the previous company could silently match
+    // nothing (or the wrong thing) under the new one, so clear them on
+    // every switch rather than carry a stale value across.
+    setModel("");
+    setStatus("");
+    setLocationFilter("");
+    setSourceFilter("");
+    setBucketFilter("");
+    setAgentFilter("");
     setPage(1);
   }
 
@@ -323,6 +338,8 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
         sortDir={sortDir}
         onSortChange={handleSortChange}
         models={models}
+        statuses={statuses}
+        locations={locations}
         leadFieldColumns={leadFieldColumns}
         page={page}
         totalPages={totalPages}

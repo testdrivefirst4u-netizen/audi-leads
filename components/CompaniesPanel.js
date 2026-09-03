@@ -2,8 +2,153 @@ import { Fragment, useEffect, useState, useCallback } from "react";
 import Skeleton from "react-loading-skeleton";
 import { apiFetch } from "../lib/apiFetch";
 import { useToast } from "./ToastProvider";
+import LogoUploadField from "./LogoUploadField";
 
 const EMPTY_SHEET = { label: "", sheetId: "", sheetName: "" };
+
+function LogoRow({ company, onClose, onSaved }) {
+  const toast = useToast();
+  const [logoUrl, setLogoUrl] = useState(company.logoUrl || "");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const res = await apiFetch(`/api/companies/${company._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logoUrl }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to save logo");
+      }
+      toast("Logo saved");
+      onSaved();
+    } catch (err) {
+      toast(err.message, { type: "err" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <tr>
+      <td colSpan={7}>
+        <div className="form" style={{ padding: "16px 0" }}>
+          <div className="hint mb-3">Upload the logo shown in {company.name}'s sidebar and login screen.</div>
+          <div className="mb-3" style={{ maxWidth: 480 }}>
+            <LogoUploadField value={logoUrl} onChange={setLogoUrl} />
+          </div>
+          <div className="flex gap-2">
+            <button className="btn" type="button" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : "Save"}
+            </button>
+            <button className="btn-sm" type="button" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function AdminAccountRow({ company, onClose, onSaved }) {
+  const toast = useToast();
+  const [loading, setLoading] = useState(true);
+  const [username, setUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch(`/api/companies/${company._id}/admin`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setUsername(data.username);
+      })
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [company._id]);
+
+  async function handleSave() {
+    if (newPassword && newPassword !== confirmPassword) {
+      toast("New password and confirmation don't match", { type: "err" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await apiFetch(`/api/companies/${company._id}/admin`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, ...(newPassword ? { password: newPassword } : {}) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to save admin account");
+      toast("Admin account updated");
+      setNewPassword("");
+      setConfirmPassword("");
+      onSaved();
+    } catch (err) {
+      toast(err.message, { type: "err" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <tr>
+      <td colSpan={7}>
+        <div className="form" style={{ padding: "16px 0" }}>
+          <div className="hint mb-3">
+            Manage the login {company.name}'s own admin signs in with. Passwords are hashed and can&apos;t be viewed —
+            only reset to a new one.
+          </div>
+          {loading ? (
+            <div className="hint">Loading...</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end mb-3" style={{ maxWidth: 720 }}>
+              <div className="field mb-0">
+                <label>Username</label>
+                <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="acme-admin" />
+              </div>
+              <div className="field mb-0">
+                <label>New Password</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Leave blank to keep current"
+                />
+              </div>
+              <div className="field mb-0">
+                <label>Confirm New Password</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Leave blank to keep current"
+                />
+              </div>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button className="btn" type="button" onClick={handleSave} disabled={saving || loading}>
+              {saving ? "Saving..." : "Save"}
+            </button>
+            <button className="btn-sm" type="button" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
 
 function SheetConfigRow({ company, onClose, onSaved }) {
   const toast = useToast();
@@ -272,6 +417,204 @@ function LeadFieldColumnsRow({ company, onClose, onSaved }) {
             </button>
           </div>
           <div className="flex gap-2">
+            <button className="btn" type="button" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : "Save"}
+            </button>
+            <button className="btn-sm" type="button" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// Lets a super admin give one company its own Lead Status / Lead Source /
+// Location filter option lists (see models/Settings.js's
+// statusOptions/sourceOptions/sourceMap/locationField), independent of every
+// other company's — empty fields here mean "use the app-wide default,"
+// which is exactly today's behavior for a company that never configures
+// this row. Reuses the same field-discovery endpoint LeadFieldColumnsRow
+// above already calls, so the Location field picker offers real raw sheet
+// keys instead of the admin typing one blind.
+function FilterConfigRow({ company, onClose, onSaved }) {
+  const toast = useToast();
+  const [discovered, setDiscovered] = useState([]);
+  const [statusOptions, setStatusOptions] = useState(company.statusOptions?.length ? company.statusOptions : [""]);
+  const [sourceOptions, setSourceOptions] = useState(company.sourceOptions?.length ? company.sourceOptions : [""]);
+  const [sourceMap, setSourceMap] = useState(
+    company.sourceMap?.length ? company.sourceMap.map((e) => ({ ...e })) : [{ from: "", to: "" }]
+  );
+  const [locationField, setLocationField] = useState(company.locationField || "");
+  const [locationOptions, setLocationOptions] = useState(company.locationOptions?.length ? company.locationOptions : [""]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch(`/api/companies/${company._id}/lead-fields/discover`)
+      .then((res) => (res.ok ? res.json() : { fields: [] }))
+      .then((data) => {
+        if (!cancelled) setDiscovered(data.fields || []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [company._id]);
+
+  function updateListItem(setter, index, value) {
+    setter((prev) => prev.map((v, i) => (i === index ? value : v)));
+  }
+  function addListItem(setter) {
+    setter((prev) => [...prev, ""]);
+  }
+  function removeListItem(setter, index) {
+    setter((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateMapEntry(index, field, value) {
+    setSourceMap((prev) => prev.map((e, i) => (i === index ? { ...e, [field]: value } : e)));
+  }
+  function addMapEntry() {
+    setSourceMap((prev) => [...prev, { from: "", to: "" }]);
+  }
+  function removeMapEntry(index) {
+    setSourceMap((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const res = await apiFetch(`/api/companies/${company._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          statusOptions: statusOptions.map((s) => s.trim()).filter(Boolean),
+          sourceOptions: sourceOptions.map((s) => s.trim()).filter(Boolean),
+          sourceMap: sourceMap.filter((e) => e.from.trim() && e.to.trim()),
+          locationField: locationField.trim(),
+          locationOptions: locationOptions.map((s) => s.trim()).filter(Boolean),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to save filter config");
+      }
+      toast("Filter config saved");
+      onSaved();
+    } catch (err) {
+      toast(err.message, { type: "err" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <tr>
+      <td colSpan={7}>
+        <div className="form" style={{ padding: "16px 0" }}>
+          <div className="hint mb-3">
+            Give {company.name} its own Lead Status / Lead Source / Location filter options on the Leads page,
+            independent of every other company. Leave a section empty to keep using the app-wide default.
+          </div>
+
+          <div className="mb-4">
+            <label className="block mb-1.5 text-sm font-semibold">Lead Status options</label>
+            {statusOptions.map((s, i) => (
+              <div className="flex gap-2 mb-2" key={i}>
+                <input value={s} onChange={(e) => updateListItem(setStatusOptions, i, e.target.value)} placeholder="e.g. Appointments" />
+                <button className="btn-sm" type="button" onClick={() => removeListItem(setStatusOptions, i)}>
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button className="btn-sm" type="button" onClick={() => addListItem(setStatusOptions)}>
+              + Add Status
+            </button>
+          </div>
+
+          <div className="mb-4">
+            <label className="block mb-1.5 text-sm font-semibold">Lead Source options</label>
+            {sourceOptions.map((s, i) => (
+              <div className="flex gap-2 mb-2" key={i}>
+                <input value={s} onChange={(e) => updateListItem(setSourceOptions, i, e.target.value)} placeholder="e.g. Website" />
+                <button className="btn-sm" type="button" onClick={() => removeListItem(setSourceOptions, i)}>
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button className="btn-sm" type="button" onClick={() => addListItem(setSourceOptions)}>
+              + Add Source
+            </button>
+          </div>
+
+          <div className="mb-4">
+            <label className="block mb-1.5 text-sm font-semibold">Source Map (raw synced value &rarr; option above)</label>
+            <div className="hint mb-2">
+              Applied to new leads as they sync, so the values above actually match what gets stored — e.g. a
+              sheet's literal "Meta Ads" &rarr; "Meta". Existing leads aren't retroactively changed by this.
+            </div>
+            {sourceMap.map((entry, i) => (
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 mb-2" key={i}>
+                <input value={entry.from} onChange={(e) => updateMapEntry(i, "from", e.target.value)} placeholder="Raw value, e.g. Meta Ads" />
+                <input value={entry.to} onChange={(e) => updateMapEntry(i, "to", e.target.value)} placeholder="Maps to, e.g. Meta" />
+                <button className="btn-sm" type="button" onClick={() => removeMapEntry(i)}>
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button className="btn-sm" type="button" onClick={addMapEntry}>
+              + Add Mapping
+            </button>
+          </div>
+
+          <div className="mb-4" style={{ maxWidth: 420 }}>
+            <label className="block mb-1.5 text-sm font-semibold">Location field</label>
+            <input
+              value={locationField}
+              onChange={(e) => setLocationField(e.target.value)}
+              placeholder="e.g. city|location"
+              list={`location-field-fields-${company._id}`}
+            />
+            <datalist id={`location-field-fields-${company._id}`}>
+              {discovered.map((f) => (
+                <option key={f.key} value={f.key} />
+              ))}
+            </datalist>
+            <div className="hint mt-1">
+              A regex matched (case-insensitive) against this company's raw sheet field names — a lead's location is
+              read from whichever field matches first. Leave empty to use the default
+              Hyderabad/Vijayawada/Visakhapatnam classifier. Different lead forms often name this differently (e.g.
+              a plain "city" field on one form, "preferred_service_location" on another) — separate alternatives
+              with <code>|</code>, e.g. <code>city|location</code>. Needed for the Location filter to match
+              anything at all, but doesn't by itself decide what shows in the dropdown below.
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <label className="block mb-1.5 text-sm font-semibold">Location options (filter dropdown)</label>
+            <div className="hint mb-2">
+              A fixed, hand-picked list — takes priority over auto-discovering every distinct value real leads have
+              ever had (which, for raw ad-form data, is often noisy). Leave empty to fall back to auto-discovery.
+            </div>
+            {locationOptions.map((s, i) => (
+              <div className="flex gap-2 mb-2" key={i}>
+                <input
+                  value={s}
+                  onChange={(e) => updateListItem(setLocationOptions, i, e.target.value)}
+                  placeholder="e.g. Kompally"
+                />
+                <button className="btn-sm" type="button" onClick={() => removeListItem(setLocationOptions, i)}>
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button className="btn-sm" type="button" onClick={() => addListItem(setLocationOptions)}>
+              + Add Location
+            </button>
+          </div>
+
+          <div className="flex gap-2 mt-3">
             <button className="btn" type="button" onClick={handleSave} disabled={saving}>
               {saving ? "Saving..." : "Save"}
             </button>
@@ -838,6 +1181,9 @@ export default function CompaniesPanel() {
   const [editingId, setEditingId] = useState(null);
   const [apiKeysId, setApiKeysId] = useState(null);
   const [leadFieldsId, setLeadFieldsId] = useState(null);
+  const [logoRowId, setLogoRowId] = useState(null);
+  const [adminAccountId, setAdminAccountId] = useState(null);
+  const [filterConfigId, setFilterConfigId] = useState(null);
 
   const load = useCallback(async () => {
     const res = await apiFetch("/api/companies");
@@ -933,8 +1279,8 @@ export default function CompaniesPanel() {
             />
           </div>
           <div className="field mb-0">
-            <label>Logo URL (optional)</label>
-            <input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="/acme-logo.png" />
+            <label>Logo (optional)</label>
+            <LogoUploadField value={logoUrl} onChange={setLogoUrl} />
           </div>
           <div className="field mb-0">
             <label>Brand Color</label>
@@ -1010,6 +1356,10 @@ export default function CompaniesPanel() {
                             className="btn-sm"
                             onClick={() => {
                               setApiKeysId(null);
+                              setLeadFieldsId(null);
+                              setLogoRowId(null);
+                              setAdminAccountId(null);
+                              setFilterConfigId(null);
                               setEditingId(editingId === c._id ? null : c._id);
                             }}
                           >
@@ -1019,6 +1369,10 @@ export default function CompaniesPanel() {
                             className="btn-sm"
                             onClick={() => {
                               setEditingId(null);
+                              setLeadFieldsId(null);
+                              setLogoRowId(null);
+                              setAdminAccountId(null);
+                              setFilterConfigId(null);
                               setApiKeysId(apiKeysId === c._id ? null : c._id);
                             }}
                           >
@@ -1029,10 +1383,52 @@ export default function CompaniesPanel() {
                             onClick={() => {
                               setEditingId(null);
                               setApiKeysId(null);
+                              setLogoRowId(null);
+                              setAdminAccountId(null);
+                              setFilterConfigId(null);
                               setLeadFieldsId(leadFieldsId === c._id ? null : c._id);
                             }}
                           >
                             {leadFieldsId === c._id ? "Cancel" : "Table Columns"}
+                          </button>
+                          <button
+                            className="btn-sm"
+                            onClick={() => {
+                              setEditingId(null);
+                              setApiKeysId(null);
+                              setLeadFieldsId(null);
+                              setAdminAccountId(null);
+                              setFilterConfigId(null);
+                              setLogoRowId(logoRowId === c._id ? null : c._id);
+                            }}
+                          >
+                            {logoRowId === c._id ? "Cancel" : "Logo"}
+                          </button>
+                          <button
+                            className="btn-sm"
+                            onClick={() => {
+                              setEditingId(null);
+                              setApiKeysId(null);
+                              setLeadFieldsId(null);
+                              setLogoRowId(null);
+                              setFilterConfigId(null);
+                              setAdminAccountId(adminAccountId === c._id ? null : c._id);
+                            }}
+                          >
+                            {adminAccountId === c._id ? "Cancel" : "Admin Login"}
+                          </button>
+                          <button
+                            className="btn-sm"
+                            onClick={() => {
+                              setEditingId(null);
+                              setApiKeysId(null);
+                              setLeadFieldsId(null);
+                              setLogoRowId(null);
+                              setAdminAccountId(null);
+                              setFilterConfigId(filterConfigId === c._id ? null : c._id);
+                            }}
+                          >
+                            {filterConfigId === c._id ? "Cancel" : "Filters"}
                           </button>
                           <button className="btn-sm" onClick={() => toggleActive(c)}>
                             {c.active ? "Deactivate" : "Reactivate"}
@@ -1061,6 +1457,36 @@ export default function CompaniesPanel() {
                         onClose={() => setLeadFieldsId(null)}
                         onSaved={() => {
                           setLeadFieldsId(null);
+                          load();
+                        }}
+                      />
+                    )}
+                    {logoRowId === c._id && (
+                      <LogoRow
+                        key={`${c._id}-logo`}
+                        company={c}
+                        onClose={() => setLogoRowId(null)}
+                        onSaved={() => {
+                          setLogoRowId(null);
+                          load();
+                        }}
+                      />
+                    )}
+                    {adminAccountId === c._id && (
+                      <AdminAccountRow
+                        key={`${c._id}-admin`}
+                        company={c}
+                        onClose={() => setAdminAccountId(null)}
+                        onSaved={() => setAdminAccountId(null)}
+                      />
+                    )}
+                    {filterConfigId === c._id && (
+                      <FilterConfigRow
+                        key={`${c._id}-filters`}
+                        company={c}
+                        onClose={() => setFilterConfigId(null)}
+                        onSaved={() => {
+                          setFilterConfigId(null);
                           load();
                         }}
                       />

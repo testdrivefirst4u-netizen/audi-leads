@@ -27,12 +27,37 @@ function sanitizeLeadFieldColumns(input) {
     .filter((c) => c.key && c.label && c.matchers.length > 0);
 }
 
+function sanitizeStringList(input) {
+  if (!Array.isArray(input)) return undefined;
+  return input.map((s) => String(s || "").trim()).filter(Boolean);
+}
+
+function sanitizeSourceMap(input) {
+  if (!Array.isArray(input)) return undefined;
+  return input
+    .map((e) => ({ from: String(e?.from || "").trim(), to: String(e?.to || "").trim() }))
+    .filter((e) => e.from && e.to);
+}
+
 async function handler(req, res) {
   if (req.method !== "PATCH") return res.status(405).json({ error: "Method not allowed" });
 
   await connectDB();
   const { id } = req.query;
-  const { active, name, logoUrl, brandColor, sheets, syncIntervalMinutes, leadFieldColumns } = req.body || {};
+  const {
+    active,
+    name,
+    logoUrl,
+    brandColor,
+    sheets,
+    syncIntervalMinutes,
+    leadFieldColumns,
+    statusOptions,
+    sourceOptions,
+    sourceMap,
+    locationField,
+    locationOptions,
+  } = req.body || {};
 
   const update = {};
   if (active !== undefined) update.active = Boolean(active);
@@ -70,9 +95,45 @@ async function handler(req, res) {
     settingsUpdate.leadFieldColumns = sanitizedLeadFieldColumns;
   }
 
+  // statusOptions/sourceOptions are display-only, like leadFieldColumns
+  // above — they only change which filter options render, not any stored
+  // lead data. sourceMap/locationField are the opposite: they change how
+  // future syncs classify raw sheet data (lib/leadFields.js's
+  // applySourceMap/resolveLocation), so those two trigger a resync — same
+  // as sheets/syncIntervalMinutes. Note a resync only affects newly-synced
+  // rows, not leads already ingested; existing leads need a one-time
+  // backfill if their historical values should change too.
+  const sanitizedStatusOptions = sanitizeStringList(statusOptions);
+  if (sanitizedStatusOptions !== undefined) {
+    settingsUpdate.statusOptions = sanitizedStatusOptions;
+  }
+  const sanitizedSourceOptions = sanitizeStringList(sourceOptions);
+  if (sanitizedSourceOptions !== undefined) {
+    settingsUpdate.sourceOptions = sanitizedSourceOptions;
+  }
+  const sanitizedSourceMap = sanitizeSourceMap(sourceMap);
+  if (sanitizedSourceMap !== undefined) {
+    settingsUpdate.sourceMap = sanitizedSourceMap;
+    needsResync = true;
+  }
+  if (locationField !== undefined) {
+    settingsUpdate.locationField = String(locationField).trim();
+    needsResync = true;
+  }
+  // Display-only, like statusOptions/sourceOptions — curates the filter
+  // dropdown, doesn't touch what a lead's `location` gets set to.
+  const sanitizedLocationOptions = sanitizeStringList(locationOptions);
+  if (sanitizedLocationOptions !== undefined) {
+    settingsUpdate.locationOptions = sanitizedLocationOptions;
+  }
+
   let settings;
   if (Object.keys(settingsUpdate).length > 0) {
     settings = await Settings.findOneAndUpdate({ companyId: id }, settingsUpdate, { new: true, upsert: true });
+    // Filter option lists are read through a short (30s) cache in
+    // pages/api/leads.js — invalidate it so a save here shows up right
+    // away instead of the admin waiting out the TTL to confirm it worked.
+    invalidate(`leads-meta:${id}`);
     if (needsResync) {
       // Same as the old admin-facing flow: apply the new sheet config
       // immediately instead of waiting for the next scheduled cron tick.

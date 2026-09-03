@@ -170,6 +170,8 @@ export default function LeadsTable({
   models,
   status,
   onStatusChange,
+  statuses,
+  locations,
   agentFilter,
   onAgentFilterChange,
   locationFilter,
@@ -301,7 +303,7 @@ export default function LeadsTable({
           <label className="toolbar-label">Status</label>
           <select value={status} onChange={(e) => onStatusChange(e.target.value)}>
             <option value="">All statuses</option>
-            {LEAD_STATUSES.map((s) => (
+            {(statuses && statuses.length > 0 ? statuses : LEAD_STATUSES).map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
@@ -340,17 +342,30 @@ export default function LeadsTable({
           <label className="toolbar-label">Location</label>
           <select value={locationFilter} onChange={(e) => onLocationFilterChange(e.target.value)}>
             <option value="">All locations</option>
-            {SHOWROOM_LOCATIONS.map((loc) => (
-              <option key={loc} value={loc}>
-                {loc}
-              </option>
-            ))}
-            <option value="Other">Other</option>
-            <option value="unfilled">Not Filled</option>
+            {locations && locations.length > 0 ? (
+              // A company with its own Settings.locationField gets its real,
+              // dynamically-discovered location values instead of Audi's
+              // hardcoded showroom cities.
+              locations.map((loc) => (
+                <option key={loc} value={loc}>
+                  {loc}
+                </option>
+              ))
+            ) : (
+              <>
+                {SHOWROOM_LOCATIONS.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+                <option value="Other">Other</option>
+                <option value="unfilled">Not Filled</option>
+              </>
+            )}
           </select>
         </div>
 
-        {/* <div className="toolbar-group">
+        <div className="toolbar-group">
           <label className="toolbar-label">Source</label>
           <select value={sourceFilter} onChange={(e) => onSourceFilterChange(e.target.value)}>
             <option value="">All sources</option>
@@ -360,7 +375,7 @@ export default function LeadsTable({
               </option>
             ))}
           </select>
-        </div> */}
+        </div>
 
         <div className="toolbar-group">
           <label className="toolbar-label">Created Date</label>
@@ -576,6 +591,7 @@ export default function LeadsTable({
           canManageLead={canManageLead}
           manageCompanyId={manageCompanyId}
           leadFieldColumns={leadFieldColumns}
+          statuses={statuses}
         />
       )}
     </div>

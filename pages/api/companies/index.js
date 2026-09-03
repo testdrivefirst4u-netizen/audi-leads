@@ -42,6 +42,11 @@ async function handler(req, res) {
           sheets: (s?.sheets || []).map((sh) => ({ _id: sh._id, label: sh.label, sheetId: sh.sheetId, sheetName: sh.sheetName })),
           syncIntervalMinutes: s?.syncIntervalMinutes || 1,
           leadFieldColumns: (s?.leadFieldColumns || []).map((c) => ({ key: c.key, label: c.label, matchers: c.matchers || [] })),
+          statusOptions: s?.statusOptions || [],
+          sourceOptions: s?.sourceOptions || [],
+          sourceMap: (s?.sourceMap || []).map((e) => ({ from: e.from, to: e.to })),
+          locationField: s?.locationField || "",
+          locationOptions: s?.locationOptions || [],
         };
       }),
     });

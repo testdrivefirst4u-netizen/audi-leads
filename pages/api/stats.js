@@ -1,10 +1,10 @@
 const connectDB = require("../../lib/db");
 const Lead = require("../../models/Lead");
+const Settings = require("../../models/Settings");
 const { requireCompanyMemberOrSuperAdminView } = require("../../lib/auth");
-const { pickField, FIELD_MATCHERS, isUrgentTimeline, normalizeShowroom } = require("../../lib/leadFields");
+const { pickField, FIELD_MATCHERS, isUrgentTimeline, normalizeShowroom, effectiveStatuses } = require("../../lib/leadFields");
 const { withCache } = require("../../lib/serverCache");
 
-const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Test Drive", "Booking", "Retail (Converted)", "Lost"];
 // Keep in sync with models/Lead.js's BUCKETS.
 const BUCKETS = ["unassigned", "qualified", "retail", "lost"];
 const TREND_DAYS = 30;
@@ -34,6 +34,12 @@ function dateKey(d) {
 
 async function computeStats(req) {
   const { month = "" } = req.query; // optional "YYYY-MM" — blank means all-time
+
+  // This company's own status list (Settings.statusOptions when configured,
+  // else the app-wide default) — computed per-request rather than as a
+  // module-level constant, since it now varies by company.
+  const settingsDoc = await Settings.findOne({ companyId: req.session.companyId }).select("statusOptions").lean();
+  const LEAD_STATUSES = effectiveStatuses(settingsDoc?.statusOptions);
 
   const filter = { companyId: req.session.companyId };
   if (/^\d{4}-\d{2}$/.test(month)) {

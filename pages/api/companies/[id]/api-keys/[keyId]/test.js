@@ -1,6 +1,7 @@
 const connectDB = require("../../../../../../lib/db");
 const ApiKey = require("../../../../../../models/ApiKey");
-const { canonicalModelFor, normalizeShowroom } = require("../../../../../../lib/leadFields");
+const Settings = require("../../../../../../models/Settings");
+const { canonicalModelFor, normalizeShowroom, resolveLocation } = require("../../../../../../lib/leadFields");
 const { normalizePhoneDigits } = require("../../../../../../lib/syncService");
 const { requireSuperAdmin } = require("../../../../../../lib/auth");
 
@@ -51,7 +52,10 @@ async function handler(req, res) {
 
   const matchedModel = canonicalModelFor(modelRaw);
   const canonicalModel = matchedModel === "Other" ? modelRaw : matchedModel;
-  const location = normalizeShowroom(showroomRaw);
+  // Preview should reflect exactly what a real delivery would resolve to —
+  // see the same locationField override in pages/api/public/leads.js.
+  const settings = await Settings.findOne({ companyId }).select("locationField").lean();
+  const location = settings?.locationField ? resolveLocation(samplePayload, settings.locationField) : normalizeShowroom(showroomRaw);
 
   res.status(200).json({
     parsed: { name, phone, email, model: modelRaw, canonicalModel, message, location },
