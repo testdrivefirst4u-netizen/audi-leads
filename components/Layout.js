@@ -73,7 +73,6 @@ export default function Layout({ children, username, role, companyName, companyL
         <div className="absolute bottom-0 left-1/4 w-[380px] h-[380px] rounded-full bg-accent/10 blur-[100px]" />
       </div>
       <Sidebar
-        username={username}
         role={role}
         companyName={companyName}
         companyLogoUrl={companyLogoUrl}
@@ -84,7 +83,14 @@ export default function Layout({ children, username, role, companyName, companyL
       />
       <main className="flex-1 min-w-0 p-4 sm:p-8">
         <div className="max-w-[1400px] mx-auto">
-          <TopBar onMenuClick={() => setMobileNavOpen(true)} role={role} />
+          <TopBar
+            onMenuClick={() => setMobileNavOpen(true)}
+            role={role}
+            username={username}
+            companyName={companyName}
+            companyLogoUrl={companyLogoUrl}
+            onLogout={handleLogout}
+          />
           {children}
         </div>
       </main>

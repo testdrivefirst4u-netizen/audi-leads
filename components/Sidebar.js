@@ -13,6 +13,7 @@ import {
   UploadIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  UserIcon,
 } from "./icons";
 
 const NAV_ITEMS = [
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   // { href: "/settings", label: "Settings", Icon: SettingsIcon },
   { href: "/companies", label: "Companies", Icon: AgentIcon, superAdminOnly: true, group: "platform" },
   { href: "/import", label: "Import Leads", Icon: UploadIcon, superAdminOnly: true, group: "platform" },
+  { href: "/account", label: "Account", Icon: UserIcon, superAdminOnly: true, group: "platform" },
 ];
 
 // Only the super-admin nav is split into labeled groups — Platform actions
@@ -96,7 +98,7 @@ function NavItemLight({ href, label, Icon, active, collapsed, badgeCount, badgeU
   );
 }
 
-export default function Sidebar({ username, role, companyName, companyLogoUrl, followUpBadge, onLogout, open, onClose }) {
+export default function Sidebar({ role, companyName, companyLogoUrl, followUpBadge, onLogout, open, onClose }) {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const isSuperAdmin = role === "super_admin";
@@ -116,34 +118,58 @@ export default function Sidebar({ username, role, companyName, companyLogoUrl, f
   const brandName = isSuperAdmin ? "BroaddCast" : companyName || "Leads";
   const brandSubtitle = isSuperAdmin ? "Platform" : null;
   const brandLogo = isSuperAdmin ? "/icon.svg" : companyLogoUrl || "/audi-logo.png";
-  const roleLabel = isSuperAdmin ? "Super Admin" : role === "admin" ? "Admin" : "Agent";
 
   const flatNavItems = NAV_ITEMS.filter((item) => !item.superAdminOnly && (!item.adminOnly || role === "admin"));
 
   return (
     <>
-      {open && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={onClose} aria-hidden="true" />}
+      {open && <div className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={onClose} aria-hidden="true" />}
 
       <aside
         className={`fixed md:sticky top-0 left-0 z-50 flex flex-col h-screen shrink-0 bg-white/70 backdrop-blur-[24px] backdrop-saturate-[1.6] border-r border-white/70 shadow-[0_20px_50px_rgba(30,35,70,0.10)] transition-[transform,width] duration-200 md:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         } ${collapsed ? "w-[72px]" : "w-60 lg:w-72"}`}
       >
-        <div className={`relative border-b border-white/50 ${collapsed ? "px-3 py-4" : "px-5 py-4"}`}>
+        <div
+          className={`relative border-b border-white/50 ${
+            collapsed ? "px-3 py-4" : isSuperAdmin ? "px-5 py-4" : "px-5 py-5"
+          }`}
+        >
           <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "gap-2.5"}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={brandLogo}
-              alt={brandName}
-              className={`shrink-0 object-contain ${isSuperAdmin ? "rounded-[8px]" : ""} ${collapsed ? "h-8 w-8" : "h-9 w-9"}`}
-            />
-            {!collapsed && (
-              <div className="min-w-0 leading-tight">
-                <div className="text-[15px] font-bold text-ink tracking-tight truncate">{brandName}</div>
-                {brandSubtitle && <div className="text-[11px] font-medium text-muted">{brandSubtitle}</div>}
+            {isSuperAdmin ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={brandLogo}
+                  alt={brandName}
+                  className={`shrink-0 object-contain rounded-[8px] ${collapsed ? "h-8 w-8" : "h-9 w-9"}`}
+                />
+                {!collapsed && (
+                  <div className="min-w-0 leading-tight">
+                    <div className="text-[15px] font-bold text-ink tracking-tight truncate">{brandName}</div>
+                    {brandSubtitle && <div className="text-[11px] font-medium text-muted">{brandSubtitle}</div>}
+                  </div>
+                )}
+              </>
+            ) : (
+              // Company view: logo only, no company name text beside it —
+              // centered in the header row (the close button below still
+              // pins to the far right via ml-auto, unaffected by this).
+              // width/height left auto (not a fixed square box) so a wide
+              // landscape logo — most company logos are — isn't crushed down
+              // to whatever tiny height fits a square; max-h/max-w just cap
+              // it, and the browser scales it down preserving its own
+              // aspect ratio either way.
+              <div className="flex items-center justify-center flex-1 py-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={brandLogo}
+                  alt={brandName}
+                  className={collapsed ? "h-auto w-auto max-h-10 max-w-[44px] object-contain" : "h-auto w-auto max-h-[68px] max-w-[200px] object-contain"}
+                />
               </div>
             )}
-            <button className="md:hidden ml-auto text-muted hover:text-ink" onClick={onClose} aria-label="Close menu">
+            <button className="ml-auto md:hidden text-muted hover:text-ink" onClick={onClose} aria-label="Close menu">
               <CloseIcon />
             </button>
           </div>
@@ -154,7 +180,7 @@ export default function Sidebar({ username, role, companyName, companyLogoUrl, f
             type="button"
             onClick={toggleCollapsed}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="hidden md:flex items-center justify-center absolute -right-3 top-6 w-6 h-6 rounded-full bg-white/80 backdrop-blur-md border border-white/70 text-muted shadow-sm hover:text-accent hover:border-accent/40 transition-colors duration-200"
+            className="absolute items-center justify-center hidden w-6 h-6 transition-colors duration-200 border rounded-full shadow-sm md:flex -right-3 top-6 bg-white/80 backdrop-blur-md border-white/70 text-muted hover:text-accent hover:border-accent/40"
           >
             {collapsed ? <ChevronRightIcon width={13} height={13} /> : <ChevronLeftIcon width={13} height={13} />}
           </button>
@@ -210,24 +236,9 @@ export default function Sidebar({ username, role, companyName, companyLogoUrl, f
         </nav>
 
         <div className={`${collapsed ? "px-3 py-3" : "px-3 py-3.5"}`}>
-          {username && (
-            <div
-              className={`flex items-center rounded-2xl mb-2 bg-white/45 backdrop-blur-[16px] border border-white/50 shadow-sm ${
-                collapsed ? "justify-center h-10 w-10 mx-auto" : "gap-2.5 px-2.5 py-2"
-              }`}
-            >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent to-accent-hover text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)]">
-                {username.charAt(0).toUpperCase()}
-              </div>
-              {!collapsed && (
-                <div className="min-w-0 leading-tight">
-                  <div className="text-[13px] font-semibold text-ink truncate">{username}</div>
-                  <div className="text-[11px] text-muted">{roleLabel}</div>
-                </div>
-              )}
-            </div>
-          )}
-
+          {/* Username/role card removed — that's now shown in the TopBar's
+              profile dropdown (components/ProfileMenu.js) instead, so it
+              isn't duplicated in both places. */}
           <button
             title={collapsed ? "Logout" : undefined}
             className={`group relative flex items-center w-full rounded-[14px] border border-transparent bg-transparent text-muted text-[13.5px] font-medium cursor-pointer transition-all duration-200 hover:bg-danger/10 hover:border-danger/15 hover:text-danger ${
