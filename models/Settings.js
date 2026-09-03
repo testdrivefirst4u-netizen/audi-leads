@@ -50,6 +50,14 @@ const SettingsSchema = new mongoose.Schema(
     // 1440 = "Daily", for hosts (e.g. Vercel Hobby) where the sync can only
     // realistically run once a day — keeps the Online/Offline threshold accurate.
     syncIntervalMinutes: { type: Number, enum: [1, 5, 15, 1440], default: 1 },
+    // Advisory lock so two overlapping runSync() calls for the same company
+    // (e.g. the local dev scheduler firing again before a long previous run
+    // finished) can't both decide the same sheet row is new and each create
+    // their own Lead for it — see lib/syncService.js.
+    syncLock: {
+      inProgress: { type: Boolean, default: false },
+      startedAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );

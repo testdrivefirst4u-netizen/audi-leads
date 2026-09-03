@@ -5,7 +5,7 @@ const SyncLogSchema = new mongoose.Schema(
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", index: true },
     startedAt: { type: Date, required: true },
     finishedAt: { type: Date },
-    status: { type: String, enum: ["success", "error"], default: "success" },
+    status: { type: String, enum: ["success", "error", "skipped"], default: "success" },
     totalRows: { type: Number, default: 0 },
     newCount: { type: Number, default: 0 },
     updatedCount: { type: Number, default: 0 },
