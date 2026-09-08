@@ -19,6 +19,16 @@ function sanitizeIps(input) {
   return input.map((ip) => String(ip).trim()).filter(Boolean);
 }
 
+// Only http(s) URLs are ever dispatched to (see lib/statusCallback.js) —
+// reject anything else up front rather than storing a value that can never
+// actually be delivered to.
+function sanitizeCallbackUrl(input) {
+  const url = String(input || "").trim();
+  if (!url) return "";
+  if (!/^https?:\/\//i.test(url)) throw new Error("Status Callback URL must start with http:// or https://");
+  return url;
+}
+
 function toPublicKey(apiKey) {
   return {
     _id: apiKey._id,
@@ -30,6 +40,8 @@ function toPublicKey(apiKey) {
     fieldMapping: apiKey.fieldMapping || {},
     rateLimitPerMinute: apiKey.rateLimitPerMinute,
     allowedIps: apiKey.allowedIps || [],
+    statusCallbackUrl: apiKey.statusCallbackUrl || "",
+    hasCallbackSecret: Boolean(apiKey.statusCallbackSecret),
   };
 }
 
@@ -43,13 +55,20 @@ async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    const { sourceName, fieldMapping, rateLimitPerMinute, allowedIps } = req.body || {};
+    const { sourceName, fieldMapping, rateLimitPerMinute, allowedIps, statusCallbackUrl, statusCallbackSecret } = req.body || {};
     if (!sourceName || !sourceName.trim()) {
       return res.status(400).json({ error: "Source name is required (e.g. CarDekho, CarWale, Website Form)" });
     }
 
     const company = await Company.findById(companyId);
     if (!company) return res.status(404).json({ error: "Company not found" });
+
+    let callbackUrl;
+    try {
+      callbackUrl = sanitizeCallbackUrl(statusCallbackUrl);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
 
     const rawKey = generateApiKey();
     const apiKey = await ApiKey.create({
@@ -61,6 +80,8 @@ async function handler(req, res) {
       fieldMapping: sanitizeMapping(fieldMapping),
       rateLimitPerMinute: rateLimitPerMinute ? Number(rateLimitPerMinute) : 60,
       allowedIps: sanitizeIps(allowedIps),
+      statusCallbackUrl: callbackUrl,
+      statusCallbackSecret: statusCallbackSecret ? String(statusCallbackSecret).trim() : "",
     });
 
     // The only time the raw key is ever available — the caller must copy it

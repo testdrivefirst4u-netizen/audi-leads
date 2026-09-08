@@ -191,6 +191,7 @@ async function handler(req, res) {
       sheetCreatedAt: new Date(),
       location,
       assignNext,
+      apiKeyId: apiKey._id,
     });
 
     await logDelivery({

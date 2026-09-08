@@ -38,6 +38,16 @@ const ApiKeySchema = new mongoose.Schema(
     // opt-in per key, not a default requirement.
     rateLimitPerMinute: { type: Number, default: 60 },
     allowedIps: { type: [String], default: [] },
+    // Reverse of the inbound webhook above — when set, a lead created via
+    // this key gets its status pushed back out to this URL every time it
+    // changes on the dashboard (see lib/statusCallback.js), so a source like
+    // CarDekho/CarWale can reflect "Contacted"/"Lost"/etc. in their own
+    // system without a human re-keying it there.
+    statusCallbackUrl: { type: String, default: "" },
+    // Sent back as the `X-Callback-Secret` header on every delivery so the
+    // receiving endpoint can verify the request actually came from us.
+    // Optional — plenty of internal/test endpoints don't need it.
+    statusCallbackSecret: { type: String, default: "" },
   },
   { timestamps: true }
 );

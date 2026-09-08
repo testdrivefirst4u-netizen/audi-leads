@@ -31,6 +31,7 @@ export default function PipelineStats({ pipeline }) {
 
   const byLabel = Object.fromEntries(pipeline.map((p) => [p.label, p.count]));
   const lost = byLabel.Lost || 0;
+  const callBack = byLabel["Call Back"] || 0;
   const stages = FUNNEL_ORDER.map((label) => ({ label, count: byLabel[label] || 0 }));
   const max = Math.max(...stages.map((s) => s.count), 1);
 
@@ -96,12 +97,24 @@ export default function PipelineStats({ pipeline }) {
         )}
       </div>
 
-      {lost > 0 && (
-        <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-sm">
-          <span className="text-muted">Lost (dropped out of pipeline)</span>
-          <span className="font-bold" style={{ color: statusChartColor("Lost") }}>
-            {lost}
-          </span>
+      {(callBack > 0 || lost > 0) && (
+        <div className="mt-3 pt-3 border-t border-border flex flex-col gap-1.5 text-sm">
+          {callBack > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted">Call Back (needs follow-up)</span>
+              <span className="font-bold" style={{ color: statusChartColor("Call Back") }}>
+                {callBack}
+              </span>
+            </div>
+          )}
+          {lost > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted">Lost (dropped out of pipeline)</span>
+              <span className="font-bold" style={{ color: statusChartColor("Lost") }}>
+                {lost}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

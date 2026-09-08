@@ -773,6 +773,123 @@ function LimitsEditRow({ company, apiKey, onClose, onSaved }) {
   );
 }
 
+function CallbackEditRow({ company, apiKey, onClose, onSaved }) {
+  const toast = useToast();
+  const [statusCallbackUrl, setStatusCallbackUrl] = useState(apiKey.statusCallbackUrl || "");
+  const [statusCallbackSecret, setStatusCallbackSecret] = useState("");
+  const [clearSecret, setClearSecret] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const res = await apiFetch(`/api/companies/${company._id}/api-keys/${apiKey._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          statusCallbackUrl,
+          statusCallbackSecret: statusCallbackSecret || undefined,
+          clearCallbackSecret: clearSecret,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to save callback settings");
+      }
+      toast("Callback settings saved");
+      onSaved();
+    } catch (err) {
+      toast(err.message, { type: "err" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTest() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await apiFetch(`/api/companies/${company._id}/api-keys/${apiKey._id}/test-callback`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Test failed");
+      setTestResult(data);
+    } catch (err) {
+      toast(err.message, { type: "err" });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <tr>
+      <td colSpan={5}>
+        <div style={{ padding: "12px 0" }}>
+          <div className="hint mb-2">
+            When a lead created by this key changes status on the dashboard (Contacted, Qualified, Lost, etc.), push
+            it back to {apiKey.sourceName}'s own system as a JSON POST — so status updates don't need to be re-keyed
+            there by hand.
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="field mb-0">
+              <label>Status Callback URL</label>
+              <input
+                value={statusCallbackUrl}
+                onChange={(e) => setStatusCallbackUrl(e.target.value)}
+                placeholder="https://partner.example.com/webhook/lead-status"
+              />
+            </div>
+            <div className="field mb-0">
+              <label>Callback Secret (optional)</label>
+              <input
+                type="password"
+                value={statusCallbackSecret}
+                onChange={(e) => {
+                  setStatusCallbackSecret(e.target.value);
+                  if (e.target.value) setClearSecret(false);
+                }}
+                placeholder={apiKey.hasCallbackSecret ? "Set — leave blank to keep it" : "Sent as X-Callback-Secret header"}
+              />
+              {apiKey.hasCallbackSecret && (
+                <label className="hint mt-1 flex items-center gap-1.5" style={{ cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={clearSecret}
+                    onChange={(e) => {
+                      setClearSecret(e.target.checked);
+                      if (e.target.checked) setStatusCallbackSecret("");
+                    }}
+                  />
+                  Remove existing secret
+                </label>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button className="btn-sm" type="button" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : "Save Callback Settings"}
+            </button>
+            <button className="btn-sm" type="button" onClick={handleTest} disabled={testing || !apiKey.statusCallbackUrl}>
+              {testing ? "Testing..." : "Test Callback"}
+            </button>
+            <button className="btn-sm" type="button" onClick={onClose}>
+              Close
+            </button>
+          </div>
+          {testResult && (
+            <div className={`save-msg mt-2 ${testResult.success ? "ok" : "err"}`}>
+              {testResult.success
+                ? `Success — HTTP ${testResult.httpStatus} in ${testResult.durationMs}ms`
+                : `Failed — ${testResult.error || `HTTP ${testResult.httpStatus}`} (${testResult.durationMs}ms)`}
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function LogsViewRow({ company, apiKey, onClose }) {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -823,15 +940,16 @@ function LogsViewRow({ company, apiKey, onClose }) {
                     <td>
                       <span
                         className={`pill ${
-                          log.status === "created" || log.status === "duplicate"
+                          log.status === "created" || log.status === "duplicate" || log.status === "callback_sent"
                             ? "bg-success/10 text-success"
                             : "bg-danger/10 text-danger"
                         }`}
                       >
+                        {log.direction === "outbound" ? "→ " : ""}
                         {log.status}
                       </span>
                     </td>
-                    <td className="text-muted">{log.ip || "-"}</td>
+                    <td className="text-muted">{log.direction === "outbound" ? "-" : log.ip || "-"}</td>
                     <td className="text-muted">{log.errorMessage || "-"}</td>
                   </tr>
                 ))}
@@ -929,6 +1047,8 @@ function ApiKeysRow({ company, onClose }) {
   const [newMapping, setNewMapping] = useState(EMPTY_MAPPING);
   const [newRateLimit, setNewRateLimit] = useState(60);
   const [newAllowedIps, setNewAllowedIps] = useState("");
+  const [newStatusCallbackUrl, setNewStatusCallbackUrl] = useState("");
+  const [newStatusCallbackSecret, setNewStatusCallbackSecret] = useState("");
   const [showMappingForNew, setShowMappingForNew] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newKey, setNewKey] = useState(null); // { rawKey, sourceName } — shown once
@@ -968,6 +1088,8 @@ function ApiKeysRow({ company, onClose }) {
           fieldMapping: newMapping,
           rateLimitPerMinute: Number(newRateLimit),
           allowedIps: ips,
+          statusCallbackUrl: newStatusCallbackUrl,
+          statusCallbackSecret: newStatusCallbackSecret,
         }),
       });
       const data = await res.json();
@@ -977,6 +1099,8 @@ function ApiKeysRow({ company, onClose }) {
       setNewMapping(EMPTY_MAPPING);
       setNewRateLimit(60);
       setNewAllowedIps("");
+      setNewStatusCallbackUrl("");
+      setNewStatusCallbackSecret("");
       setShowMappingForNew(false);
       load();
     } catch (err) {
@@ -1049,6 +1173,23 @@ function ApiKeysRow({ company, onClose }) {
                       placeholder="Leave blank to allow any IP"
                     />
                   </div>
+                  <div className="field mb-0">
+                    <label>Status Callback URL (optional)</label>
+                    <input
+                      value={newStatusCallbackUrl}
+                      onChange={(e) => setNewStatusCallbackUrl(e.target.value)}
+                      placeholder="https://partner.example.com/webhook/lead-status"
+                    />
+                  </div>
+                  <div className="field mb-0">
+                    <label>Callback Secret (optional)</label>
+                    <input
+                      type="password"
+                      value={newStatusCallbackSecret}
+                      onChange={(e) => setNewStatusCallbackSecret(e.target.value)}
+                      placeholder="Sent as X-Callback-Secret header"
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -1110,6 +1251,13 @@ function ApiKeysRow({ company, onClose }) {
                           <button className="btn-sm" onClick={() => toggle(k._id, "limits")}>
                             {expanded?.id === k._id && expanded.view === "limits" ? "Cancel" : "Limits"}
                           </button>
+                          <button className="btn-sm" onClick={() => toggle(k._id, "callback")}>
+                            {expanded?.id === k._id && expanded.view === "callback"
+                              ? "Cancel"
+                              : k.statusCallbackUrl
+                              ? "Callback ✓"
+                              : "Callback"}
+                          </button>
                           <button className="btn-sm" onClick={() => toggle(k._id, "logs")}>
                             {expanded?.id === k._id && expanded.view === "logs" ? "Cancel" : "Logs"}
                           </button>
@@ -1135,6 +1283,17 @@ function ApiKeysRow({ company, onClose }) {
                     )}
                     {expanded?.id === k._id && expanded.view === "limits" && (
                       <LimitsEditRow
+                        company={company}
+                        apiKey={k}
+                        onClose={() => setExpanded(null)}
+                        onSaved={() => {
+                          setExpanded(null);
+                          load();
+                        }}
+                      />
+                    )}
+                    {expanded?.id === k._id && expanded.view === "callback" && (
+                      <CallbackEditRow
                         company={company}
                         apiKey={k}
                         onClose={() => setExpanded(null)}

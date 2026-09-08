@@ -63,7 +63,7 @@ const BucketHistoryEntrySchema = new mongoose.Schema(
 // a single global enum can't express "valid values differ per company" —
 // validation instead happens in pages/api/leads/[id]/status.js, against
 // whichever list actually applies to that lead's company.
-const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Test Drive", "Booking", "Retail (Converted)", "Lost"];
+const LEAD_STATUSES = ["New", "Contacted", "Call Back", "Qualified", "Test Drive", "Booking", "Retail (Converted)", "Lost"];
 // Independent of `status` above. Qualified/Retail are permanent once set;
 // "unassigned" (the default — every new lead starts untriaged) and "lost"
 // are the two editable states a lead can move freely between before it's
@@ -109,6 +109,11 @@ const LeadSchema = new mongoose.Schema(
     // Where this lead originally came from — the Google Sheet sync, or an
     // external integration (CarDekho/CarWale/etc.) pushing via its own API key.
     source: { type: String, default: "Meta Ads", index: true },
+    // Set once at creation, only for leads that came in via the public API
+    // (pages/api/public/leads.js) — undefined for sheet-synced leads. Lets a
+    // later status change know which external source (if any) to notify via
+    // that key's configured statusCallbackUrl (see lib/statusCallback.js).
+    apiKeyId: { type: mongoose.Schema.Types.ObjectId, ref: "ApiKey", index: true },
     // CRM fields managed from the dashboard, untouched by the sheet sync.
     // No enum here on purpose — see the LEAD_STATUSES comment above.
     status: { type: String, default: "New", index: true },
