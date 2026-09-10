@@ -207,15 +207,15 @@ export default function ImportLeadsPage({ username }) {
   return (
     <Layout username={username} role="super_admin">
       <h1 className="page-title">Import Leads</h1>
-      <p className="hint mb-5">
+      <p className="mb-5 hint">
         Upload a CSV or Excel file to bulk-add leads into any company. Every row runs through the same
         duplicate-detection and auto-assignment as Google Sheets sync — a customer who already has a lead for the
         same model gets merged as a repeat enquiry instead of duplicated.
       </p>
 
-      <div className="panel mb-5" style={{ padding: 20 }}>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="field mb-0">
+      <div className="mb-5 panel" style={{ padding: 20 }}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="mb-0 field">
             <label>Company</label>
             <select
               value={companyId}
@@ -232,7 +232,7 @@ export default function ImportLeadsPage({ username }) {
             </select>
           </div>
 
-          <div className="field mb-0">
+          <div className="mb-0 field">
             <label>Lead Source</label>
             <select
               value={sourceSlug}
@@ -249,7 +249,7 @@ export default function ImportLeadsPage({ username }) {
             </select>
           </div>
 
-          <div className="field mb-0">
+          <div className="mb-0 field">
             <label>Channel</label>
             <div
               className={`w-full rounded-lg border px-3 py-2.5 text-sm ${
@@ -263,7 +263,7 @@ export default function ImportLeadsPage({ username }) {
       </div>
 
       {step === "upload" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <div
               className={`panel flex flex-col items-center justify-center text-center p-10 border-2 border-dashed cursor-pointer transition-colors ${
@@ -277,7 +277,7 @@ export default function ImportLeadsPage({ username }) {
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
             >
-              <UploadIcon width={40} height={40} className="text-muted mb-3" />
+              <UploadIcon width={40} height={40} className="mb-3 text-muted" />
               <input
                 ref={fileInputRef}
                 type="file"
@@ -288,12 +288,12 @@ export default function ImportLeadsPage({ username }) {
               {file ? (
                 <>
                   <strong>{file.name}</strong>
-                  <span className="hint mt-1">{(file.size / 1024).toFixed(1)} KB — click to choose a different file</span>
+                  <span className="mt-1 hint">{(file.size / 1024).toFixed(1)} KB — click to choose a different file</span>
                 </>
               ) : (
                 <>
                   <strong>Drag &amp; drop a CSV or Excel file here</strong>
-                  <span className="hint mt-1">or click to browse — .csv, .xlsx, .xls (up to 2000 rows)</span>
+                  <span className="mt-1 hint">or click to browse — .csv, .xlsx, .xls (up to 2000 rows)</span>
                 </>
               )}
             </div>
@@ -309,13 +309,13 @@ export default function ImportLeadsPage({ username }) {
               )}
             </div>
 
-            {errorMessage && <div className="save-msg err mt-3">{errorMessage}</div>}
-            {!sourceSlug && <div className="hint mt-3">Select a lead source above before uploading — it's stored against every lead you import.</div>}
+            {errorMessage && <div className="mt-3 save-msg err">{errorMessage}</div>}
+            {!sourceSlug && <div className="mt-3 hint">Select a lead source above before uploading — it's stored against every lead you import.</div>}
           </div>
 
           <div className="panel" style={{ padding: 20, height: "fit-content" }}>
             <h3 className="mb-3">How this works</h3>
-            <p className="hint mb-2">
+            <p className="mb-2 hint">
               After upload, you'll see exactly which column maps to which CRM field (auto-detected per source, and
               editable), then a preview with counts before anything is actually imported.
             </p>
@@ -336,15 +336,15 @@ export default function ImportLeadsPage({ username }) {
           <table>
             <thead>
               <tr>
-                <th>Excel Column</th>
-                <th></th>
                 <th>CRM Field</th>
+                <th></th>
+                <th>Excel Column</th>
               </tr>
             </thead>
             <tbody>
               {parseResult.crmFields.map((field) => (
                 <tr key={field.key}>
-                  <td className="text-muted">{mapping[field.key] || <span className="hint">(not mapped)</span>}</td>
+                  <td>{field.label}</td>
                   <td className="text-muted">→</td>
                   <td>
                     <select
@@ -358,7 +358,7 @@ export default function ImportLeadsPage({ username }) {
                         </option>
                       ))}
                     </select>
-                    <span className="hint ml-2">{field.label}</span>
+                    <span className="ml-2 hint">{field.label}</span>
                   </td>
                 </tr>
               ))}
@@ -368,7 +368,7 @@ export default function ImportLeadsPage({ username }) {
           {parseResult.unmappedColumns.length > 0 && (
             <div className="mt-4">
               <strong>Unmapped Columns:</strong>
-              <p className="hint mt-1 mb-1">
+              <p className="mt-1 mb-1 hint">
                 Not shown on the lead form, but kept on the lead's raw data so nothing is lost.
               </p>
               <ul className="mt-1">
@@ -391,14 +391,14 @@ export default function ImportLeadsPage({ username }) {
               Back
             </button>
           </div>
-          {errorMessage && <div className="save-msg err mt-3">{errorMessage}</div>}
+          {errorMessage && <div className="mt-3 save-msg err">{errorMessage}</div>}
         </div>
       )}
 
       {step === "preview" && parseResult && (
         <div className="panel" style={{ padding: 20 }}>
           <h3 className="mb-3">Preview — {selectedSource?.name}</h3>
-          <div className="status-grid mb-4">
+          <div className="mb-4 status-grid">
             <div className="card">
               <div className="label">Total Rows</div>
               <div className="value">{parseResult.counts.totalRows}</div>
@@ -443,7 +443,7 @@ export default function ImportLeadsPage({ username }) {
               ))}
             </tbody>
           </table>
-          <p className="hint mt-2">Showing the first {parseResult.preview.length} of {parseResult.counts.totalRows} rows.</p>
+          <p className="mt-2 hint">Showing the first {parseResult.preview.length} of {parseResult.counts.totalRows} rows.</p>
 
           <div className="flex gap-2 mt-4">
             <button className="btn" onClick={handleImport} disabled={importing || parseResult.counts.validLeads === 0}>
@@ -465,7 +465,7 @@ export default function ImportLeadsPage({ username }) {
             <div className="save-msg err">{result.message}</div>
           ) : (
             <>
-              <div className="save-msg ok mb-3">Import complete.</div>
+              <div className="mb-3 save-msg ok">Import complete.</div>
               <div className="status-grid">
                 <div className="card">
                   <div className="label">Total Rows</div>
@@ -498,15 +498,15 @@ export default function ImportLeadsPage({ username }) {
               )}
             </>
           )}
-          <button className="btn mt-4" onClick={resetToUpload}>
+          <button className="mt-4 btn" onClick={resetToUpload}>
             Import Another File
           </button>
         </div>
       )}
 
-      <div className="panel mt-6" style={{ padding: 20 }}>
+      <div className="mt-6 panel" style={{ padding: 20 }}>
         <h3 className="mb-3">Import History</h3>
-        <p className="hint mb-3">
+        <p className="mb-3 hint">
           Every past import for this company. If the wrong file or mapping was used, Revoke deletes the leads it
           created — including any an agent may have since called or added notes to. Leads it merged into an
           existing customer's history as a repeat enquiry are left untouched.
