@@ -1,5 +1,14 @@
 /** @type {import('next').NextConfig} */
 
+// `next dev`'s webpack build wraps every module in `eval(...)` to make Fast
+// Refresh/HMR work — with a `script-src` that doesn't allow 'unsafe-eval',
+// the browser blocks that eval outright, React never initializes, and every
+// page renders permanently blank in dev mode (production `next start` never
+// hits this — it doesn't use eval — so this only bit local development).
+// Scoped to non-production so the deployed app's CSP stays exactly as tight
+// as before.
+const IS_DEV = process.env.NODE_ENV !== "production";
+
 // Every response gets these — no external scripts/fonts/analytics are
 // loaded anywhere in this app (verified: no next/image, no Google Fonts
 // link, no third-party <script> tags), so the CSP can stay tight without
@@ -18,11 +27,11 @@ const SECURITY_HEADERS = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self'",
+      `script-src 'self'${IS_DEV ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https://ik.imagekit.io",
       "font-src 'self' data:",
-      "connect-src 'self'",
+      `connect-src 'self'${IS_DEV ? " ws:" : ""}`,
       "worker-src 'self'",
       "object-src 'none'",
       "base-uri 'self'",
