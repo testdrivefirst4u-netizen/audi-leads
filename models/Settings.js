@@ -38,6 +38,21 @@ const LeadFieldColumnSchema = new mongoose.Schema(
 // dropdown offers.
 const SourceMapEntrySchema = new mongoose.Schema({ from: { type: String }, to: { type: String } }, { _id: false });
 
+// One entry per lead source (see lib/leadSources.js's LEAD_SOURCES, matched
+// by `sourceSlug`) whose default column-alias mapping doesn't fit this
+// company's actual export shape — e.g. their Meta export calls the name
+// column "candidate_name" instead of the default "full_name"/"name". Only
+// fields present in `mapping` override the source's own defaults; anything
+// absent falls back to lib/leadSources.js as normal. Editable only by the
+// super admin (see pages/api/companies/[id]/source-mappings.js).
+const SourceColumnOverrideSchema = new mongoose.Schema(
+  {
+    sourceSlug: { type: String, required: true },
+    mapping: { type: mongoose.Schema.Types.Mixed, default: {} },
+  },
+  { _id: false }
+);
+
 const SettingsSchema = new mongoose.Schema(
   {
     // Legacy single-tenant lookup key — no longer unique (every company's
@@ -61,6 +76,10 @@ const SettingsSchema = new mongoose.Schema(
     statusOptions: { type: [String], default: [] },
     sourceOptions: { type: [String], default: [] },
     sourceMap: { type: [SourceMapEntrySchema], default: [] },
+    // Per-company, per-lead-source column-mapping overrides for the Excel
+    // import page — see SourceColumnOverrideSchema above. Empty means every
+    // source uses its default alias list from lib/leadSources.js unchanged.
+    sourceColumnOverrides: { type: [SourceColumnOverrideSchema], default: [] },
     // Raw sheet-data field name (e.g. "city") to read a lead's location from
     // directly, bypassing normalizeShowroom()'s fixed 3-city classifier —
     // for a company whose real locations aren't Audi's showroom cities. This

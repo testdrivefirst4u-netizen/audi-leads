@@ -39,6 +39,20 @@ function sanitizeSourceMap(input) {
     .filter((e) => e.from && e.to);
 }
 
+function sanitizeSourceColumnOverrides(input) {
+  if (!Array.isArray(input)) return undefined;
+  return input
+    .map((o) => {
+      const mapping = {};
+      for (const [key, value] of Object.entries(o?.mapping || {})) {
+        const trimmed = String(value || "").trim();
+        if (trimmed) mapping[key] = trimmed;
+      }
+      return { sourceSlug: String(o?.sourceSlug || "").trim(), mapping };
+    })
+    .filter((o) => o.sourceSlug && Object.keys(o.mapping).length > 0);
+}
+
 async function handler(req, res) {
   if (req.method !== "PATCH") return res.status(405).json({ error: "Method not allowed" });
 
@@ -57,6 +71,7 @@ async function handler(req, res) {
     sourceMap,
     locationField,
     locationOptions,
+    sourceColumnOverrides,
   } = req.body || {};
 
   const update = {};
@@ -125,6 +140,12 @@ async function handler(req, res) {
   const sanitizedLocationOptions = sanitizeStringList(locationOptions);
   if (sanitizedLocationOptions !== undefined) {
     settingsUpdate.locationOptions = sanitizedLocationOptions;
+  }
+  // Only affects the Excel/CSV import page's column auto-detection (see
+  // lib/leadSources.js) — doesn't touch the Google Sheet sync, so no resync.
+  const sanitizedSourceColumnOverrides = sanitizeSourceColumnOverrides(sourceColumnOverrides);
+  if (sanitizedSourceColumnOverrides !== undefined) {
+    settingsUpdate.sourceColumnOverrides = sanitizedSourceColumnOverrides;
   }
 
   let settings;

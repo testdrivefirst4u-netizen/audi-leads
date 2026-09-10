@@ -33,13 +33,15 @@ async function handler(req, res) {
   }
 
   const leads = await Lead.find(filter)
-    .select("model canonicalModel data status calls sheetCreatedAt source")
+    .select("model canonicalModel data status calls sheetCreatedAt source channel campaign")
     .lean();
 
   const modelCounts = {};
   const showroomCounts = {};
   const statusCounts = {};
   const sourceCounts = {};
+  const channelCounts = {};
+  const campaignCounts = {};
   let totalCalls = 0;
 
   for (const lead of leads) {
@@ -48,6 +50,9 @@ async function handler(req, res) {
 
     const sourceName = lead.source || "Meta Ads";
     sourceCounts[sourceName] = (sourceCounts[sourceName] || 0) + 1;
+
+    if (lead.channel) channelCounts[lead.channel] = (channelCounts[lead.channel] || 0) + 1;
+    if (lead.campaign) campaignCounts[lead.campaign] = (campaignCounts[lead.campaign] || 0) + 1;
 
     const showroom = normalizeShowroom(pickField(lead.data, FIELD_MATCHERS.showroom));
     if (showroom) showroomCounts[showroom] = (showroomCounts[showroom] || 0) + 1;
@@ -71,6 +76,8 @@ async function handler(req, res) {
     byShowroom: toBreakdown(showroomCounts),
     byStatus: toBreakdown(statusCounts),
     bySource: toBreakdown(sourceCounts),
+    byChannel: toBreakdown(channelCounts),
+    byCampaign: toBreakdown(campaignCounts),
   });
 }
 

@@ -37,6 +37,8 @@ const REPORT_TYPES = [
   { key: "model", title: "Model-wise Lead Report", dataKey: "byModel" },
   { key: "showroom", title: "Showroom-wise Lead Report", dataKey: "byShowroom" },
   { key: "source", title: "Lead Source Report", dataKey: "bySource" },
+  { key: "channel", title: "Channel-wise Lead Report", dataKey: "byChannel" },
+  { key: "campaign", title: "Campaign-wise Lead Report", dataKey: "byCampaign" },
   { key: "status", title: "Lead Status Report", dataKey: "byStatus" },
 ];
 

@@ -47,6 +47,7 @@ async function handler(req, res) {
           sourceMap: (s?.sourceMap || []).map((e) => ({ from: e.from, to: e.to })),
           locationField: s?.locationField || "",
           locationOptions: s?.locationOptions || [],
+          sourceColumnOverrides: (s?.sourceColumnOverrides || []).map((o) => ({ sourceSlug: o.sourceSlug, mapping: o.mapping || {} })),
         };
       }),
     });

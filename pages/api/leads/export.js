@@ -22,13 +22,15 @@ async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   await connectDB();
-  const { from, to, model = "", status = "", agent = "", location = "", source = "", bucket = "" } = req.query;
+  const { from, to, model = "", status = "", agent = "", location = "", source = "", channel = "", campaign = "", bucket = "" } = req.query;
 
   const filter = { companyId: req.session.companyId };
   if (model) filter.canonicalModel = model;
   if (status) filter.status = status;
   if (location) filter.location = location === "unfilled" ? { $in: [null, ""] } : location;
   if (source) filter.source = source;
+  if (channel) filter.channel = channel;
+  if (campaign) filter.campaign = campaign;
   if (bucket) filter.bucket = bucketFilterValue(bucket);
   if (from || to) {
     filter.sheetCreatedAt = {};

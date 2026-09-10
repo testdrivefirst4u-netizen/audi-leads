@@ -71,13 +71,14 @@ async function computeStats(req) {
   ]);
 
   const leads = await Lead.find(filter)
-    .select("model canonicalModel data status bucket sheetCreatedAt calls remarks leadType duplicateCount enquiryHistory source")
+    .select("model canonicalModel data status bucket sheetCreatedAt calls remarks leadType duplicateCount enquiryHistory source campaign")
     .lean();
 
   const exchangeCounts = { Yes: 0, No: 0, "Not Filled": 0 };
   const showroomCounts = {};
   const modelCounts = {};
   const sourceCounts = {};
+  const campaignCounts = {};
   const pipelineCounts = Object.fromEntries(LEAD_STATUSES.map((s) => [s, 0]));
   const bucketCounts = Object.fromEntries(BUCKETS.map((b) => [b, 0]));
 
@@ -127,6 +128,8 @@ async function computeStats(req) {
     const sourceName = lead.source || "Meta Ads";
     sourceCounts[sourceName] = (sourceCounts[sourceName] || 0) + 1;
 
+    if (lead.campaign) campaignCounts[lead.campaign] = (campaignCounts[lead.campaign] || 0) + 1;
+
     const status = LEAD_STATUSES.includes(lead.status) ? lead.status : "New";
     pipelineCounts[status]++;
 
@@ -163,6 +166,7 @@ async function computeStats(req) {
     showroom: toSortedArray(showroomCounts),
     models: toSortedArray(modelCounts),
     sources: toSortedArray(sourceCounts),
+    campaigns: toSortedArray(campaignCounts),
     duplicateDetection: {
       totalEnquiries,
       uniqueLeads: leads.length,

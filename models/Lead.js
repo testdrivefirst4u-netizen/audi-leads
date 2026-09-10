@@ -114,6 +114,27 @@ const LeadSchema = new mongoose.Schema(
     // later status change know which external source (if any) to notify via
     // that key's configured statusCallbackUrl (see lib/statusCallback.js).
     apiKeyId: { type: mongoose.Schema.Types.ObjectId, ref: "ApiKey", index: true },
+    // Marketing attribution — set at creation time by the source-aware Excel
+    // import (pages/api/leads/import.js, see lib/leadSources.js) for leads
+    // that came from a paid/tracked channel. Every field is optional and
+    // untouched by the sheet sync or public API, which don't populate them —
+    // a lead simply won't have these set if its source doesn't apply.
+    // `channel`/`campaign` are indexed since the Leads list filters and
+    // Dashboard/Reports need to query/group by them; the rest are
+    // display-only on the lead detail page.
+    channel: { type: String }, // e.g. "Paid Social", "Paid Search", "Organic / Direct"
+    campaign: { type: String },
+    campaignId: { type: String },
+    adSet: { type: String },
+    adSetId: { type: String },
+    ad: { type: String },
+    adId: { type: String },
+    utmSource: { type: String },
+    utmMedium: { type: String },
+    utmCampaign: { type: String },
+    utmTerm: { type: String },
+    utmContent: { type: String },
+    landingPage: { type: String },
     // CRM fields managed from the dashboard, untouched by the sheet sync.
     // No enum here on purpose — see the LEAD_STATUSES comment above.
     status: { type: String, default: "New", index: true },
@@ -162,6 +183,10 @@ LeadSchema.index({ companyId: 1, "enquiryHistory.model": 1, "enquiryHistory.rowN
 LeadSchema.index({ companyId: 1, sheetCreatedAt: -1 });
 LeadSchema.index({ companyId: 1, status: 1 });
 LeadSchema.index({ companyId: 1, lastEnquiryAt: -1 });
+// Backs the Leads list's Channel/Campaign filters and the Dashboard/Reports
+// breakdowns by the same fields (see lib/leadSources.js).
+LeadSchema.index({ companyId: 1, channel: 1 });
+LeadSchema.index({ companyId: 1, campaign: 1 });
 
 module.exports = mongoose.models.Lead || mongoose.model("Lead", LeadSchema);
 module.exports.LEAD_STATUSES = LEAD_STATUSES;

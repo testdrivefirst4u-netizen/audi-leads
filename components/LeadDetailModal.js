@@ -604,6 +604,24 @@ export default function LeadDetailModal({
                 </div>
               </Section>
 
+              {(lead.channel || lead.campaign || lead.utmSource || lead.utmMedium || lead.utmCampaign || lead.landingPage) && (
+                <Section title="Source Information">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+                    <Field label="Source" value={lead.source || "Meta Ads"} />
+                    <Field label="Channel" value={lead.channel} />
+                    <Field label="Campaign" value={lead.campaign} />
+                    <Field label="Ad Set" value={lead.adSet} />
+                    <Field label="Ad" value={lead.ad} />
+                    <Field label="UTM Source" value={lead.utmSource} />
+                    <Field label="UTM Medium" value={lead.utmMedium} />
+                    <Field label="UTM Campaign" value={lead.utmCampaign} />
+                    <Field label="UTM Term" value={lead.utmTerm} />
+                    <Field label="UTM Content" value={lead.utmContent} />
+                    <Field label="Landing Page" value={lead.landingPage} />
+                  </div>
+                </Section>
+              )}
+
               <Section title="Customer Details">
                 {editing ? (
                   <>

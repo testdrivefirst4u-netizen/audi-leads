@@ -178,9 +178,15 @@ export default function LeadsTable({
   onLocationFilterChange,
   sourceFilter,
   onSourceFilterChange,
+  channelFilter,
+  onChannelFilterChange,
+  campaignFilter,
+  onCampaignFilterChange,
   bucketFilter,
   onBucketFilterChange,
   sources,
+  channels,
+  campaigns,
   followUpFilter,
   onFollowUpFilterChange,
   followUpTabs,
@@ -376,6 +382,34 @@ export default function LeadsTable({
             ))}
           </select>
         </div>
+
+        {channels?.length > 0 && (
+          <div className="toolbar-group">
+            <label className="toolbar-label">Channel</label>
+            <select value={channelFilter} onChange={(e) => onChannelFilterChange(e.target.value)}>
+              <option value="">All channels</option>
+              {channels.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {campaigns?.length > 0 && (
+          <div className="toolbar-group">
+            <label className="toolbar-label">Campaign</label>
+            <select value={campaignFilter} onChange={(e) => onCampaignFilterChange(e.target.value)}>
+              <option value="">All campaigns</option>
+              {campaigns.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="toolbar-group">
           <label className="toolbar-label">Created Date</label>

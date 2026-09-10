@@ -3,6 +3,7 @@ import Skeleton from "react-loading-skeleton";
 import { apiFetch } from "../lib/apiFetch";
 import { useToast } from "./ToastProvider";
 import LogoUploadField from "./LogoUploadField";
+import { LEAD_SOURCES, CRM_FIELDS } from "../lib/leadSources";
 
 const EMPTY_SHEET = { label: "", sheetId: "", sheetName: "" };
 
@@ -613,6 +614,125 @@ function FilterConfigRow({ company, onClose, onSaved }) {
               + Add Location
             </button>
           </div>
+
+          <div className="flex gap-2 mt-3">
+            <button className="btn" type="button" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : "Save"}
+            </button>
+            <button className="btn-sm" type="button" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// Grouped purely for scannability in the UI below — CRM_FIELDS itself
+// (lib/leadSources.js) is the flat, authoritative list every other part of
+// the import flow uses.
+const SOURCE_MAPPING_GROUPS = [
+  { title: "Common Fields", keys: ["name", "phone", "email", "model", "location", "message", "createdDate"] },
+  { title: "Campaign & Ad", keys: ["campaign", "campaignId", "adSet", "adSetId", "ad", "adId"] },
+  { title: "UTM & Landing Page", keys: ["utmSource", "utmMedium", "utmCampaign", "utmTerm", "utmContent", "landingPage"] },
+];
+
+// Per-company override of a lead source's default column aliases (see
+// lib/leadSources.js) — e.g. "this company's Meta export calls the name
+// column candidate_name, not full_name" — without touching code. Only
+// fields the admin actually fills in override the source's own defaults;
+// everything else keeps using lib/leadSources.js unchanged.
+function SourceMappingsRow({ company, onClose, onSaved }) {
+  const toast = useToast();
+  const [overrides, setOverrides] = useState(
+    (company.sourceColumnOverrides || []).map((o) => ({ sourceSlug: o.sourceSlug, mapping: { ...(o.mapping || {}) } }))
+  );
+  const [selectedSlug, setSelectedSlug] = useState(LEAD_SOURCES[0].slug);
+  const [saving, setSaving] = useState(false);
+
+  const currentMapping = overrides.find((o) => o.sourceSlug === selectedSlug)?.mapping || {};
+  const selectedSource = LEAD_SOURCES.find((s) => s.slug === selectedSlug);
+
+  function updateField(fieldKey, value) {
+    setOverrides((prev) => {
+      const existing = prev.find((o) => o.sourceSlug === selectedSlug);
+      if (existing) {
+        return prev.map((o) => (o.sourceSlug === selectedSlug ? { ...o, mapping: { ...o.mapping, [fieldKey]: value } } : o));
+      }
+      return [...prev, { sourceSlug: selectedSlug, mapping: { [fieldKey]: value } }];
+    });
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const cleaned = overrides
+        .map((o) => ({
+          sourceSlug: o.sourceSlug,
+          mapping: Object.fromEntries(Object.entries(o.mapping || {}).filter(([, v]) => String(v || "").trim())),
+        }))
+        .filter((o) => Object.keys(o.mapping).length > 0);
+
+      const res = await apiFetch(`/api/companies/${company._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceColumnOverrides: cleaned }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to save source mappings");
+      }
+      toast("Source mappings saved");
+      onSaved();
+    } catch (err) {
+      toast(err.message, { type: "err" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <tr>
+      <td colSpan={7}>
+        <div className="form" style={{ padding: "16px 0" }}>
+          <div className="hint mb-3">
+            Override which column {company.name}'s own exports use for a given lead source, if it's different from
+            the default. Leave a field blank to keep using the default alias list for that source.
+          </div>
+
+          <div className="field mb-3" style={{ maxWidth: 280 }}>
+            <label>Lead Source</label>
+            <select value={selectedSlug} onChange={(e) => setSelectedSlug(e.target.value)}>
+              {LEAD_SOURCES.map((s) => (
+                <option key={s.slug} value={s.slug}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {SOURCE_MAPPING_GROUPS.map((group) => (
+            <div className="mb-4" key={group.title}>
+              <label className="block mb-1.5 text-sm font-semibold">{group.title}</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {group.keys.map((key) => {
+                  const field = CRM_FIELDS.find((f) => f.key === key);
+                  const defaultAliases = [...(selectedSource?.aliases?.[key] || [])].slice(0, 2).join(", ");
+                  return (
+                    <div className="field mb-0" key={key}>
+                      <label>{field.label}</label>
+                      <input
+                        value={currentMapping[key] || ""}
+                        onChange={(e) => updateField(key, e.target.value)}
+                        placeholder={defaultAliases ? `Default: ${defaultAliases}` : "Uses common alias list"}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
 
           <div className="flex gap-2 mt-3">
             <button className="btn" type="button" onClick={handleSave} disabled={saving}>
@@ -1343,6 +1463,7 @@ export default function CompaniesPanel() {
   const [logoRowId, setLogoRowId] = useState(null);
   const [adminAccountId, setAdminAccountId] = useState(null);
   const [filterConfigId, setFilterConfigId] = useState(null);
+  const [sourceMappingsId, setSourceMappingsId] = useState(null);
 
   const load = useCallback(async () => {
     const res = await apiFetch("/api/companies");
@@ -1510,7 +1631,7 @@ export default function CompaniesPanel() {
                         </span>
                       </td>
                       <td>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <button
                             className="btn-sm"
                             onClick={() => {
@@ -1519,6 +1640,7 @@ export default function CompaniesPanel() {
                               setLogoRowId(null);
                               setAdminAccountId(null);
                               setFilterConfigId(null);
+                              setSourceMappingsId(null);
                               setEditingId(editingId === c._id ? null : c._id);
                             }}
                           >
@@ -1532,6 +1654,7 @@ export default function CompaniesPanel() {
                               setLogoRowId(null);
                               setAdminAccountId(null);
                               setFilterConfigId(null);
+                              setSourceMappingsId(null);
                               setApiKeysId(apiKeysId === c._id ? null : c._id);
                             }}
                           >
@@ -1545,6 +1668,7 @@ export default function CompaniesPanel() {
                               setLogoRowId(null);
                               setAdminAccountId(null);
                               setFilterConfigId(null);
+                              setSourceMappingsId(null);
                               setLeadFieldsId(leadFieldsId === c._id ? null : c._id);
                             }}
                           >
@@ -1558,6 +1682,7 @@ export default function CompaniesPanel() {
                               setLeadFieldsId(null);
                               setAdminAccountId(null);
                               setFilterConfigId(null);
+                              setSourceMappingsId(null);
                               setLogoRowId(logoRowId === c._id ? null : c._id);
                             }}
                           >
@@ -1571,6 +1696,7 @@ export default function CompaniesPanel() {
                               setLeadFieldsId(null);
                               setLogoRowId(null);
                               setFilterConfigId(null);
+                              setSourceMappingsId(null);
                               setAdminAccountId(adminAccountId === c._id ? null : c._id);
                             }}
                           >
@@ -1584,10 +1710,25 @@ export default function CompaniesPanel() {
                               setLeadFieldsId(null);
                               setLogoRowId(null);
                               setAdminAccountId(null);
+                              setSourceMappingsId(null);
                               setFilterConfigId(filterConfigId === c._id ? null : c._id);
                             }}
                           >
                             {filterConfigId === c._id ? "Cancel" : "Filters"}
+                          </button>
+                          <button
+                            className="btn-sm"
+                            onClick={() => {
+                              setEditingId(null);
+                              setApiKeysId(null);
+                              setLeadFieldsId(null);
+                              setLogoRowId(null);
+                              setAdminAccountId(null);
+                              setFilterConfigId(null);
+                              setSourceMappingsId(sourceMappingsId === c._id ? null : c._id);
+                            }}
+                          >
+                            {sourceMappingsId === c._id ? "Cancel" : "Source Mappings"}
                           </button>
                           <button className="btn-sm" onClick={() => toggleActive(c)}>
                             {c.active ? "Deactivate" : "Reactivate"}
@@ -1646,6 +1787,17 @@ export default function CompaniesPanel() {
                         onClose={() => setFilterConfigId(null)}
                         onSaved={() => {
                           setFilterConfigId(null);
+                          load();
+                        }}
+                      />
+                    )}
+                    {sourceMappingsId === c._id && (
+                      <SourceMappingsRow
+                        key={`${c._id}-source-mappings`}
+                        company={c}
+                        onClose={() => setSourceMappingsId(null)}
+                        onSaved={() => {
+                          setSourceMappingsId(null);
                           load();
                         }}
                       />
