@@ -4,10 +4,20 @@ import { statusChartColor } from "../lib/leadFields";
 // New -> Contacted -> Qualified -> Test Drive -> Booking -> Retail (Converted)
 // reads as a real funnel (each stage a subset of the one before); Lost is an
 // exit branch, not a sequential stage, so it's shown separately below rather
-// than narrowing the funnel further. Each stage keeps the same hue it uses in
-// StatusPieChart (statusChartColor) so a status reads as the same color in
-// both charts.
+// than narrowing the funnel further. Call Back/Lost keep their own
+// statusChartColor (they're status/exit signals) — but the funnel stages
+// themselves are an *ordered* sequence, not independent identities, so they
+// share one hue (the brand accent) in a light->dark ramp instead of 6
+// unrelated categorical colors. This is the dataviz method's own rule for
+// ordered categories (funnel/tiers/age bands): one hue, ordinal ramp.
 const FUNNEL_ORDER = ["New", "Contacted", "Qualified", "Test Drive", "Booking", "Retail (Converted)"];
+const RAMP_START_OPACITY = 0.35;
+const RAMP_END_OPACITY = 1;
+
+function ramp(i, count) {
+  if (count <= 1) return RAMP_END_OPACITY;
+  return RAMP_START_OPACITY + (i / (count - 1)) * (RAMP_END_OPACITY - RAMP_START_OPACITY);
+}
 
 const WIDTH = 360;
 const HEIGHT = 220;
@@ -64,8 +74,8 @@ export default function PipelineStats({ pipeline }) {
             <path
               key={bar.label}
               d={topRoundedBarPath(bar.x, bar.y, bar.w, bar.h)}
-              fill={statusChartColor(bar.label)}
-              opacity={hoverIndex !== null && hoverIndex !== i ? 0.55 : 1}
+              fill="rgb(var(--accent-rgb))"
+              fillOpacity={ramp(i, bars.length) * (hoverIndex !== null && hoverIndex !== i ? 0.55 : 1)}
               onMouseEnter={() => setHoverIndex(i)}
               onMouseLeave={() => setHoverIndex(null)}
             />

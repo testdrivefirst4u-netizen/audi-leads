@@ -22,18 +22,25 @@ export default function CompanySwitcher({ companyId, onChange }) {
   }, []);
 
   return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3 mb-5 flex items-center gap-3 flex-wrap">
-      <span className="pill bg-accent-soft text-accent">Super Admin View — Read Only</span>
-      <label className="toolbar-label m-0">Company</label>
-      <select value={companyId || ""} onChange={(e) => onChange(e.target.value)} disabled={loading}>
-        {companies.length === 0 && <option value="">No companies yet</option>}
-        {companies.map((c) => (
-          <option key={c._id} value={c._id}>
-            {c.name}
-          </option>
-        ))}
-      </select>
-      <span className="hint m-0">Viewing this company&apos;s data as read-only — no edits, reassignments, or remarks.</span>
+    <div className="panel mb-5" style={{ padding: 20 }}>
+      <span className="pill mb-3 inline-block bg-accent-soft text-accent">Super Admin View — Read Only</span>
+      <div className="field mb-0" style={{ maxWidth: 280 }}>
+        <label>Company</label>
+        <select
+          value={companyId || ""}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={loading}
+          className="disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {companies.length === 0 && <option value="">No companies yet</option>}
+          {companies.map((c) => (
+            <option key={c._id} value={c._id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <p className="hint m-0 mt-3">Viewing this company&apos;s data as read-only — no edits, reassignments, or remarks.</p>
     </div>
   );
 }

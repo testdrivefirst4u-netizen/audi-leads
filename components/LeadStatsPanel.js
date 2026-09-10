@@ -1,41 +1,29 @@
-function BarList({ rows, emptyText }) {
-  if (!rows || rows.length === 0) {
-    return <div className="empty-state" style={{ padding: "20px 0" }}>{emptyText}</div>;
-  }
-  const max = Math.max(...rows.map((r) => r.count), 1);
-
-  return (
-    <div className="bar-list">
-      {rows.map((row) => (
-        <div className="bar-row" key={row.label}>
-          <span className="bar-label" title={row.label}>
-            {row.label}
-          </span>
-          <div className="bar-track">
-            <div className="bar-fill" style={{ width: `${(row.count / max) * 100}%` }} />
-          </div>
-          <span className="bar-count">{row.count}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
+import BarListChart from "./BarListChart";
+import { PhoneIcon } from "./icons";
 
 export default function LeadStatsPanel({ stats }) {
   if (!stats) return null;
 
+  // "Not Filled" is a non-answer, not a third option alongside Yes/No — it
+  // shouldn't compete visually with the real signal (BarListChart renders a
+  // muted row for it via the `muted` flag).
+  const exchangeRows = (stats.exchange || []).map((row) => (row.label === "Not Filled" ? { ...row, muted: true } : row));
+
   return (
-    <div className="stats-panel">
-      <div className="stats-card">
+    <div className="dash-panel-grid">
+      <div className="dash-panel mb-0">
         <h3>Exchange Plan</h3>
-        <BarList rows={stats.exchange} emptyText="No data" />
+        <BarListChart data={exchangeRows} emptyText="No data" />
       </div>
-      <div className="stats-card">
+      <div className="dash-panel mb-0">
         <h3>Showroom</h3>
-        <BarList rows={stats.showroom} emptyText="No showroom data in this sheet" />
+        <BarListChart data={stats.showroom} emptyText="No showroom data in this sheet" />
       </div>
-      <div className="stats-card">
-        <h3>Calls Made</h3>
+      <div className="dash-panel mb-0">
+        <h3 className="flex items-center gap-1.5">
+          <PhoneIcon className="text-muted" />
+          Calls Made
+        </h3>
         <div className="hero-number">{stats.totalCalls ?? 0}</div>
         <div className="hint">Total call attempts logged across every lead</div>
       </div>
