@@ -18,10 +18,11 @@ const PAGE_SIZE = 20;
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);
   if (!session) return { redirect: { destination: "/login", permanent: false } };
-  // Super admin isn't redirected away anymore — they get a read-only,
-  // company-picker-driven view of this same page (see CompanySwitcher).
+  // Super admin isn't redirected away anymore — they get a company-picker-
+  // driven view of this same page (see CompanySwitcher) and can work the
+  // chosen company's leads exactly as its admin would.
   if (session.role === "super_admin") {
-    return { props: { username: session.username, role: "super_admin", initialHot: false } };
+    return { props: { username: session.username, role: "super_admin", initialHot: false, initialSearch: context.query.q || "" } };
   }
   const branding = await getCompanyBranding(session.companyId);
   return {
@@ -29,6 +30,7 @@ export async function getServerSideProps(context) {
       username: session.username,
       role: session.role || "admin",
       initialHot: context.query.hot === "true",
+      initialSearch: context.query.q || "",
       ...branding,
     },
   };
@@ -58,12 +60,12 @@ function resolveExportRange(preset, custom) {
   return { from: toISODate(from), to: toISODate(to) };
 }
 
-export default function LeadsPage({ username, role, initialHot, companyName, companyLogoUrl, companyBrandColor }) {
+export default function LeadsPage({ username, role, initialHot, initialSearch, companyName, companyLogoUrl, companyBrandColor }) {
   const toast = useToast();
   const isSuperAdminView = role === "super_admin";
   const [viewCompanyId, setViewCompanyId] = useState("");
   const [leads, setLeads] = useState([]);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch || "");
   const [model, setModel] = useState("");
   const [status, setStatus] = useState("");
   const [agentFilter, setAgentFilter] = useState("");
@@ -243,9 +245,63 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
     setPage(1);
   }
 
+  // Same query the table is currently showing, minus paging — used by
+  // "Select all N matching" so a bulk action can cover every page.
+  async function fetchAllMatchingIds() {
+    const { from, to } = resolveExportRange(exportPreset, customRange);
+    const params = new URLSearchParams({
+      search,
+      model,
+      status,
+      agent: agentFilter,
+      location: locationFilter,
+      source: sourceFilter,
+      channel: channelFilter,
+      campaign: campaignFilter,
+      bucket: bucketFilter,
+      followUpFilter,
+      hot: hotOnly ? "true" : "",
+      from: from || "",
+      to: to || "",
+      idsOnly: "1",
+    });
+    if (isSuperAdminView) params.set("companyId", viewCompanyId);
+    const res = await apiFetch(`/api/leads?${params.toString()}`);
+    if (!res.ok) throw new Error("Failed to load matching leads");
+    const data = await res.json();
+    return { ids: data.ids || [], total: data.total || 0 };
+  }
+
+  async function handleBulkAssign(leadIds, agentId) {
+    const params = new URLSearchParams();
+    if (isSuperAdminView) params.set("companyId", viewCompanyId);
+    const res = await apiFetch(`/api/leads/bulk-assign${params.toString() ? `?${params}` : ""}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ leadIds, agentId: agentId || null }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast(data.error || "Failed to assign leads", { type: "err" });
+      return false;
+    }
+    const byId = new Map((data.leads || []).map((l) => [l._id, l]));
+    setLeads((prev) => prev.map((l) => byId.get(l._id) || l));
+    toast(
+      agentId
+        ? `${data.updated} lead${data.updated === 1 ? "" : "s"} assigned to ${data.agent?.name || "agent"}`
+        : `${data.updated} lead${data.updated === 1 ? "" : "s"} unassigned`
+    );
+    // Agent filter counts / agent-scoped views may have changed — refresh
+    // the page in the background so the next poll doesn't surprise anyone.
+    fetchLeads(filters);
+    return true;
+  }
+
   async function handleReassign(leadId, agentId) {
-    if (isSuperAdminView) return undefined; // read-only view — no mutations
-    const res = await apiFetch(`/api/leads/${leadId}/assign`, {
+    const params = new URLSearchParams();
+    if (isSuperAdminView) params.set("companyId", viewCompanyId);
+    const res = await apiFetch(`/api/leads/${leadId}/assign${params.toString() ? `?${params}` : ""}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ agentId: agentId || null }),
@@ -330,7 +386,7 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
   return (
     <Layout username={username} role={role} companyName={companyName} companyLogoUrl={companyLogoUrl} companyBrandColor={companyBrandColor}>
       <h1 className="page-title">Leads</h1>
-      {isSuperAdminView && <CompanySwitcher companyId={viewCompanyId} onChange={handleViewCompanyChange} />}
+      {isSuperAdminView && <CompanySwitcher companyId={viewCompanyId} onChange={handleViewCompanyChange} editable />}
       <LeadsTable
         leads={leads}
         loading={loading}
@@ -360,8 +416,9 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
         followUpTabs={followUpTabs}
         agents={agents}
         role={isSuperAdminView ? "admin" : role}
-        readOnly={isSuperAdminView}
         onReassign={handleReassign}
+        onBulkAssign={isSuperAdminView || role === "admin" ? handleBulkAssign : undefined}
+        onSelectAllMatching={isSuperAdminView || role === "admin" ? fetchAllMatchingIds : undefined}
         hotOnly={hotOnly}
         onHotOnlyChange={handleHotOnlyChange}
         sortBy={sortBy}
@@ -385,7 +442,7 @@ export default function LeadsPage({ username, role, initialHot, companyName, com
         onLeadUpdated={handleLeadUpdated}
         onLeadDeleted={handleLeadDeleted}
         canManageLead={isSuperAdminView}
-        manageCompanyId={viewCompanyId}
+        manageCompanyId={isSuperAdminView ? viewCompanyId : ""}
       />
     </Layout>
   );

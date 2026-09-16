@@ -3,6 +3,7 @@ import { apiFetch } from "../lib/apiFetch";
 import { useToast } from "./ToastProvider";
 import { LEAD_STATUSES, CANONICAL_MODELS, statusColor, pickField, prettify, prettyBucket, bucketColor, BUCKET_ACTIONS } from "../lib/leadFields";
 import { WhatsAppIcon, PhoneIcon, NoteIcon, CalendarIcon } from "./icons";
+import { enquiryTimeline } from "../lib/leadFields";
 
 function formatDate(d) {
   if (!d) return "-";
@@ -164,6 +165,19 @@ export default function LeadDetailModal({
 
   if (!lead) return null;
 
+  const timeline = enquiryTimeline(lead);
+  const firstEnquiry = timeline[0];
+  const latestEnquiry = timeline[timeline.length - 1];
+
+  // A company member's session already carries their companyId; the super
+  // admin has none, so every mutation on their behalf names the company
+  // they picked in the CompanySwitcher (see lib/auth.js's
+  // scopeSuperAdminToCompany).
+  function leadUrl(path = "") {
+    const base = `/api/leads/${lead._id}${path}`;
+    return manageCompanyId ? `${base}?companyId=${encodeURIComponent(manageCompanyId)}` : base;
+  }
+
   function startEdit() {
     setEditForm({
       name: lead.name || "",
@@ -177,7 +191,7 @@ export default function LeadDetailModal({
   async function saveEdit() {
     setSavingEdit(true);
     try {
-      const res = await apiFetch(`/api/leads/${lead._id}?companyId=${manageCompanyId}`, {
+      const res = await apiFetch(leadUrl(), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editForm),
@@ -201,7 +215,7 @@ export default function LeadDetailModal({
     }
     setDeleting(true);
     try {
-      const res = await apiFetch(`/api/leads/${lead._id}?companyId=${manageCompanyId}`, { method: "DELETE" });
+      const res = await apiFetch(leadUrl(), { method: "DELETE" });
       if (!res.ok) throw new Error((await res.json()).error || "Failed to delete lead");
       toast("Lead deleted");
       onDeleted?.(lead._id);
@@ -215,7 +229,7 @@ export default function LeadDetailModal({
 
   async function toggleFollowUp(followUpId, completed) {
     try {
-      const res = await apiFetch(`/api/leads/${lead._id}/followups/${followUpId}`, {
+      const res = await apiFetch(leadUrl(`/followups/${followUpId}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ completed }),
@@ -231,7 +245,7 @@ export default function LeadDetailModal({
 
   async function snoozeFollowUp(followUpId) {
     try {
-      const res = await apiFetch(`/api/leads/${lead._id}/followups/${followUpId}`, {
+      const res = await apiFetch(leadUrl(`/followups/${followUpId}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: tomorrowISODate() }),
@@ -250,7 +264,7 @@ export default function LeadDetailModal({
   async function changeBucket(targetBucket) {
     setChangingBucket(true);
     try {
-      const res = await apiFetch(`/api/leads/${lead._id}/bucket`, {
+      const res = await apiFetch(leadUrl("/bucket"), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ bucket: targetBucket }),
@@ -270,7 +284,7 @@ export default function LeadDetailModal({
   async function changeStatus(newStatus) {
     setSavingStatus(true);
     try {
-      const res = await apiFetch(`/api/leads/${lead._id}/status`, {
+      const res = await apiFetch(leadUrl("/status"), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
@@ -298,7 +312,7 @@ export default function LeadDetailModal({
       let followUpsCleared = 0;
 
       if (remarkText.trim()) {
-        const res = await apiFetch(`/api/leads/${lead._id}/remarks`, {
+        const res = await apiFetch(leadUrl("/remarks"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: remarkText }),
@@ -310,7 +324,7 @@ export default function LeadDetailModal({
       }
 
       if (logCall) {
-        const res = await apiFetch(`/api/leads/${lead._id}/calls`, {
+        const res = await apiFetch(leadUrl("/calls"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ note: callNote }),
@@ -322,7 +336,7 @@ export default function LeadDetailModal({
       }
 
       if (followDate) {
-        const res = await apiFetch(`/api/leads/${lead._id}/followups`, {
+        const res = await apiFetch(leadUrl("/followups"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ date: followDate, note: followNote }),
@@ -392,9 +406,19 @@ export default function LeadDetailModal({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal max-w-[920px]" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>
-            {lead.name || "Lead"} <span className="hint">({lead.model})</span>
-          </h2>
+          <div>
+            <h2>
+              {lead.name || "Lead"} <span className="hint">({lead.model})</span>
+            </h2>
+            {timeline.length > 1 && (
+              <div className="hint mt-0.5">
+                <span className="pill bg-[#fffbeb] text-[#b45309]">🟡 Enquired {timeline.length}× for this model</span>{" "}
+                <span>
+                  · latest <strong>{formatDate(latestEnquiry.date)}</strong> · first {formatDateOnly(firstEnquiry.date)}
+                </span>
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {canManageLead && !editing && (
               <>
@@ -595,10 +619,20 @@ export default function LeadDetailModal({
                       value={prettify(pickField(data, (col.matchers || []).map((m) => new RegExp(m, "i"))))}
                     />
                   ))}
-                  <Field label="Created" value={formatDate(lead.sheetCreatedAt)} />
+                  <Field label={timeline.length > 1 ? "First Enquiry" : "Created"} value={formatDate(firstEnquiry.date)} />
                   <Field
-                    label="Repeat Enquiries"
-                    value={lead.duplicateCount > 0 ? `${lead.duplicateCount} repeat${lead.duplicateCount === 1 ? "" : "s"}` : "None"}
+                    label="Latest Enquiry"
+                    value={
+                      timeline.length > 1 ? (
+                        <span className="font-semibold text-[#b45309]">{formatDate(latestEnquiry.date)}</span>
+                      ) : (
+                        <span className="text-muted">Same as created</span>
+                      )
+                    }
+                  />
+                  <Field
+                    label="Total Enquiries"
+                    value={timeline.length > 1 ? `${timeline.length} (${timeline.length - 1} repeat${timeline.length === 2 ? "" : "s"})` : "1"}
                   />
                   <Field label="Pending Follow-ups" value={pendingFollowUps > 0 ? pendingFollowUps : "None"} />
                 </div>
@@ -667,28 +701,55 @@ export default function LeadDetailModal({
                 )}
               </Section>
 
-              {(lead.enquiryHistory || []).length > 1 && (
-                <Section
-                  title="Enquiry History"
-                  meta={`${lead.enquiryHistory.length} total, ${lead.duplicateCount || 0} repeat`}
-                  collapsible
-                  defaultOpen={false}
-                >
-                  <ul className="timeline">
-                    {[...lead.enquiryHistory]
-                      .sort((a, b) => new Date(a.date) - new Date(b.date))
-                      .map((e, i) => (
-                        <li key={`${e.model}-${e.rowNumber}-${i}`}>
-                          <span className={`pill ${i === 0 ? "bg-[#ecfdf5] text-[#047857]" : "bg-[#fef2f2] text-[#b91c1c]"}`}>
-                            {i === 0 ? "🟢 Original" : "🔴 Duplicate Lead"}
-                          </span>
-                          <span className="timeline-date">{formatDate(e.date)}</span>
-                          <span className="text-muted">{e.model}</span>
-                        </li>
-                      ))}
-                  </ul>
-                </Section>
-              )}
+              <Section
+                title="Enquiry History"
+                meta={timeline.length > 1 ? `${timeline.length} enquiries · latest is current` : "1 enquiry"}
+                collapsible
+                defaultOpen={timeline.length > 1}
+              >
+                <div className="hint mb-2">
+                  Every time this customer submitted an enquiry for {lead.canonicalModel || lead.model}, newest first. The
+                  latest one is the current enquiry; this lead was originally created from the first.
+                </div>
+                <ul className="timeline">
+                  {[...timeline].reverse().map((e) => (
+                    <li
+                      key={`${e.model}-${e.rowNumber}-${e.number}`}
+                      className={e.isLatest && timeline.length > 1 ? "rounded-md bg-[#fffbeb] px-2 -mx-2" : ""}
+                    >
+                      <span
+                        className={`pill ${
+                          e.isLatest && timeline.length > 1
+                            ? "bg-[#b45309] text-white"
+                            : e.isFirst
+                            ? "bg-[#ecfdf5] text-[#047857]"
+                            : "bg-[#f1f5f9] text-[#475569]"
+                        }`}
+                        style={{ minWidth: 118, justifyContent: "center" }}
+                      >
+                        {e.isLatest && timeline.length > 1
+                          ? "★ Latest (current)"
+                          : e.isFirst
+                          ? timeline.length > 1
+                            ? "First enquiry"
+                            : "Only enquiry"
+                          : `Repeat #${e.number - 1}`}
+                      </span>
+                      <span className="text-muted" style={{ minWidth: 44 }}>
+                        #{e.number} of {e.total}
+                      </span>
+                      <span className={`timeline-date ${e.isLatest && timeline.length > 1 ? "font-semibold text-ink" : ""}`}>
+                        {formatDate(e.date)}
+                      </span>
+                      <span className="text-muted">
+                        {e.source || "Meta Ads"}
+                        {e.model && ` · ${e.model}`}
+                        {e.rowNumber != null && ` · row ${e.rowNumber + 1}`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
 
               <Section title="Sheet Details" collapsible defaultOpen={false}>
                 <div className="kv-grid">

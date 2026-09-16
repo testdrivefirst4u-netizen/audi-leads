@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const connectDB = require("../../lib/db");
 const Lead = require("../../models/Lead");
 const Settings = require("../../models/Settings");
@@ -32,6 +33,32 @@ function dateKey(d) {
   return new Date(d).toISOString().slice(0, 10);
 }
 
+// How many enquiries (of any kind) landed in a window, counting every entry
+// in every lead's enquiryHistory — so a customer's 2nd/3rd submission for
+// the same model counts even though it never became a new Lead document.
+// Entries pointing at the same sheet row are collapsed first (an old
+// overlapping-sync bug could record one row twice), matching what the lead
+// detail's Enquiry History shows. "Repeat enquiries in the window" is then
+// simply this minus the new leads created in the same window, since each
+// new lead's first history entry is dated by its own sheetCreatedAt.
+async function countEnquiriesBetween(baseFilter, start, end) {
+  // Unlike find()/countDocuments(), aggregate() does not cast query values
+  // through the schema — a string companyId (a super-admin session viewing
+  // a company) would silently match nothing here.
+  const match = {};
+  for (const [key, value] of Object.entries(baseFilter)) {
+    match[key] = typeof value === "string" && mongoose.isValidObjectId(value) ? new mongoose.Types.ObjectId(value) : value;
+  }
+  const rows = await Lead.aggregate([
+    { $match: { ...match, lastEnquiryAt: { $gte: start } } },
+    { $unwind: "$enquiryHistory" },
+    { $match: { "enquiryHistory.date": { $gte: start, $lt: end } } },
+    { $group: { _id: { lead: "$_id", model: "$enquiryHistory.model", row: "$enquiryHistory.rowNumber" } } },
+    { $count: "n" },
+  ]);
+  return rows[0]?.n || 0;
+}
+
 async function computeStats(req) {
   const { month = "" } = req.query; // optional "YYYY-MM" — blank means all-time
 
@@ -61,14 +88,22 @@ async function computeStats(req) {
   startOfToday.setHours(0, 0, 0, 0);
   const startOfYesterday = new Date(startOfToday);
   startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-  const [totalRecords, newLeadsToday, newLeadsYesterday] = await Promise.all([
+  const endOfToday = new Date(startOfToday);
+  endOfToday.setDate(endOfToday.getDate() + 1);
+  const [totalRecords, newLeadsToday, newLeadsYesterday, enquiriesToday, enquiriesYesterday] = await Promise.all([
     Lead.countDocuments(baseFilter),
     // The sheet's own create_time, not our DB insert time — a lead entered
     // on the sheet last week but only just synced today (e.g. after a sync
     // gap) shouldn't count as "new today".
     Lead.countDocuments({ ...baseFilter, sheetCreatedAt: { $gte: startOfToday } }),
     Lead.countDocuments({ ...baseFilter, sheetCreatedAt: { $gte: startOfYesterday, $lt: startOfToday } }),
+    countEnquiriesBetween(baseFilter, startOfToday, endOfToday),
+    countEnquiriesBetween(baseFilter, startOfYesterday, startOfToday),
   ]);
+  // Repeat enquiries that arrived in the window without creating a lead —
+  // the part of today's activity the "new leads" number alone hides.
+  const duplicatesToday = Math.max(0, enquiriesToday - newLeadsToday);
+  const duplicatesYesterday = Math.max(0, enquiriesYesterday - newLeadsYesterday);
 
   const leads = await Lead.find(filter)
     .select("model canonicalModel data status bucket sheetCreatedAt calls remarks leadType duplicateCount enquiryHistory source campaign")
@@ -160,6 +195,10 @@ async function computeStats(req) {
     totalRecords,
     newLeadsToday,
     newLeadsYesterday,
+    duplicatesToday,
+    duplicatesYesterday,
+    enquiriesToday,
+    enquiriesYesterday,
     totalCalls,
     hotCount,
     exchange: toSortedArray(exchangeCounts),

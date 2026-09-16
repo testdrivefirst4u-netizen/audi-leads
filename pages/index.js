@@ -133,15 +133,26 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
         <div className="dash-card" style={{ "--dash-accent": "#eda100" }}>
           <div className="label">Duplicate Leads</div>
           <div className="value">{loading ? <Skeleton width={60} /> : stats?.duplicateDetection?.duplicateEnquiries ?? 0}</div>
+          {!loading && stats?.duplicatesToday > 0 && <div className="dash-card-caption">+{stats.duplicatesToday} today</div>}
         </div>
         <div className="dash-card" style={{ "--dash-accent": "#1baf7a" }}>
           <div className="label">Today's Leads</div>
           <div className="value">{loading ? <Skeleton width={60} /> : stats?.newLeadsToday ?? 0}</div>
           {!loading && <TodayDelta today={stats?.newLeadsToday} yesterday={stats?.newLeadsYesterday} />}
         </div>
+        <div className="dash-card" style={{ "--dash-accent": "#b45309" }}>
+          <div className="label">Today's Duplicates</div>
+          <div className="value">{loading ? <Skeleton width={60} /> : stats?.duplicatesToday ?? 0}</div>
+          {!loading && (
+            <div className="dash-card-caption">
+              repeat enquiries today · {stats?.enquiriesToday ?? 0} total enquir{(stats?.enquiriesToday ?? 0) === 1 ? "y" : "ies"} received
+            </div>
+          )}
+        </div>
         <div className="dash-card" style={{ "--dash-accent": "#94a3b8" }}>
           <div className="label">Yesterday's Leads</div>
           <div className="value">{loading ? <Skeleton width={60} /> : stats?.newLeadsYesterday ?? 0}</div>
+          {!loading && stats?.duplicatesYesterday > 0 && <div className="dash-card-caption">+{stats.duplicatesYesterday} duplicates</div>}
         </div>
       </div>
 

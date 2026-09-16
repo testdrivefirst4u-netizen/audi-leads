@@ -6,7 +6,7 @@ const { requireCompanyMemberOrSuperAdminView } = require("../../lib/auth");
 const { pickField, FIELD_MATCHERS, isUrgentTimeline, nextFollowUp, bucketFilterValue, escapeRegExp, effectiveStatuses } = require("../../lib/leadFields");
 const { withCache } = require("../../lib/serverCache");
 
-const SORTABLE_FIELDS = new Set(["name", "canonicalModel", "status", "sheetCreatedAt"]);
+const SORTABLE_FIELDS = new Set(["name", "canonicalModel", "status", "sheetCreatedAt", "lastEnquiryAt"]);
 // The model/source filter-dropdown option lists barely change (only when a
 // genuinely new model tab or lead source shows up) but this endpoint is
 // polled every few seconds — recomputing the full distinct-value scan on
@@ -135,7 +135,11 @@ async function handler(req, res) {
     pageSize = "20",
     sortBy = "sheetCreatedAt",
     sortDir = "desc",
+    // "Select all N matching" on the Leads page — same filters, but only
+    // the ids come back (capped), for feeding /api/leads/bulk-assign.
+    idsOnly = "",
   } = req.query;
+  const IDS_ONLY_CAP = 5000;
 
   const filter = { companyId: req.session.companyId };
   if (search) {
@@ -276,6 +280,10 @@ async function handler(req, res) {
       return sortDirection === 1 ? cmp : -cmp;
     });
 
+    if (idsOnly === "1") {
+      return res.status(200).json({ ids: hotLeads.slice(0, IDS_ONLY_CAP).map((l) => String(l._id)), total: hotLeads.length });
+    }
+
     const total = hotLeads.length;
     const start = (pageNum - 1) * pageSizeNum;
     const leads = hotLeads.slice(start, start + pageSizeNum);
@@ -298,6 +306,14 @@ async function handler(req, res) {
       followUpTabs,
       leadFieldColumns,
     });
+  }
+
+  if (idsOnly === "1") {
+    const [docs, matching] = await Promise.all([
+      Lead.find(filter).sort({ [sortField]: sortDirection }).limit(IDS_ONLY_CAP).select("_id").lean(),
+      Lead.countDocuments(filter),
+    ]);
+    return res.status(200).json({ ids: docs.map((d) => String(d._id)), total: matching });
   }
 
   const [[leads, total], { models, sources, statuses, locations, channels, campaigns }, leadFieldColumns] = await Promise.all([

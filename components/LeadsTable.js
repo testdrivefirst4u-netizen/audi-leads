@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Skeleton from "react-loading-skeleton";
 import LeadDetailModal from "./LeadDetailModal";
 import { FaWhatsapp } from "react-icons/fa6";
@@ -60,6 +60,23 @@ function LeadTypeBadge({ lead }) {
   }
   return (
     <span className="pill bg-[#ecfdf5] text-[#047857]">🟢 New Lead</span>
+  );
+}
+
+// The most recent submission for this customer+model — for a repeat
+// enquirer this is the date a rep should treat as "current", not the
+// original created date the lead document carries.
+function LatestEnquiryCell({ lead }) {
+  const repeats = lead.duplicateCount || 0;
+  const latest = lead.lastEnquiryAt || lead.sheetCreatedAt;
+  if (repeats === 0) return <span className="text-muted">{formatDate(latest)}</span>;
+  return (
+    <div>
+      <div className="font-semibold text-[#b45309]" title="Most recent enquiry — the current one">
+        ★ {formatDate(latest)}
+      </div>
+      <div className="hint m-0">{repeats + 1} enquiries · first {formatDate(lead.sheetCreatedAt)}</div>
+    </div>
   );
 }
 
@@ -215,8 +232,85 @@ export default function LeadsTable({
   onLeadDeleted,
   canManageLead,
   manageCompanyId,
+  onBulkAssign,
+  onSelectAllMatching,
 }) {
   const [selected, setSelected] = useState(null);
+
+  // Bulk assignment — checkbox selection lives here (ids only), the write
+  // itself is the page's onBulkAssign. Selection is per current page; the
+  // "Select all N matching" link extends it to every lead behind the
+  // current filters via onSelectAllMatching.
+  const canBulkAssign = Boolean(onBulkAssign) && role === "admin" && !readOnly;
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkAgentId, setBulkAgentId] = useState("");
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [selectingAll, setSelectingAll] = useState(false);
+  const [allMatchingTotal, setAllMatchingTotal] = useState(0); // >0 once "select all matching" was used
+  const pageIds = useMemo(() => leads.map((l) => l._id), [leads]);
+  const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const someOnPageSelected = pageIds.some((id) => selectedIds.has(id));
+
+  // A selection made from "select all matching" survives paging; a plain
+  // per-page selection is dropped when the filters change the visible set
+  // enough that none of it is on screen — otherwise a stale count would sit
+  // in the bar with nothing checked.
+  useEffect(() => {
+    if (allMatchingTotal > 0) return;
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const onScreen = [...prev].filter((id) => pageIds.includes(id));
+      return onScreen.length === prev.size ? prev : new Set(onScreen);
+    });
+  }, [pageIds, allMatchingTotal]);
+
+  function toggleOne(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setAllMatchingTotal(0);
+  }
+
+  function togglePage() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+    setAllMatchingTotal(0);
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+    setAllMatchingTotal(0);
+  }
+
+  async function selectAllMatching() {
+    if (!onSelectAllMatching) return;
+    setSelectingAll(true);
+    try {
+      const { ids, total: matching } = await onSelectAllMatching();
+      setSelectedIds(new Set(ids));
+      setAllMatchingTotal(matching);
+    } finally {
+      setSelectingAll(false);
+    }
+  }
+
+  async function runBulkAssign() {
+    if (selectedIds.size === 0) return;
+    setBulkAssigning(true);
+    try {
+      const ok = await onBulkAssign([...selectedIds], bulkAgentId || null);
+      if (ok) clearSelection();
+    } finally {
+      setBulkAssigning(false);
+    }
+  }
 
   // Compiled once per leadFieldColumns change, not per cell render — each
   // column's `matchers` are regex source strings (see models/Settings.js).
@@ -469,6 +563,57 @@ export default function LeadsTable({
         </div>
       ) : (
         <>
+          {canBulkAssign && (
+            <div
+              className={`mx-5 mb-3 flex flex-wrap items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[13px] ${
+                selectedIds.size > 0 ? "border-accent/40 bg-accent-soft" : "border-border bg-bg"
+              }`}
+            >
+              <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                <input
+                  type="checkbox"
+                  checked={allOnPageSelected}
+                  ref={(el) => el && (el.indeterminate = !allOnPageSelected && someOnPageSelected)}
+                  onChange={togglePage}
+                />
+                {selectedIds.size === 0
+                  ? "Select all on this page"
+                  : allMatchingTotal > 0
+                  ? `All ${selectedIds.size} matching leads selected`
+                  : `${selectedIds.size} selected`}
+              </label>
+              {onSelectAllMatching && allOnPageSelected && allMatchingTotal === 0 && total > pageIds.length && (
+                <button type="button" className="text-accent font-semibold underline-offset-2 hover:underline" onClick={selectAllMatching} disabled={selectingAll}>
+                  {selectingAll ? "Selecting…" : `Select all ${total} matching leads`}
+                </button>
+              )}
+              {selectedIds.size > 0 && (
+                <>
+                  <span className="text-muted">·</span>
+                  <span className="toolbar-label m-0">Assign to</span>
+                  <select value={bulkAgentId} onChange={(e) => setBulkAgentId(e.target.value)} className="text-[13px]" style={{ minWidth: 160 }}>
+                    <option value="">Unassigned</option>
+                    {agents.map((a) => (
+                      <option key={a._id} value={a._id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" className="btn-sm btn-export" onClick={runBulkAssign} disabled={bulkAssigning}>
+                    {bulkAssigning
+                      ? "Assigning…"
+                      : bulkAgentId
+                      ? `Assign ${selectedIds.size} lead${selectedIds.size === 1 ? "" : "s"}`
+                      : `Unassign ${selectedIds.size} lead${selectedIds.size === 1 ? "" : "s"}`}
+                  </button>
+                  <button type="button" className="btn-sm" onClick={clearSelection} disabled={bulkAssigning}>
+                    Clear
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Mobile card list — the 17-column table below is unusable on a
               phone even with the sticky action column, so small screens get
               a stacked card per lead instead (tap anywhere to open). */}
@@ -482,7 +627,17 @@ export default function LeadsTable({
                   className="rounded-xl border border-border bg-card p-3.5 cursor-pointer active:bg-bg transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <NameCell lead={lead} />
+                    <div className="flex items-center gap-2 min-w-0">
+                      {canBulkAssign && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(lead._id)}
+                          onChange={() => toggleOne(lead._id)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      )}
+                      <NameCell lead={lead} />
+                    </div>
                     <StatusBadge status={lead.status} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -494,6 +649,11 @@ export default function LeadsTable({
                     <PhoneCell phone={lead.phone} />
                   </div>
                   {remark && <div className="mb-2 text-xs remark-cell text-muted">{remark}</div>}
+                  {(lead.duplicateCount || 0) > 0 && (
+                    <div className="mb-2 text-xs">
+                      <LatestEnquiryCell lead={lead} />
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-2 pt-2 text-xs border-t border-border">
                     <span onClick={(e) => e.stopPropagation()}>
                       <AgentCell lead={lead} agents={agents} role={role} readOnly={readOnly} onReassign={handleReassign} />
@@ -509,6 +669,17 @@ export default function LeadsTable({
             <table>
               <thead>
                 <tr>
+                  {canBulkAssign && (
+                    <th style={{ width: 36 }}>
+                      <input
+                        type="checkbox"
+                        checked={allOnPageSelected}
+                        ref={(el) => el && (el.indeterminate = !allOnPageSelected && someOnPageSelected)}
+                        onChange={togglePage}
+                        title="Select all on this page"
+                      />
+                    </th>
+                  )}
                   <th>#</th>
                   <SortableHeader label="Model" field="canonicalModel" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th
@@ -534,6 +705,7 @@ export default function LeadsTable({
                   <th>Latest Remark</th>
                   <th>Next Follow-up</th>
                   <SortableHeader label="Created" field="sheetCreatedAt" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
+                  <SortableHeader label="Latest Enquiry" field="lastEnquiryAt" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th className="sticky right-0 z-[1] bg-[#fafbfd]"></th>
                 </tr>
               </thead>
@@ -544,8 +716,13 @@ export default function LeadsTable({
                     <tr
                       key={lead._id}
                       onClick={() => setSelected(lead)}
-                      className="transition-colors cursor-pointer hover:bg-bg"
+                      className={`transition-colors cursor-pointer hover:bg-bg ${selectedIds.has(lead._id) ? "bg-accent-soft" : ""}`}
                     >
+                      {canBulkAssign && (
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <input type="checkbox" checked={selectedIds.has(lead._id)} onChange={() => toggleOne(lead._id)} />
+                        </td>
+                      )}
                       <td className="text-muted">{(page - 1) * pageSize + index + 1}</td>
                       <td>
                         <ModelBadge lead={lead} />
@@ -581,6 +758,9 @@ export default function LeadsTable({
                         <FollowUpBadge lead={lead} />
                       </td>
                       <td className="text-muted">{formatDate(lead.sheetCreatedAt)}</td>
+                      <td>
+                        <LatestEnquiryCell lead={lead} />
+                      </td>
                       <td className="sticky right-0 z-[1] bg-card" onClick={(e) => e.stopPropagation()}>
                         <button className="btn-sm" onClick={() => setSelected(lead)}>
                           {readOnly ? "View" : "Manage"}
