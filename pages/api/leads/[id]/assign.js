@@ -1,7 +1,7 @@
 const connectDB = require("../../../../lib/db");
 const Lead = require("../../../../models/Lead");
 const Agent = require("../../../../models/Agent");
-const { requireAdmin } = require("../../../../lib/auth");
+const { requireAdminOrSuperAdmin } = require("../../../../lib/auth");
 
 async function handler(req, res) {
   if (req.method !== "PATCH") return res.status(405).json({ error: "Method not allowed" });
@@ -29,4 +29,4 @@ async function handler(req, res) {
   res.status(200).json({ lead });
 }
 
-export default requireAdmin(handler);
+export default requireAdminOrSuperAdmin(handler);

@@ -1,6 +1,6 @@
 const connectDB = require("../../../../../lib/db");
 const Lead = require("../../../../../models/Lead");
-const { requireCompanyMember } = require("../../../../../lib/auth");
+const { requireCompanyMemberOrSuperAdmin } = require("../../../../../lib/auth");
 const { leadOwnershipFilter } = require("../../../../../lib/leadAccess");
 const { invalidate } = require("../../../../../lib/serverCache");
 
@@ -41,4 +41,4 @@ async function handler(req, res) {
   res.status(200).json({ lead });
 }
 
-export default requireCompanyMember(handler);
+export default requireCompanyMemberOrSuperAdmin(handler);

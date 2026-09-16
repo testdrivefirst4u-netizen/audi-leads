@@ -110,7 +110,7 @@ export default function AgentsPanel({ role }) {
 
   return (
     <div>
-      {isSuperAdminView && <CompanySwitcher companyId={viewCompanyId} onChange={setViewCompanyId} />}
+      {isSuperAdminView && <CompanySwitcher companyId={viewCompanyId} onChange={setViewCompanyId} editable />}
 
       <div className="panel mt-6">
         <div className="panel-header">

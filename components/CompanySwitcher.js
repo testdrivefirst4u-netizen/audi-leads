@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../lib/apiFetch";
 
-// Super-admin-only control shown at the top of Leads/Dashboard/Reports —
-// picks which company's data to view (read-only monitoring, no session of
-// its own belongs to a company, so every page it appears on must know which
-// one is currently selected before it can fetch anything).
-export default function CompanySwitcher({ companyId, onChange }) {
+// Super-admin-only control shown at the top of Leads/Dashboard/Reports/Agents
+// — picks which company's data to work with (no super-admin session belongs
+// to a company, so every page it appears on must know which one is currently
+// selected before it can fetch anything). Pages that let the super admin
+// change things (Leads, Agents) pass editable so the badge doesn't claim
+// they're read-only; Dashboard/Reports leave it off.
+export default function CompanySwitcher({ companyId, onChange, editable = false }) {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -23,7 +25,9 @@ export default function CompanySwitcher({ companyId, onChange }) {
 
   return (
     <div className="panel mb-5" style={{ padding: 20 }}>
-      <span className="pill mb-3 inline-block bg-accent-soft text-accent">Super Admin View — Read Only</span>
+      <span className="pill mb-3 inline-block bg-accent-soft text-accent">
+        {editable ? "Super Admin — Full Access" : "Super Admin View — Read Only"}
+      </span>
       <div className="field mb-0" style={{ maxWidth: 280 }}>
         <label>Company</label>
         <select
@@ -40,7 +44,11 @@ export default function CompanySwitcher({ companyId, onChange }) {
           ))}
         </select>
       </div>
-      <p className="hint m-0 mt-3">Viewing this company&apos;s data as read-only — no edits, reassignments, or remarks.</p>
+      <p className="hint m-0 mt-3">
+        {editable
+          ? "Acting on this company's data with the same access as its admin — edits, reassignments, and remarks are saved to this company."
+          : "Viewing this company's data as read-only."}
+      </p>
     </div>
   );
 }
