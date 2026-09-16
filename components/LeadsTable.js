@@ -302,10 +302,10 @@ export default function LeadsTable({
   }
 
   async function runBulkAssign() {
-    if (selectedIds.size === 0) return;
+    if (selectedIds.size === 0 || !bulkAgentId) return;
     setBulkAssigning(true);
     try {
-      const ok = await onBulkAssign([...selectedIds], bulkAgentId || null);
+      const ok = await onBulkAssign([...selectedIds], bulkAgentId === "__unassign__" ? null : bulkAgentId);
       if (ok) clearSelection();
     } finally {
       setBulkAssigning(false);
@@ -591,20 +591,22 @@ export default function LeadsTable({
                 <>
                   <span className="text-muted">·</span>
                   <span className="toolbar-label m-0">Assign to</span>
-                  <select value={bulkAgentId} onChange={(e) => setBulkAgentId(e.target.value)} className="text-[13px]" style={{ minWidth: 160 }}>
-                    <option value="">Unassigned</option>
+                  <select value={bulkAgentId} onChange={(e) => setBulkAgentId(e.target.value)} className="text-[13px]" style={{ minWidth: 180 }}>
+                    <option value="">Choose an agent…</option>
                     {agents.map((a) => (
                       <option key={a._id} value={a._id}>
                         {a.name}
                       </option>
                     ))}
+                    <option value="__unassign__">— Unassign (remove agent)</option>
                   </select>
-                  <button type="button" className="btn-sm btn-export" onClick={runBulkAssign} disabled={bulkAssigning}>
+                  {agents.length === 0 && <span className="hint m-0">No active agents yet — add one on the Agents page.</span>}
+                  <button type="button" className="btn-sm btn-export" onClick={runBulkAssign} disabled={bulkAssigning || !bulkAgentId}>
                     {bulkAssigning
                       ? "Assigning…"
-                      : bulkAgentId
-                      ? `Assign ${selectedIds.size} lead${selectedIds.size === 1 ? "" : "s"}`
-                      : `Unassign ${selectedIds.size} lead${selectedIds.size === 1 ? "" : "s"}`}
+                      : bulkAgentId === "__unassign__"
+                      ? `Unassign ${selectedIds.size} lead${selectedIds.size === 1 ? "" : "s"}`
+                      : `Assign ${selectedIds.size} lead${selectedIds.size === 1 ? "" : "s"}`}
                   </button>
                   <button type="button" className="btn-sm" onClick={clearSelection} disabled={bulkAssigning}>
                     Clear
