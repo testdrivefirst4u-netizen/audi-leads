@@ -243,6 +243,12 @@ export default function EmailReportsRow({ company, onClose }) {
                         } leads.`
                       : "Automatic sending is off — reports can still be sent manually below."}
                     {lastScheduledDate && ` Last automatic send: ${lastScheduledDate}.`}
+                    {dailyEnabled && sendHour > 9 && (
+                      <span className="block mt-1 text-[#b45309]">
+                        Note: on the current hosting plan the scheduler runs once a day at 9:00 AM (Asia/Kolkata). Pick 9:00 AM
+                        or earlier for the report to go out that day.
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

@@ -8,9 +8,12 @@ const { withTiming } = require("../../../lib/perfMonitor");
 // always with `Authorization: Bearer <CRON_SECRET>`. Safe to call as often
 // as you like: lib/emailReports.js's runScheduledReports() only sends each
 // company's report once per calendar day (in that company's timezone) and
-// only once the clock has passed its configured send hour, so an hourly
-// schedule gives every company its own send time while a once-a-day
-// schedule (Vercel Hobby) still works as long as it fires late enough.
+// only once the clock has passed its configured send hour. vercel.json
+// schedules this once a day at 03:30 UTC (09:00 IST) because Vercel's Hobby
+// plan rejects deployments with crons more frequent than daily — on Pro,
+// switch it to hourly ("0 * * * *") so each company's own send hour is
+// honoured exactly; on the daily schedule a company's report goes out at
+// that 09:00 IST run provided its send hour is 9:00 AM or earlier.
 async function handler(req, res) {
   if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
