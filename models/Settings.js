@@ -53,6 +53,29 @@ const SourceColumnOverrideSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Per-company day-wise lead report emails — see lib/emailReports.js. Only
+// the super admin edits this (pages/api/companies/[id]/email-reports.js).
+// `recipients` has no upper bound; `dailyEnabled` gates the scheduled send
+// (pages/api/cron/email-reports.js), which fires once per calendar day in
+// `timezone` at or after `sendHour`. `lastScheduledDate` (a "YYYY-MM-DD"
+// in that timezone) is what makes the cron idempotent — the endpoint can be
+// hit as often as the host likes without ever double-sending a day.
+const EmailReportConfigSchema = new mongoose.Schema(
+  {
+    recipients: { type: [String], default: [] },
+    dailyEnabled: { type: Boolean, default: false },
+    // Hour of day (0-23, in `timezone`) at/after which the daily send fires.
+    sendHour: { type: Number, min: 0, max: 23, default: 9 },
+    // Which day the automatic report covers: "yesterday" (the just-completed
+    // day, for a morning send) or "today" (for an end-of-day send).
+    coverage: { type: String, enum: ["yesterday", "today"], default: "yesterday" },
+    // IANA zone the report's day boundaries and sendHour are interpreted in.
+    timezone: { type: String, default: "Asia/Kolkata" },
+    lastScheduledDate: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
 const SettingsSchema = new mongoose.Schema(
   {
     // Legacy single-tenant lookup key — no longer unique (every company's
@@ -97,6 +120,7 @@ const SettingsSchema = new mongoose.Schema(
     // 1440 = "Daily", for hosts (e.g. Vercel Hobby) where the sync can only
     // realistically run once a day — keeps the Online/Offline threshold accurate.
     syncIntervalMinutes: { type: Number, enum: [1, 5, 15, 1440], default: 1 },
+    emailReports: { type: EmailReportConfigSchema, default: () => ({}) },
     // Advisory lock so two overlapping runSync() calls for the same company
     // (e.g. the local dev scheduler firing again before a long previous run
     // finished) can't both decide the same sheet row is new and each create

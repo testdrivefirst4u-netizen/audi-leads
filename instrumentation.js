@@ -33,4 +33,21 @@ export async function register() {
   console.log(`[local-cron] will sync every ${intervalMinutes} minute(s) via /api/cron/sync`);
   setTimeout(trigger, 5000); // give the server a moment to finish starting up
   setInterval(trigger, intervalMinutes * 60 * 1000);
+
+  // Daily lead-report emails (lib/emailReports.js) — the endpoint itself
+  // decides which companies are actually due, so polling it every 15
+  // minutes just bounds how late after a company's send hour it goes out.
+  const triggerReports = () => {
+    fetch(`http://localhost:${port}/api/cron/email-reports`, {
+      headers: secret ? { Authorization: `Bearer ${secret}` } : {},
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        const sent = (data.results || []).filter((r) => r.status === "sent").length;
+        if (sent > 0 || data.error) console.log("[local-cron] email reports:", data);
+      })
+      .catch((err) => console.error("[local-cron] email reports failed:", err.message));
+  };
+  setTimeout(triggerReports, 15000);
+  setInterval(triggerReports, 15 * 60 * 1000);
 }

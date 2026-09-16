@@ -3,6 +3,7 @@ import Skeleton from "react-loading-skeleton";
 import { apiFetch } from "../lib/apiFetch";
 import { useToast } from "./ToastProvider";
 import LogoUploadField from "./LogoUploadField";
+import EmailReportsRow from "./EmailReportsRow";
 import { LEAD_SOURCES, CRM_FIELDS } from "../lib/leadSources";
 
 const EMPTY_SHEET = { label: "", sheetId: "", sheetName: "" };
@@ -1464,6 +1465,7 @@ export default function CompaniesPanel() {
   const [adminAccountId, setAdminAccountId] = useState(null);
   const [filterConfigId, setFilterConfigId] = useState(null);
   const [sourceMappingsId, setSourceMappingsId] = useState(null);
+  const [emailReportsId, setEmailReportsId] = useState(null);
 
   const load = useCallback(async () => {
     const res = await apiFetch("/api/companies");
@@ -1635,6 +1637,7 @@ export default function CompaniesPanel() {
                           <button
                             className="btn-sm"
                             onClick={() => {
+                              setEmailReportsId(null);
                               setApiKeysId(null);
                               setLeadFieldsId(null);
                               setLogoRowId(null);
@@ -1649,6 +1652,7 @@ export default function CompaniesPanel() {
                           <button
                             className="btn-sm"
                             onClick={() => {
+                              setEmailReportsId(null);
                               setEditingId(null);
                               setLeadFieldsId(null);
                               setLogoRowId(null);
@@ -1663,6 +1667,7 @@ export default function CompaniesPanel() {
                           <button
                             className="btn-sm"
                             onClick={() => {
+                              setEmailReportsId(null);
                               setEditingId(null);
                               setApiKeysId(null);
                               setLogoRowId(null);
@@ -1677,6 +1682,7 @@ export default function CompaniesPanel() {
                           <button
                             className="btn-sm"
                             onClick={() => {
+                              setEmailReportsId(null);
                               setEditingId(null);
                               setApiKeysId(null);
                               setLeadFieldsId(null);
@@ -1691,6 +1697,7 @@ export default function CompaniesPanel() {
                           <button
                             className="btn-sm"
                             onClick={() => {
+                              setEmailReportsId(null);
                               setEditingId(null);
                               setApiKeysId(null);
                               setLeadFieldsId(null);
@@ -1705,6 +1712,7 @@ export default function CompaniesPanel() {
                           <button
                             className="btn-sm"
                             onClick={() => {
+                              setEmailReportsId(null);
                               setEditingId(null);
                               setApiKeysId(null);
                               setLeadFieldsId(null);
@@ -1719,6 +1727,7 @@ export default function CompaniesPanel() {
                           <button
                             className="btn-sm"
                             onClick={() => {
+                              setEmailReportsId(null);
                               setEditingId(null);
                               setApiKeysId(null);
                               setLeadFieldsId(null);
@@ -1729,6 +1738,21 @@ export default function CompaniesPanel() {
                             }}
                           >
                             {sourceMappingsId === c._id ? "Cancel" : "Source Mappings"}
+                          </button>
+                          <button
+                            className="btn-sm"
+                            onClick={() => {
+                              setEditingId(null);
+                              setApiKeysId(null);
+                              setLeadFieldsId(null);
+                              setLogoRowId(null);
+                              setAdminAccountId(null);
+                              setFilterConfigId(null);
+                              setSourceMappingsId(null);
+                              setEmailReportsId(emailReportsId === c._id ? null : c._id);
+                            }}
+                          >
+                            {emailReportsId === c._id ? "Cancel" : "Email Reports"}
                           </button>
                           <button className="btn-sm" onClick={() => toggleActive(c)}>
                             {c.active ? "Deactivate" : "Reactivate"}
@@ -1802,6 +1826,9 @@ export default function CompaniesPanel() {
                         }}
                       />
                     )}
+                    {emailReportsId === c._id && (
+                      <EmailReportsRow key={`${c._id}-email-reports`} company={c} onClose={() => setEmailReportsId(null)} />
+                    )}
                   </Fragment>
                 ))}
                 {companies.length === 0 && (
@@ -1819,7 +1846,8 @@ export default function CompaniesPanel() {
           Each company gets its own admin login, own Google Sheet config, own agents, and own leads — completely
           isolated from every other company. Only the platform admin manages each company's Google Sheet connection
           and its Lead Source API keys (for integrations like CarDekho/CarWale); company admins see sync status
-          only. Deactivating a company blocks its sync and hides it from new onboarding, but keeps its data intact.
+          only. Email Reports configures who at each company receives its day-wise lead report and when it goes
+          out automatically. Deactivating a company blocks its sync and hides it from new onboarding, but keeps its data intact.
         </div>
       </div>
     </div>
