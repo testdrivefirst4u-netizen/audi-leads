@@ -76,6 +76,41 @@ const EmailReportConfigSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// One connected Facebook Page (and, through it, any Instagram account that
+// runs lead ads for that page). The webhook identifies a company by the
+// Page ID Meta sends in each event, so a page can belong to exactly one
+// company. The page access token is stored encrypted (lib/meta/crypto.js)
+// and never leaves the server — the UI only ever sees `tokenPreview`.
+const MetaPageSchema = new mongoose.Schema(
+  {
+    pageId: { type: String, required: true },
+    pageName: { type: String, default: "" },
+    accessTokenEnc: { type: String, default: "" },
+    tokenPreview: { type: String, default: "" }, // e.g. "EAAG…x9Qz"
+    instagramAccountId: { type: String, default: "" },
+    instagramUsername: { type: String, default: "" },
+    subscribed: { type: Boolean, default: false }, // page subscribed to this app's leadgen webhook
+    connectedAt: { type: Date },
+    lastVerifiedAt: { type: Date },
+    lastVerifyError: { type: String, default: "" },
+  },
+  { _id: true }
+);
+
+const MetaConfigSchema = new mongoose.Schema(
+  {
+    enabled: { type: Boolean, default: true },
+    connectionName: { type: String, default: "" },
+    businessPortfolio: { type: String, default: "" },
+    pages: { type: [MetaPageSchema], default: [] },
+    lastWebhookAt: { type: Date },
+    lastLeadAt: { type: Date },
+    lastError: { type: String, default: "" },
+    lastErrorAt: { type: Date },
+  },
+  { _id: false }
+);
+
 const SettingsSchema = new mongoose.Schema(
   {
     // Legacy single-tenant lookup key — no longer unique (every company's
@@ -121,6 +156,8 @@ const SettingsSchema = new mongoose.Schema(
     // realistically run once a day — keeps the Online/Offline threshold accurate.
     syncIntervalMinutes: { type: Number, enum: [1, 5, 15, 1440], default: 1 },
     emailReports: { type: EmailReportConfigSchema, default: () => ({}) },
+    // Meta Lead Ads connection — see MetaConfigSchema above and lib/meta/.
+    meta: { type: MetaConfigSchema, default: () => ({}) },
     // Advisory lock so two overlapping runSync() calls for the same company
     // (e.g. the local dev scheduler firing again before a long previous run
     // finished) can't both decide the same sheet row is new and each create
@@ -132,5 +169,9 @@ const SettingsSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// The webhook's first job is "which company owns this Page?" — one lookup
+// per event, so the page id is indexed.
+SettingsSchema.index({ "meta.pages.pageId": 1 });
 
 module.exports = mongoose.models.Settings || mongoose.model("Settings", SettingsSchema);

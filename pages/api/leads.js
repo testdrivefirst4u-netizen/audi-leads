@@ -43,12 +43,17 @@ async function companyLeadMeta(companyId) {
     // list) is only a fallback for a company that hasn't hand-picked one.
     const needsDynamicLocations = !locationOptions.length && !!locationField;
 
-    const [models, dynamicSources, dynamicLocations, channels, campaigns] = await Promise.all([
+    const [models, dynamicSources, dynamicLocations, channels, campaigns, forms, ads, platforms] = await Promise.all([
       Lead.distinct("canonicalModel", { companyId }),
       sourceOptions.length ? Promise.resolve(null) : Lead.distinct("source", { companyId }),
       needsDynamicLocations ? Lead.distinct("location", { companyId }) : Promise.resolve(null),
       Lead.distinct("channel", { companyId }),
       Lead.distinct("campaign", { companyId }),
+      // Meta Lead Ads — form / ad names and which platforms have delivered
+      // leads, so the Leads page only shows those filters once relevant.
+      Lead.distinct("metaFormName", { companyId }),
+      Lead.distinct("ad", { companyId }),
+      Lead.distinct("platform", { companyId }),
     ]);
 
     return {
@@ -65,6 +70,9 @@ async function companyLeadMeta(companyId) {
       // filter by (see components/LeadsTable.js).
       channels: channels.filter(Boolean).sort(),
       campaigns: campaigns.filter(Boolean).sort(),
+      forms: forms.filter(Boolean).sort(),
+      ads: ads.filter(Boolean).sort(),
+      platforms: platforms.filter(Boolean).sort(),
     };
   });
 }
@@ -93,9 +101,27 @@ async function leadFieldColumnsFor(companyId) {
 // the key from the raw query inputs instead keeps it accurate.
 function filterSignature(
   req,
-  { search = "", model = "", status = "", location = "", source = "", channel = "", campaign = "", bucket = "", from = "", to = "", agent = "" } = {}
+  {
+    search = "",
+    model = "",
+    status = "",
+    location = "",
+    source = "",
+    channel = "",
+    campaign = "",
+    bucket = "",
+    from = "",
+    to = "",
+    agent = "",
+    platform = "",
+    form = "",
+    ad = "",
+  } = {}
 ) {
   return [
+    platform,
+    form,
+    ad,
     req.session.companyId,
     req.session.role,
     req.session.agentId || "",
@@ -130,6 +156,10 @@ async function handler(req, res) {
     channel = "",
     campaign = "",
     bucket = "",
+    // Meta Lead Ads: "facebook" | "instagram" | "other" (non-Meta sources)
+    platform = "",
+    form = "",
+    ad = "",
     followUpFilter = "",
     page = "1",
     pageSize = "20",
@@ -174,6 +204,17 @@ async function handler(req, res) {
   if (campaign) {
     filter.campaign = campaign;
   }
+  if (platform === "other") {
+    filter.platform = { $in: ["", null] };
+  } else if (platform) {
+    filter.platform = platform;
+  }
+  if (form) {
+    filter.metaFormName = form;
+  }
+  if (ad) {
+    filter.ad = ad;
+  }
   if (bucket) {
     filter.bucket = bucketFilterValue(bucket);
   }
@@ -204,7 +245,7 @@ async function handler(req, res) {
   // date, computed in JS by nextFollowUp). Narrow to leads that have any
   // follow-ups at all (indexed-ish via the array-exists check) then finish
   // the classification in JS — same low-hundreds-of-leads scale as "hot".
-  const followUpSig = filterSignature(req, { search, model, status, location, source, bucket, from, to, agent });
+  const followUpSig = filterSignature(req, { search, model, status, location, source, bucket, from, to, agent, platform, form, ad });
   const { followUpTabs, bucketIds } = await withCache(`followup-tabs:${followUpSig}`, FOLLOWUP_TABS_CACHE_MS, async () => {
     const followUpCandidates = await Lead.find({ ...filter, "followUps.0": { $exists: true } })
       .select("followUps")
@@ -243,7 +284,7 @@ async function handler(req, res) {
     // JS filter below, against the same underlying candidate set, so every
     // search term within the cache window can reuse one fetch instead of
     // triggering its own.
-    const hotSig = filterSignature(req, { model, location, source, channel, campaign, from, to, agent });
+    const hotSig = filterSignature(req, { model, location, source, channel, campaign, from, to, agent, platform, form, ad });
     const candidates = await withCache(`hot-candidates:${hotSig}`, HOT_CANDIDATES_CACHE_MS, () =>
       Lead.find({
         companyId: req.session.companyId,
@@ -257,6 +298,9 @@ async function handler(req, res) {
         ...(filter.source ? { source: filter.source } : {}),
         ...(filter.channel ? { channel: filter.channel } : {}),
         ...(filter.campaign ? { campaign: filter.campaign } : {}),
+        ...(filter.platform !== undefined ? { platform: filter.platform } : {}),
+        ...(filter.metaFormName ? { metaFormName: filter.metaFormName } : {}),
+        ...(filter.ad ? { ad: filter.ad } : {}),
       })
         .sort({ sheetCreatedAt: -1 })
         .populate("assignedTo", "name")
@@ -287,7 +331,7 @@ async function handler(req, res) {
     const total = hotLeads.length;
     const start = (pageNum - 1) * pageSizeNum;
     const leads = hotLeads.slice(start, start + pageSizeNum);
-    const { models, sources, statuses, locations, channels, campaigns } = await companyLeadMeta(req.session.companyId);
+    const { models, sources, statuses, locations, channels, campaigns, forms, ads, platforms } = await companyLeadMeta(req.session.companyId);
     const leadFieldColumns = await leadFieldColumnsFor(req.session.companyId);
 
     return res.status(200).json({
@@ -302,6 +346,9 @@ async function handler(req, res) {
       locations,
       channels,
       campaigns,
+      forms,
+      ads,
+      platforms,
       agents: agentList,
       followUpTabs,
       leadFieldColumns,
@@ -316,7 +363,7 @@ async function handler(req, res) {
     return res.status(200).json({ ids: docs.map((d) => String(d._id)), total: matching });
   }
 
-  const [[leads, total], { models, sources, statuses, locations, channels, campaigns }, leadFieldColumns] = await Promise.all([
+  const [[leads, total], { models, sources, statuses, locations, channels, campaigns, forms, ads, platforms }, leadFieldColumns] = await Promise.all([
     Promise.all([
       Lead.find(filter)
         .sort({ [sortField]: sortDirection })
@@ -342,6 +389,9 @@ async function handler(req, res) {
     locations,
     channels,
     campaigns,
+    forms,
+    ads,
+    platforms,
     agents: agentList,
     followUpTabs,
     leadFieldColumns,

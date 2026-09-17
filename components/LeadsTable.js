@@ -80,6 +80,26 @@ function LatestEnquiryCell({ lead }) {
   );
 }
 
+// Facebook / Instagram badge for Meta Lead Ads leads (platform is set by
+// the webhook pipeline); every other source renders as plain text.
+export function SourceCell({ lead }) {
+  if (lead.platform === "facebook") {
+    return (
+      <span className="pill bg-[#eef3ff] text-[#1d4ed8]" title={`Facebook Lead Ads${lead.metaFormName ? ` · ${lead.metaFormName}` : ""}`}>
+        <span aria-hidden="true">f</span>&nbsp;Facebook
+      </span>
+    );
+  }
+  if (lead.platform === "instagram") {
+    return (
+      <span className="pill bg-[#fdf2f8] text-[#be185d]" title={`Instagram Lead Ads${lead.metaFormName ? ` · ${lead.metaFormName}` : ""}`}>
+        <span aria-hidden="true">◎</span>&nbsp;Instagram
+      </span>
+    );
+  }
+  return <span>{lead.source || "Meta Ads"}</span>;
+}
+
 const NEW_LEAD_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function NameCell({ lead }) {
@@ -199,6 +219,15 @@ export default function LeadsTable({
   onChannelFilterChange,
   campaignFilter,
   onCampaignFilterChange,
+  platformFilter,
+  onPlatformFilterChange,
+  formFilter,
+  onFormFilterChange,
+  adFilter,
+  onAdFilterChange,
+  forms,
+  ads,
+  platforms,
   bucketFilter,
   onBucketFilterChange,
   sources,
@@ -491,6 +520,43 @@ export default function LeadsTable({
           </div>
         )}
 
+        {platforms?.length > 0 && (
+          <div className="toolbar-group">
+            <label className="toolbar-label">Platform</label>
+            <select value={platformFilter || ""} onChange={(e) => onPlatformFilterChange?.(e.target.value)}>
+              <option value="">All leads</option>
+              {platforms.includes("facebook") && <option value="facebook">Facebook</option>}
+              {platforms.includes("instagram") && <option value="instagram">Instagram</option>}
+              <option value="other">Other sources</option>
+            </select>
+          </div>
+        )}
+        {forms?.length > 0 && (
+          <div className="toolbar-group">
+            <label className="toolbar-label">Form</label>
+            <select value={formFilter || ""} onChange={(e) => onFormFilterChange?.(e.target.value)}>
+              <option value="">All forms</option>
+              {forms.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {ads?.length > 0 && (
+          <div className="toolbar-group">
+            <label className="toolbar-label">Ad</label>
+            <select value={adFilter || ""} onChange={(e) => onAdFilterChange?.(e.target.value)}>
+              <option value="">All ads</option>
+              {ads.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {campaigns?.length > 0 && (
           <div className="toolbar-group">
             <label className="toolbar-label">Campaign</label>
@@ -735,7 +801,9 @@ export default function LeadsTable({
                       <td>
                         <LeadTypeBadge lead={lead} />
                       </td>
-                      <td className="text-muted">{lead.source || "Meta Ads"}</td>
+                      <td className="text-muted">
+                        <SourceCell lead={lead} />
+                      </td>
                       <td>
                         <PhoneCell phone={lead.phone} />
                       </td>

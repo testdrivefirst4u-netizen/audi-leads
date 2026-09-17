@@ -73,6 +73,12 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
   const [sourceFilter, setSourceFilter] = useState("");
   const [channelFilter, setChannelFilter] = useState("");
   const [campaignFilter, setCampaignFilter] = useState("");
+  const [platformFilter, setPlatformFilter] = useState("");
+  const [formFilter, setFormFilter] = useState("");
+  const [adFilter, setAdFilter] = useState("");
+  const [forms, setForms] = useState([]);
+  const [ads, setAds] = useState([]);
+  const [platforms, setPlatforms] = useState([]);
   const [bucketFilter, setBucketFilter] = useState("");
   const [followUpFilter, setFollowUpFilter] = useState("");
   const [followUpTabs, setFollowUpTabs] = useState({ overdue: 0, today: 0, upcoming: 0, completed: 0 });
@@ -108,6 +114,9 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
         source: filters.sourceFilter || "",
         channel: filters.channelFilter || "",
         campaign: filters.campaignFilter || "",
+        platform: filters.platformFilter || "",
+        form: filters.formFilter || "",
+        ad: filters.adFilter || "",
         bucket: filters.bucketFilter || "",
         followUpFilter: filters.followUpFilter || "",
         hot: filters.hotOnly ? "true" : "",
@@ -129,6 +138,9 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
           setSources(data.sources || []);
           setChannels(data.channels || []);
           setCampaigns(data.campaigns || []);
+          setForms(data.forms || []);
+          setAds(data.ads || []);
+          setPlatforms(data.platforms || []);
           setStatuses(data.statuses || []);
           setLocations(data.locations || []);
           setLeadFieldColumns(data.leadFieldColumns || []);
@@ -149,6 +161,9 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
     sourceFilter,
     channelFilter,
     campaignFilter,
+    platformFilter,
+    formFilter,
+    adFilter,
     bucketFilter,
     followUpFilter,
     hotOnly,
@@ -164,13 +179,13 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
     const timeout = setTimeout(() => fetchLeads(filters), 250);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, model, status, agentFilter, locationFilter, sourceFilter, channelFilter, campaignFilter, bucketFilter, followUpFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, viewCompanyId, fetchLeads]);
+  }, [search, model, status, agentFilter, locationFilter, sourceFilter, channelFilter, campaignFilter, platformFilter, formFilter, adFilter, bucketFilter, followUpFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, viewCompanyId, fetchLeads]);
 
   useEffect(() => {
     const interval = setInterval(() => fetchLeads(filters), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, model, status, agentFilter, locationFilter, sourceFilter, channelFilter, campaignFilter, bucketFilter, followUpFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, viewCompanyId, fetchLeads]);
+  }, [search, model, status, agentFilter, locationFilter, sourceFilter, channelFilter, campaignFilter, platformFilter, formFilter, adFilter, bucketFilter, followUpFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, viewCompanyId, fetchLeads]);
 
   function handleSearchChange(value) {
     setSearch(value);
@@ -240,6 +255,9 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
     setSourceFilter("");
     setChannelFilter("");
     setCampaignFilter("");
+    setPlatformFilter("");
+    setFormFilter("");
+    setAdFilter("");
     setBucketFilter("");
     setAgentFilter("");
     setPage(1);
@@ -258,6 +276,9 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
       source: sourceFilter,
       channel: channelFilter,
       campaign: campaignFilter,
+      platform: platformFilter,
+      form: formFilter,
+      ad: adFilter,
       bucket: bucketFilter,
       followUpFilter,
       hot: hotOnly ? "true" : "",
@@ -406,6 +427,24 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
         onChannelFilterChange={handleChannelFilterChange}
         campaignFilter={campaignFilter}
         onCampaignFilterChange={handleCampaignFilterChange}
+        platformFilter={platformFilter}
+        onPlatformFilterChange={(v) => {
+          setPlatformFilter(v);
+          setPage(1);
+        }}
+        formFilter={formFilter}
+        onFormFilterChange={(v) => {
+          setFormFilter(v);
+          setPage(1);
+        }}
+        adFilter={adFilter}
+        onAdFilterChange={(v) => {
+          setAdFilter(v);
+          setPage(1);
+        }}
+        forms={forms}
+        ads={ads}
+        platforms={platforms}
         bucketFilter={bucketFilter}
         onBucketFilterChange={handleBucketFilterChange}
         sources={sources}

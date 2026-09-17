@@ -638,6 +638,21 @@ export default function LeadDetailModal({
                 </div>
               </Section>
 
+              {lead.metaLeadId && (
+                <Section title={`${lead.platform === "instagram" ? "Instagram" : "Facebook"} Lead Ad`}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+                    <Field label="Platform" value={lead.platform === "instagram" ? "Instagram" : "Facebook"} />
+                    <Field label="Meta Lead ID" value={<code>{lead.metaLeadId}</code>} />
+                    <Field label="Received" value={formatDate(lead.metaCreatedTime || lead.sheetCreatedAt)} />
+                    <Field label="Form" value={lead.metaFormName || (lead.metaFormId ? `Form ${lead.metaFormId}` : "")} />
+                    <Field label="Campaign" value={lead.campaign || (lead.campaignId ? `#${lead.campaignId}` : "")} />
+                    <Field label="Ad Set" value={lead.adSet || (lead.adSetId ? `#${lead.adSetId}` : "")} />
+                    <Field label="Ad" value={lead.ad || (lead.adId ? `#${lead.adId}` : "")} />
+                    <Field label="Page ID" value={lead.metaPageId} />
+                  </div>
+                </Section>
+              )}
+
               {(lead.channel || lead.campaign || lead.utmSource || lead.utmMedium || lead.utmCampaign || lead.landingPage) && (
                 <Section title="Source Information">
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
@@ -751,7 +766,7 @@ export default function LeadDetailModal({
                 </ul>
               </Section>
 
-              <Section title="Sheet Details" collapsible defaultOpen={false}>
+              <Section title={lead.metaLeadId ? "Form Answers" : "Sheet Details"} collapsible defaultOpen={false}>
                 <div className="kv-grid">
                   {Object.entries(data).map(([k, v]) => (
                     <div key={k} className="kv-row">

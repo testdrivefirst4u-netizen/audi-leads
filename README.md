@@ -112,3 +112,92 @@ Sync status is considered **Online** when the most recent sync run succeeded
 within `2 × syncIntervalMinutes`. If the sync service crashes, MongoDB is
 unreachable, or the sheet ID is misconfigured, the card flips to **Offline**
 and shows the last error.
+
+## Meta Lead Ads (Facebook / Instagram) → CRM
+
+Lead forms submitted on Facebook or Instagram are delivered to the CRM in real time:
+
+```
+Lead form → Meta webhook → POST /api/webhooks/meta → Graph API lead retrieval
+         → lib/leadIngest.js (same dedup + auto-assign as the sheet sync)
+         → Leads page → agent assignment → follow-ups
+```
+
+Code map: `pages/api/webhooks/meta.js` (webhook), `lib/meta/graph.js` (Graph API client),
+`lib/meta/mapLead.js` (form → Lead fields), `lib/meta/processEvent.js` (pipeline + retries),
+`models/MetaWebhookEvent.js` (event log), `pages/meta-integration.js` + `components/MetaIntegrationPanel.js`
+(admin page), `pages/api/meta/{settings,connect,events}.js` (admin APIs). Meta leads are ordinary
+`Lead` documents (no separate model/collection) with `platform`, `metaLeadId` (unique), `metaPageId`,
+`metaFormId`, `metaFormName`, `metaCreatedTime` and the existing `campaign/adSet/ad` attribution fields.
+
+### 1. Environment variables (Vercel → Settings → Environment Variables, and `.env` locally)
+
+| Variable | Purpose |
+|---|---|
+| `META_APP_ID` | App ID of your Meta app ("Broadcast CRM Integration"). |
+| `META_APP_SECRET` | App secret — used to verify the `X-Hub-Signature-256` on every webhook. **Required**; unsigned traffic is refused. |
+| `META_VERIFY_TOKEN` | Any random string; paste the same value as *Verify token* in the App Dashboard. |
+| `META_GRAPH_API_VERSION` | Graph API version, e.g. `v23.0` (default). |
+| `META_ACCESS_TOKEN` | Optional server-wide fallback Page/System-User token. Normally each company pastes its own Page token in the CRM instead. |
+| `META_PAGE_ID` | Optional; pre-fills the Page ID field on the Meta Lead Ads page. |
+| `META_WEBHOOK_URL` | Optional; overrides the callback URL shown in the admin panel (default: `https://<your-domain>/api/webhooks/meta`). |
+
+Never use `NEXT_PUBLIC_` for any of these. Page access tokens pasted in the CRM are stored AES-256-GCM
+encrypted (key derived from `AUTH_SECRET`) and never returned to the browser.
+
+### 2. Meta App Dashboard configuration
+
+1. developers.facebook.com → your app → **Add product → Webhooks** (and **Facebook Login for Business** /
+   **Marketing API** if not already present).
+2. Webhooks → **Page** → *Subscribe to this object*:
+   - Callback URL: `https://<your-crm-domain>/api/webhooks/meta` (copy it from the CRM's Meta Lead Ads page)
+   - Verify token: the value of `META_VERIFY_TOKEN`
+   - Meta calls `GET /api/webhooks/meta?hub.mode=subscribe&…` and expects the challenge back — the deploy
+     with the env vars must be live *before* you click Verify and Save.
+3. Subscribe the Page object to the **`leadgen`** field.
+4. Generate a **long-lived Page access token** for a user who is an admin of the Facebook Page, with
+   permissions `leads_retrieval`, `pages_show_list`, `pages_manage_metadata` (Graph API Explorer → your app →
+   *User or Page* → the Page; or a System User in Business Settings → Add Assets → Page → generate token).
+5. In the CRM: **Meta Lead Ads** page (company admin, or super admin with the company picked) → enter the
+   **Page ID** + the **Page access token** → *Connect Page* (the CRM verifies the token and page with Meta) →
+   *Subscribe leadgen* (calls `POST /{page-id}/subscribed_apps`). Instagram lead ads run through the Instagram
+   account linked to that Page — no separate step.
+6. Test: Meta **Lead Ads Testing Tool** (business.facebook.com/ads/lead_gen/testing) → pick the Page + form →
+   *Create lead*. Within seconds it appears under *Recent webhook events* as **Lead created**, and on the
+   Leads page with a Facebook/Instagram badge. Delete the test lead in the Testing Tool afterwards.
+
+### 3. Permissions & App Review
+
+- In **Development** mode the integration works for app admins/developers/testers and the Pages they manage —
+  enough to go live for your own business's Pages.
+- To receive leads for Pages owned by other businesses (clients), the app must pass **App Review** for
+  `leads_retrieval` (plus `pages_show_list` / `pages_manage_metadata`) and be switched to **Live** mode.
+  Advanced Access for `leads_retrieval` requires Business Verification of the "broaddcast" portfolio.
+- Leads Access Manager (Business Settings → Integrations → Leads Access) must allow the CRM app / the token's
+  user to read leads for each Page, otherwise Graph returns an OAuth (#200/#190) error — the event shows as
+  *Failed* with the message and can be retried after fixing access.
+
+### 4. Reliability
+
+- Every webhook delivery is stored as a `MetaWebhookEvent` (unique on `leadgen_id`) before it is processed,
+  and processed inline before the 200 response. A lead that already exists (redelivery, or the same lead
+  arriving via the Google Sheet export) is linked, never duplicated.
+- If the Graph API or the token fails, the event is kept as **Failed** with the reason and retried by the
+  *Retry* buttons on the Meta Lead Ads page and once a day by `/api/cron/sync`. Because processing is
+  inline on Vercel's request/response model, there is no separate queue — "accepted" means "stored"; the
+  event log is the source of truth for what still needs attention.
+- Verify: MongoDB `leads` collection → `db.leads.find({ metaLeadId: { $exists: true } })`; Vercel →
+  Deployments → Functions → `/api/webhooks/meta` logs (`[meta-webhook]`, `[meta]` prefixes; tokens are
+  redacted).
+
+### 5. Local testing
+
+```
+node scripts/test-meta-integration.js
+```
+Runs 34 checks with mock data only: webhook verification (right/wrong token), signature enforcement,
+duplicate deliveries, Facebook and Instagram leads, missing phone/email, custom questions, Graph API
+failure + retry, expired token, disabled connection, unauthorised admin routes, and that normal lead
+creation/assignment still works. It creates a throw-away company in the connected database and removes
+it afterwards. For the HTTP half, set `META_APP_SECRET` and `META_VERIFY_TOKEN` for the dev server (any
+test values) before running.

@@ -135,6 +135,19 @@ const LeadSchema = new mongoose.Schema(
     utmTerm: { type: String },
     utmContent: { type: String },
     landingPage: { type: String },
+    // Meta Lead Ads (Facebook / Instagram) — set only by the webhook
+    // pipeline in lib/meta/processEvent.js. `platform` is what the Leads
+    // page's Facebook/Instagram badges and filter key off; the rest are the
+    // Graph API identifiers of the lead, its page and its form. Campaign /
+    // ad set / ad names and ids reuse the attribution fields above.
+    // metaLeadId is globally unique on Meta's side, so a unique sparse
+    // index here is what makes webhook retries idempotent at the DB level.
+    platform: { type: String, enum: ["facebook", "instagram", ""], default: "" },
+    metaLeadId: { type: String, unique: true, sparse: true },
+    metaPageId: { type: String },
+    metaFormId: { type: String },
+    metaFormName: { type: String },
+    metaCreatedTime: { type: Date },
     // CRM fields managed from the dashboard, untouched by the sheet sync.
     // No enum here on purpose — see the LEAD_STATUSES comment above.
     status: { type: String, default: "New", index: true },
@@ -187,6 +200,10 @@ LeadSchema.index({ companyId: 1, lastEnquiryAt: -1 });
 // breakdowns by the same fields (see lib/leadSources.js).
 LeadSchema.index({ companyId: 1, channel: 1 });
 LeadSchema.index({ companyId: 1, campaign: 1 });
+// Leads page Facebook/Instagram + Form + Ad filters (Meta Lead Ads).
+LeadSchema.index({ companyId: 1, platform: 1 });
+LeadSchema.index({ companyId: 1, metaFormName: 1 });
+LeadSchema.index({ companyId: 1, ad: 1 });
 
 module.exports = mongoose.models.Lead || mongoose.model("Lead", LeadSchema);
 module.exports.LEAD_STATUSES = LEAD_STATUSES;

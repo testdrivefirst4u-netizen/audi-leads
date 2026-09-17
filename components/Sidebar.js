@@ -15,6 +15,7 @@ import {
   ChevronRightIcon,
   UserIcon,
   ChecklistIcon,
+  MetaIcon,
 } from "./icons";
 
 const NAV_ITEMS = [
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { href: "/reports", label: "Reports", Icon: ReportIcon, superAdminVisible: true, group: "monitor" },
   { href: "/agents", label: "Agents", Icon: AgentIcon, adminOnly: true, superAdminVisible: true, group: "monitor" },
   { href: "/import-audit", label: "Import Audit", Icon: ChecklistIcon, adminOnly: true, superAdminVisible: true, group: "monitor" },
+  { href: "/meta-integration", label: "Meta Lead Ads", Icon: MetaIcon, adminOnly: true, superAdminVisible: true, group: "monitor" },
   // { href: "/settings", label: "Settings", Icon: SettingsIcon },
   { href: "/companies", label: "Companies", Icon: AgentIcon, superAdminOnly: true, group: "platform" },
   { href: "/import", label: "Import Leads", Icon: UploadIcon, superAdminOnly: true, group: "platform" },

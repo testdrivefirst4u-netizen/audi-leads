@@ -1,6 +1,7 @@
 const connectDB = require("../../../lib/db");
 const Company = require("../../../models/Company");
 const { runSync } = require("../../../lib/syncService");
+const { retryFailedEvents } = require("../../../lib/meta/processEvent");
 const { withTiming } = require("../../../lib/perfMonitor");
 
 // The single trigger point for the background sync, on every host. This is
@@ -52,7 +53,19 @@ async function handler(req, res) {
       });
     }
 
-    res.status(200).json({ companies: results.length, results });
+    // Meta Lead Ads events that failed (Graph API hiccup, token expired
+    // and since renewed) or arrived before their Page was connected — one
+    // retry pass a day, on top of the manual Retry on the Meta Lead Ads
+    // page. Never lets a Meta problem fail the sheet sync response.
+    let metaRetry = null;
+    try {
+      metaRetry = await retryFailedEvents({ limit: 200 });
+    } catch (err) {
+      console.error("[cron] meta retry failed:", err.message);
+      metaRetry = { error: err.message };
+    }
+
+    res.status(200).json({ companies: results.length, results, metaRetry });
   } catch (err) {
     console.error("[cron] sync failed:", err);
     res.status(500).json({ error: "Server error during sync — see server logs for detail." });
