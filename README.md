@@ -137,7 +137,7 @@ Code map: `pages/api/webhooks/meta.js` (webhook), `lib/meta/graph.js` (Graph API
 | `META_APP_ID` | App ID of your Meta app ("Broadcast CRM Integration"). |
 | `META_APP_SECRET` | App secret — used to verify the `X-Hub-Signature-256` on every webhook. **Required**; unsigned traffic is refused. |
 | `META_VERIFY_TOKEN` | Any random string; paste the same value as *Verify token* in the App Dashboard. |
-| `META_GRAPH_API_VERSION` | Graph API version, e.g. `v23.0` (default). |
+| `META_GRAPH_API_VERSION` | Graph API version, e.g. `v26.0` (default — match the version shown in the App Dashboard webhook fields). |
 | `META_ACCESS_TOKEN` | Optional server-wide fallback Page/System-User token. Normally each company pastes its own Page token in the CRM instead. |
 | `META_PAGE_ID` | Optional; pre-fills the Page ID field on the Meta Lead Ads page. |
 | `META_WEBHOOK_URL` | Optional; overrides the callback URL shown in the admin panel (default: `https://<your-domain>/api/webhooks/meta`). |
