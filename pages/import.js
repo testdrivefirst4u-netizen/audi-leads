@@ -235,377 +235,480 @@ export default function ImportLeadsPage({ username }) {
   }
 
   const mappedHeaders = new Set(Object.values(mapping).filter(Boolean));
+  const selectedCompany = companies.find((c) => c._id === companyId) || null;
+  const stepIndex = { upload: 0, mapping: 1, preview: 2, result: 3 }[step] ?? 0;
+  const STEPS = ["Set up", "Map columns", "Preview", "Done"];
+  const activeHistory = history.filter((b) => !b.revoked);
+  const historyTotals = {
+    imports: activeHistory.length,
+    created: activeHistory.reduce((s, b) => s + (b.created || 0), 0),
+    merged: activeHistory.reduce((s, b) => s + (b.duplicate || 0), 0),
+  };
+  const autoMapped = parseResult?.suggestedMapping || {};
 
   return (
     <Layout username={username} role="super_admin">
-      <h1 className="page-title">Import Leads</h1>
-      <p className="mb-5 hint">
-        Upload a CSV or Excel file to bulk-add leads into any company. Every row runs through the same
-        duplicate-detection and auto-assignment as Google Sheets sync — a customer who already has a lead for the
-        same model gets merged as a repeat enquiry instead of duplicated.
-      </p>
-
-      <div className="mb-5 panel" style={{ padding: 20 }}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="mb-0 field">
-            <label>Company</label>
-            <select
-              value={companyId}
-              onChange={(e) => setCompanyId(e.target.value)}
-              disabled={step !== "upload"}
-              className="disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {companies.length === 0 && <option value="">No companies yet</option>}
-              {companies.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="mb-0 field">
-            <label>Lead Source</label>
-            <select
-              value={sourceSlug}
-              onChange={(e) => setSourceSlug(e.target.value)}
-              disabled={step !== "upload"}
-              className="disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <option value="">Select a source...</option>
-              {LEAD_SOURCES.map((s) => (
-                <option key={s.slug} value={s.slug}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="mb-0 field">
-            <label>Channel</label>
-            <div
-              className={`w-full rounded-lg border px-3 py-2.5 text-sm ${
-                selectedSource ? "border-accent/30 bg-accent/5 font-semibold text-accent" : "border-border bg-bg text-muted"
-              }`}
-            >
-              {selectedSource ? selectedSource.channel : "Select a source first"}
-            </div>
-          </div>
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="page-title mb-1">Import Leads</h1>
+          <p className="hint m-0">
+            Bulk-add leads from a CSV or Excel export. Every row goes through the same duplicate detection and auto-assignment as the
+            Google Sheet sync.
+          </p>
         </div>
+        {!historyLoading && selectedCompany && (
+          <div className="hint m-0 text-right">
+            <strong className="text-ink">{selectedCompany.name}</strong> · {historyTotals.imports} import{historyTotals.imports === 1 ? "" : "s"} ·{" "}
+            {historyTotals.created.toLocaleString()} leads created · {historyTotals.merged.toLocaleString()} merged
+          </div>
+        )}
+      </div>
+
+      {/* Stepper */}
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        {STEPS.map((label, i) => {
+          const done = i < stepIndex;
+          const active = i === stepIndex;
+          return (
+            <div key={label} className="flex items-center gap-2">
+              <div
+                className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12.5px] font-semibold ${
+                  active ? "border-accent bg-accent text-white" : done ? "border-success/30 bg-success/10 text-success" : "border-border bg-card text-muted"
+                }`}
+              >
+                <span
+                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] ${
+                    active ? "bg-white/20" : done ? "bg-success text-white" : "bg-bg"
+                  }`}
+                >
+                  {done ? "✓" : i + 1}
+                </span>
+                {label}
+              </div>
+              {i < STEPS.length - 1 && <span className={`h-px w-6 ${i < stepIndex ? "bg-success/40" : "bg-border"}`} />}
+            </div>
+          );
+        })}
       </div>
 
       {step === "upload" && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <div
-              className={`panel flex flex-col items-center justify-center text-center p-10 border-2 border-dashed cursor-pointer transition-colors ${
-                dragOver ? "border-accent bg-accent/5" : "border-border"
-              }`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <UploadIcon width={40} height={40} className="mb-3 text-muted" />
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                style={{ display: "none" }}
-                onChange={handleFileInput}
-              />
-              {file ? (
-                <>
-                  <strong>{file.name}</strong>
-                  <span className="mt-1 hint">{(file.size / 1024).toFixed(1)} KB — click to choose a different file</span>
-                </>
-              ) : (
-                <>
-                  <strong>Drag &amp; drop a CSV or Excel file here</strong>
-                  <span className="mt-1 hint">or click to browse — .csv, .xlsx, .xls (up to 5,000 rows)</span>
-                </>
-              )}
+          <div className="flex flex-col gap-5 lg:col-span-2">
+            {/* 1. Company + source */}
+            <div className="panel">
+              <div className="panel-header">
+                <h2>1 · Where do these leads belong?</h2>
+              </div>
+              <div className="p-5">
+                <div className="field" style={{ maxWidth: 360 }}>
+                  <label>Company</label>
+                  <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
+                    {companies.length === 0 && <option value="">No companies yet</option>}
+                    {companies.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <label className="block text-[13px] font-semibold text-muted mb-1.5">Lead source</label>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                  {LEAD_SOURCES.map((s) => {
+                    const active = sourceSlug === s.slug;
+                    return (
+                      <button
+                        key={s.slug}
+                        type="button"
+                        onClick={() => setSourceSlug(s.slug)}
+                        className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          active ? "border-accent bg-accent-soft ring-[3px] ring-accent/15" : "border-border bg-card hover:border-accent/40 hover:bg-bg"
+                        }`}
+                      >
+                        <div className={`text-[13px] font-semibold ${active ? "text-accent" : "text-ink"}`}>{s.name}</div>
+                        <div className="hint m-0">{s.channel}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="hint mt-2">
+                  The source is stored on every imported lead and drives column auto-detection (e.g. a Meta export&apos;s <code>full_name</code>
+                  / <code>phone_number</code>).
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-2 mt-4">
-              <button className="btn" onClick={handleUploadAndPreview} disabled={!file || !companyId || !sourceSlug || parsing}>
-                {parsing ? "Reading file..." : "Upload & Preview"}
-              </button>
-              {file && !parsing && (
-                <button className="btn-sm" onClick={() => setFile(null)}>
-                  Clear
-                </button>
-              )}
-            </div>
+            {/* 2. File */}
+            <div className="panel">
+              <div className="panel-header">
+                <h2>2 · Upload the file</h2>
+                <span className="hint">.csv, .xlsx, .xls · up to 5,000 rows</span>
+              </div>
+              <div className="p-5">
+                <div
+                  className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+                    dragOver ? "border-accent bg-accent/5" : file ? "border-success/40 bg-success/5" : "border-border bg-bg hover:border-accent/40"
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOver(true);
+                  }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" style={{ display: "none" }} onChange={handleFileInput} />
+                  <div className={`mb-3 flex h-14 w-14 items-center justify-center rounded-2xl ${file ? "bg-success/10 text-success" : "bg-accent-soft text-accent"}`}>
+                    <UploadIcon width={26} height={26} />
+                  </div>
+                  {file ? (
+                    <>
+                      <strong className="text-[15px]">{file.name}</strong>
+                      <span className="mt-1 hint">{(file.size / 1024).toFixed(1)} KB · click to choose a different file</span>
+                    </>
+                  ) : (
+                    <>
+                      <strong className="text-[15px]">Drag &amp; drop your export here</strong>
+                      <span className="mt-1 hint">or click to browse</span>
+                    </>
+                  )}
+                </div>
 
-            {errorMessage && <div className="mt-3 save-msg err">{errorMessage}</div>}
-            {!sourceSlug && <div className="mt-3 hint">Select a lead source above before uploading — it's stored against every lead you import.</div>}
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <button className="btn" onClick={handleUploadAndPreview} disabled={!file || !companyId || !sourceSlug || parsing}>
+                    {parsing ? "Reading file…" : "Continue → Map columns"}
+                  </button>
+                  {file && !parsing && (
+                    <button className="btn-sm" onClick={() => setFile(null)}>
+                      Clear file
+                    </button>
+                  )}
+                  {!sourceSlug && <span className="hint">Pick a lead source first.</span>}
+                  {sourceSlug && !file && <span className="hint">Now add the file.</span>}
+                </div>
+                {errorMessage && <div className="mt-3 save-msg err">{errorMessage}</div>}
+              </div>
+            </div>
           </div>
 
-          <div className="panel" style={{ padding: 20, height: "fit-content" }}>
-            <h3 className="mb-3">How this works</h3>
-            <p className="mb-2 hint">
-              After upload, you'll see exactly which column maps to which CRM field (auto-detected per source, and
-              editable), then a preview with counts before anything is actually imported.
-            </p>
-            <p className="hint">
-              Columns that don't match any CRM field aren't lost — they're kept on each lead's raw data for later
-              reference.
-            </p>
+          {/* Side: how it works */}
+          <div className="flex flex-col gap-5">
+            <div className="panel p-5">
+              <h3 className="m-0 mb-3 text-[15px] font-bold">How it works</h3>
+              <ol className="m-0 flex list-none flex-col gap-3 p-0">
+                {[
+                  ["Map columns", "We auto-detect which column is the name, phone, email, model, campaign… you can adjust before anything is saved."],
+                  ["Preview", "Row counts — valid, missing contact, likely repeats — plus the first rows exactly as they will be imported."],
+                  ["Import", "Uploads in 500-row chunks with live progress. Repeat enquiries fold into the existing lead; new leads are auto-assigned to agents."],
+                  ["Undo", "Every import is a batch. Revoke removes the leads it created if the wrong file or mapping was used."],
+                ].map(([t, d], i) => (
+                  <li key={t} className="flex gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11px] font-bold text-accent">{i + 1}</span>
+                    <div>
+                      <div className="text-[13px] font-semibold text-ink">{t}</div>
+                      <div className="hint m-0">{d}</div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div className="panel p-5">
+              <h3 className="m-0 mb-2 text-[15px] font-bold">Tips</h3>
+              <ul className="m-0 flex list-disc flex-col gap-1.5 pl-4 hint">
+                <li>Keep the header row — column names are how auto-detection works.</li>
+                <li>Rows without a phone <em>and</em> email are skipped; everything else is kept, including unmapped columns.</li>
+                <li>Per-source column overrides live in Companies → Sources.</li>
+              </ul>
+            </div>
           </div>
         </div>
       )}
 
       {step === "mapping" && parseResult && (
-        <div className="panel" style={{ padding: 20 }}>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="m-0">Column Mapping — {selectedSource?.name}</h3>
-            <span className="hint">{parseResult.headers.length} columns found in {file?.name}</span>
+        <div className="panel">
+          <div className="panel-header flex-wrap gap-2">
+            <h2>
+              Map columns <span className="hint">— {selectedSource?.name} · {file?.name}</span>
+            </h2>
+            <span className="hint">
+              {parseResult.headers.length} columns · {Object.values(mapping).filter(Boolean).length} mapped
+            </span>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>CRM Field</th>
-                <th></th>
-                <th>Excel Column</th>
-              </tr>
-            </thead>
-            <tbody>
-              {parseResult.crmFields.map((field) => (
-                <tr key={field.key}>
-                  <td>{field.label}</td>
-                  <td className="text-muted">→</td>
-                  <td>
-                    <select
-                      value={mapping[field.key] || ""}
-                      onChange={(e) => handleMappingChange(field.key, e.target.value)}
-                    >
-                      <option value="">-- Not mapped --</option>
+          <div className="p-5">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {parseResult.crmFields.map((field) => {
+                const value = mapping[field.key] || "";
+                const auto = value && autoMapped[field.key] === value;
+                return (
+                  <div key={field.key} className={`rounded-xl border p-3 ${value ? "border-border bg-card" : "border-dashed border-border bg-bg"}`}>
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <span className="text-[13px] font-semibold text-ink">{field.label}</span>
+                      {value ? (
+                        <span className={`pill ${auto ? "bg-success/10 text-success" : "bg-accent-soft text-accent"}`}>{auto ? "auto-detected" : "manual"}</span>
+                      ) : (
+                        <span className="pill bg-bg text-muted">not mapped</span>
+                      )}
+                    </div>
+                    <select value={value} onChange={(e) => handleMappingChange(field.key, e.target.value)} className="w-full">
+                      <option value="">— Not mapped —</option>
                       {parseResult.headers.map((h) => (
-                        <option key={h} value={h} disabled={mappedHeaders.has(h) && mapping[field.key] !== h}>
+                        <option key={h} value={h} disabled={mappedHeaders.has(h) && value !== h}>
                           {h}
                         </option>
                       ))}
                     </select>
-                    <span className="ml-2 hint">{field.label}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {parseResult.unmappedColumns.length > 0 && (
-            <div className="mt-4">
-              <strong>Unmapped Columns:</strong>
-              <p className="mt-1 mb-1 hint">
-                Not shown on the lead form, but kept on the lead's raw data so nothing is lost.
-              </p>
-              <ul className="mt-1">
-                {parseResult.unmappedColumns
-                  .filter((h) => !mappedHeaders.has(h))
-                  .map((h) => (
-                    <li key={h} className="hint">
-                      {h}
-                    </li>
-                  ))}
-              </ul>
+                  </div>
+                );
+              })}
             </div>
-          )}
 
-          <div className="flex gap-2 mt-4">
-            <button className="btn" onClick={handleContinueToPreview} disabled={parsing}>
-              {parsing ? "Checking..." : "Continue to Preview"}
-            </button>
-            <button className="btn-sm" onClick={resetToUpload}>
-              Back
-            </button>
+            {parseResult.unmappedColumns.filter((h) => !mappedHeaders.has(h)).length > 0 && (
+              <div className="mt-5">
+                <div className="text-[13px] font-semibold text-ink">Columns kept as raw data</div>
+                <div className="hint mt-0.5 mb-2">Not shown as CRM fields, but saved on each lead and visible under its details.</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {parseResult.unmappedColumns
+                    .filter((h) => !mappedHeaders.has(h))
+                    .map((h) => (
+                      <span key={h} className="pill bg-bg text-muted">
+                        {h}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button className="btn" onClick={handleContinueToPreview} disabled={parsing}>
+                {parsing ? "Checking…" : "Continue → Preview"}
+              </button>
+              <button className="btn-sm" onClick={resetToUpload}>
+                Back
+              </button>
+            </div>
+            {errorMessage && <div className="mt-3 save-msg err">{errorMessage}</div>}
           </div>
-          {errorMessage && <div className="mt-3 save-msg err">{errorMessage}</div>}
         </div>
       )}
 
       {step === "preview" && parseResult && (
-        <div className="panel" style={{ padding: 20 }}>
-          <h3 className="mb-3">Preview — {selectedSource?.name}</h3>
-          <div className="mb-4 status-grid">
-            <div className="card">
-              <div className="label">Total Rows</div>
-              <div className="value">{parseResult.counts.totalRows}</div>
-            </div>
-            <div className="card">
-              <div className="label">Valid Leads</div>
-              <div className="value">{parseResult.counts.validLeads}</div>
-            </div>
-            <div className="card">
-              <div className="label">Missing Phone/Email</div>
-              <div className="value">{parseResult.counts.missingContact}</div>
-            </div>
-            <div className="card">
-              <div className="label">Likely Duplicates</div>
-              <div className="value">{parseResult.counts.duplicates}</div>
-            </div>
+        <div className="panel">
+          <div className="panel-header flex-wrap gap-2">
+            <h2>
+              Preview <span className="hint">— {selectedSource?.name} → {selectedCompany?.name}</span>
+            </h2>
+            <span className="hint">Nothing is saved until you click Import.</span>
           </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Phone</th>
-                <th>Email</th>
-                <th>Model</th>
-                <th>Source</th>
-                <th>Campaign</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {parseResult.preview.map((row, i) => (
-                <tr key={i}>
-                  <td>{row.name || "-"}</td>
-                  <td>{row.phone || "-"}</td>
-                  <td>{row.email || "-"}</td>
-                  <td>{row.model || "-"}</td>
-                  <td>{selectedSource?.name}</td>
-                  <td>{row.campaign || "-"}</td>
-                  <td className={row.status === "Valid" ? "text-success" : "text-danger"}>{row.status}</td>
-                </tr>
+          <div className="p-5">
+            <div className="dash-stat-grid">
+              {[
+                ["Rows in file", parseResult.counts.totalRows, "rgb(var(--accent-rgb))", "excluding the header"],
+                ["Will import", parseResult.counts.validLeads, "#1baf7a", "have a phone or email"],
+                ["Skipped", parseResult.counts.missingContact, "#94a3b8", "no phone and no email"],
+                ["Likely repeats", parseResult.counts.duplicates, "#eda100", "same customer + model already in CRM — merged, not duplicated"],
+              ].map(([label, value, accent, caption]) => (
+                <div className="dash-card" key={label} style={{ "--dash-accent": accent }}>
+                  <div className="label">{label}</div>
+                  <div className="value">{Number(value).toLocaleString()}</div>
+                  <div className="dash-card-caption">{caption}</div>
+                </div>
               ))}
-            </tbody>
-          </table>
-          <p className="mt-2 hint">Showing the first {parseResult.preview.length} of {parseResult.counts.totalRows} rows.</p>
+            </div>
 
-          <div className="flex gap-2 mt-4">
-            <button className="btn" onClick={handleImport} disabled={importing || parseResult.counts.validLeads === 0}>
-              {importing
-                ? importProgress
-                  ? `Importing… ${importProgress.done.toLocaleString()} / ${importProgress.total.toLocaleString()}`
-                  : "Importing..."
-                : `Import ${parseResult.counts.validLeads.toLocaleString()} Leads`}
-            </button>
-            <button className="btn-sm" onClick={() => setStep("mapping")} disabled={importing}>
-              Back to Mapping
-            </button>
-            <button className="btn-sm" onClick={resetToUpload} disabled={importing}>
-              Cancel
-            </button>
+            <div className="table-scroll rounded-xl border border-border">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Email</th>
+                    <th>Model</th>
+                    <th>Campaign</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parseResult.preview.map((row, i) => (
+                    <tr key={i}>
+                      <td>{row.name || "-"}</td>
+                      <td>{row.phone || "-"}</td>
+                      <td className="text-muted">{row.email || "-"}</td>
+                      <td>{row.model || "-"}</td>
+                      <td className="text-muted">{row.campaign || "-"}</td>
+                      <td>
+                        <span className={`pill ${row.status === "Valid" ? "bg-success/10 text-success" : "bg-danger/10 text-danger"}`}>{row.status}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 hint">
+              First {parseResult.preview.length} of {parseResult.counts.totalRows.toLocaleString()} rows.
+            </p>
+
+            {importing && importProgress && (
+              <div className="mt-4">
+                <div className="mb-1 flex justify-between text-[12px] font-semibold">
+                  <span>Importing…</span>
+                  <span>
+                    {importProgress.done.toLocaleString()} / {importProgress.total.toLocaleString()}
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-bg">
+                  <div className="h-2 rounded-full bg-accent transition-[width]" style={{ width: `${Math.round((importProgress.done / importProgress.total) * 100)}%` }} />
+                </div>
+              </div>
+            )}
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button className="btn" onClick={handleImport} disabled={importing || parseResult.counts.validLeads === 0}>
+                {importing ? "Importing…" : `Import ${parseResult.counts.validLeads.toLocaleString()} leads into ${selectedCompany?.name || "company"}`}
+              </button>
+              <button className="btn-sm" onClick={() => setStep("mapping")} disabled={importing}>
+                Back to mapping
+              </button>
+              <button className="btn-sm" onClick={resetToUpload} disabled={importing}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {step === "result" && result && (
-        <div className="panel" style={{ padding: 20 }}>
-          {result.type === "err" ? (
-            <div className="save-msg err">{result.message}</div>
-          ) : (
-            <>
-              <div className="mb-3 save-msg ok">Import complete.</div>
-              <div className="status-grid">
-                <div className="card">
-                  <div className="label">Total Rows</div>
-                  <div className="value">{result.data.totalRows}</div>
+        <div className="panel">
+          <div className="p-6">
+            {result.type === "err" ? (
+              <>
+                <div className="mb-1 text-[17px] font-bold text-danger">Import failed</div>
+                <div className="save-msg err m-0">{result.message}</div>
+              </>
+            ) : (
+              <>
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-success/10 text-success text-xl font-bold">✓</div>
+                  <div>
+                    <div className="text-[17px] font-bold text-ink">Import complete</div>
+                    <div className="hint m-0">
+                      {result.data.created.toLocaleString()} new lead{result.data.created === 1 ? "" : "s"} added to {selectedCompany?.name} from {file?.name}
+                    </div>
+                  </div>
                 </div>
-                <div className="card">
-                  <div className="label">Created</div>
-                  <div className="value">{result.data.created}</div>
+                <div className="dash-stat-grid">
+                  {[
+                    ["Rows processed", result.data.totalRows, "rgb(var(--accent-rgb))", ""],
+                    ["Created", result.data.created, "#1baf7a", "new leads, auto-assigned"],
+                    ["Merged", result.data.duplicate, "#eda100", "repeat enquiries on existing leads"],
+                    ["Skipped", result.data.skipped, "#94a3b8", "no phone and no email"],
+                  ].map(([label, value, accent, caption]) => (
+                    <div className="dash-card" key={label} style={{ "--dash-accent": accent }}>
+                      <div className="label">{label}</div>
+                      <div className="value">{Number(value).toLocaleString()}</div>
+                      {caption && <div className="dash-card-caption">{caption}</div>}
+                    </div>
+                  ))}
                 </div>
-                <div className="card">
-                  <div className="label">Merged (Repeat Enquiry)</div>
-                  <div className="value">{result.data.duplicate}</div>
-                </div>
-                <div className="card">
-                  <div className="label">Skipped</div>
-                  <div className="value">{result.data.skipped}</div>
-                </div>
-              </div>
-              {result.data.errors?.length > 0 && (
-                <div className="mt-3">
-                  <strong>{result.data.errorCount} row error(s):</strong>
-                  <ul className="mt-1">
-                    {result.data.errors.map((e, i) => (
-                      <li key={i} className="hint">
-                        {e}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                {result.data.errors?.length > 0 && (
+                  <div className="rounded-xl border border-danger/30 bg-danger/5 p-3">
+                    <strong className="text-danger">{result.data.errorCount} row error(s)</strong>
+                    <ul className="mt-1 mb-0 list-disc pl-5 hint">
+                      {result.data.errors.map((e, i) => (
+                        <li key={i}>{e}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button className="btn" onClick={resetToUpload}>
+                Import another file
+              </button>
+              {result.type === "ok" && (
+                <a className="btn-sm" href="/leads">
+                  View leads
+                </a>
               )}
-            </>
-          )}
-          <button className="mt-4 btn" onClick={resetToUpload}>
-            Import Another File
-          </button>
+            </div>
+          </div>
         </div>
       )}
 
-      <div className="mt-6 panel" style={{ padding: 20 }}>
-        <h3 className="mb-3">Import History</h3>
-        <p className="mb-3 hint">
-          Every past import for this company. If the wrong file or mapping was used, Revoke deletes the leads it
-          created — including any an agent may have since called or added notes to. Leads it merged into an
-          existing customer's history as a repeat enquiry are left untouched.
-        </p>
+      {/* History */}
+      <div className="panel mt-6">
+        <div className="panel-header flex-wrap gap-2">
+          <h2>
+            Import history <span className="hint">— {selectedCompany?.name || "company"}</span>
+          </h2>
+          <span className="hint">Revoke deletes the leads an import created (repeat-enquiry merges are left untouched).</span>
+        </div>
         {historyLoading ? (
-          <div className="hint">Loading...</div>
+          <div className="p-5 hint">Loading…</div>
         ) : history.length === 0 ? (
           <div className="empty-state">No imports yet for this company.</div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Source</th>
-                <th>File</th>
-                <th>Created</th>
-                <th>Merged</th>
-                <th>Skipped</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.map((b) => (
-                <tr key={b._id}>
-                  <td className="text-muted">{new Date(b.createdAt).toLocaleString()}</td>
-                  <td>{b.sourceName}</td>
-                  <td className="text-muted">{b.filename || "-"}</td>
-                  <td>{b.created}</td>
-                  <td>{b.duplicate}</td>
-                  <td>{b.skipped}</td>
-                  <td>
-                    {b.revoked ? (
-                      <span className="pill bg-danger/10 text-danger" title={b.revokedAt ? new Date(b.revokedAt).toLocaleString() : ""}>
-                        Revoked ({b.revokedCount ?? 0})
-                      </span>
-                    ) : (
-                      <span className="pill bg-success/10 text-success">Active</span>
-                    )}
-                  </td>
-                  <td>
-                    {!b.revoked && b.created > 0 && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="btn-sm"
-                          style={revokeArmedId === b._id ? { background: "#fef2f2", borderColor: "#fca5a5", color: "#b91c1c" } : undefined}
-                          onClick={() => handleRevoke(b._id)}
-                          disabled={revokingId === b._id}
-                        >
-                          {revokingId === b._id ? "Revoking..." : revokeArmedId === b._id ? `Confirm — delete ${b.created}?` : "Revoke Import"}
-                        </button>
-                        {revokeArmedId === b._id && revokingId !== b._id && (
-                          <button className="btn-sm" onClick={() => setRevokeArmedId(null)}>
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </td>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Source</th>
+                  <th>File</th>
+                  <th>Created</th>
+                  <th>Merged</th>
+                  <th>Skipped</th>
+                  <th>By</th>
+                  <th>Status</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {history.map((b) => (
+                  <tr key={b._id} className={b.revoked ? "opacity-60" : ""}>
+                    <td className="text-muted">{new Date(b.createdAt).toLocaleString()}</td>
+                    <td>
+                      <span className="pill bg-accent-soft text-accent">{b.sourceName}</span>
+                    </td>
+                    <td className="text-muted" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis" }} title={b.filename}>
+                      {b.filename || "-"}
+                    </td>
+                    <td className="font-semibold">{b.created}</td>
+                    <td>{b.duplicate}</td>
+                    <td className="text-muted">{b.skipped}</td>
+                    <td className="text-muted">{b.importedBy || "-"}</td>
+                    <td>
+                      {b.revoked ? (
+                        <span className="pill bg-danger/10 text-danger" title={b.revokedAt ? new Date(b.revokedAt).toLocaleString() : ""}>
+                          Revoked ({b.revokedCount ?? 0})
+                        </span>
+                      ) : (
+                        <span className="pill bg-success/10 text-success">Active</span>
+                      )}
+                    </td>
+                    <td>
+                      {!b.revoked && b.created > 0 && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="btn-sm"
+                            style={revokeArmedId === b._id ? { background: "#fef2f2", borderColor: "#fca5a5", color: "#b91c1c" } : undefined}
+                            onClick={() => handleRevoke(b._id)}
+                            disabled={revokingId === b._id}
+                          >
+                            {revokingId === b._id ? "Revoking…" : revokeArmedId === b._id ? `Confirm — delete ${b.created}?` : "Revoke"}
+                          </button>
+                          {revokeArmedId === b._id && revokingId !== b._id && (
+                            <button className="btn-sm" onClick={() => setRevokeArmedId(null)}>
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </Layout>
