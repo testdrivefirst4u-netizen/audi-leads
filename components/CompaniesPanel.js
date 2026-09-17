@@ -1448,6 +1448,201 @@ function ApiKeysRow({ company, onClose }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Companies page shell — a card per company with a tabbed "Manage" bar that
+// opens one of the configuration panels above (SheetConfigRow, ApiKeysRow,
+// …) in place. Those panels render as table rows (<tr><td colSpan=7>), so
+// the expanded area wraps them in a one-row table; they are untouched.
+// ---------------------------------------------------------------------------
+
+const MANAGE_TABS = [
+  { key: "sheet", label: "Google Sheet", short: "Sheet" },
+  { key: "apiKeys", label: "Lead Source API Keys", short: "API Keys" },
+  { key: "columns", label: "Table Columns", short: "Columns" },
+  { key: "filters", label: "Filters", short: "Filters" },
+  { key: "sources", label: "Source Mappings", short: "Sources" },
+  { key: "logo", label: "Logo", short: "Logo" },
+  { key: "admin", label: "Admin Login", short: "Admin" },
+  { key: "email", label: "Email Reports", short: "Email" },
+];
+
+function initialsOf(name) {
+  return (name || "?")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+}
+
+// A readable ink color on top of a brand color (for the avatar fallback).
+function inkOn(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+  if (!m) return "#fff";
+  const n = parseInt(m[1], 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum > 0.6 ? "#111827" : "#fff";
+}
+
+function Indicator({ ok, label, detail }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-semibold ${
+        ok ? "border-success/30 bg-success/10 text-success" : "border-border bg-bg text-muted"
+      }`}
+      title={detail || ""}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-success" : "bg-muted/40"}`} />
+      {label}
+    </span>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div className="min-w-[72px]">
+      <div className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">{label}</div>
+      <div className="text-[19px] font-bold leading-tight text-ink">{value}</div>
+    </div>
+  );
+}
+
+function CompanyCard({ company: c, open, onOpen, onToggleActive, onColorChange, onSaved }) {
+  const brand = c.brandColor || "#3d5afe";
+  const sheetConnected = (c.sheets || []).length > 0;
+  const metaConnected = (c.metaPages || []).length > 0;
+  const metaSubscribed = (c.metaPages || []).some((p) => p.subscribed);
+  const emailOn = c.emailDailyEnabled && c.emailRecipients > 0;
+  const tab = open;
+
+  const panel = (() => {
+    const common = { company: c, onClose: () => onOpen(null), onSaved: () => { onOpen(null); onSaved(); } };
+    switch (tab) {
+      case "sheet":
+        return <SheetConfigRow key={`${c._id}-config`} {...common} />;
+      case "apiKeys":
+        return <ApiKeysRow key={`${c._id}-keys`} company={c} onClose={() => onOpen(null)} />;
+      case "columns":
+        return <LeadFieldColumnsRow key={`${c._id}-lead-fields`} {...common} />;
+      case "filters":
+        return <FilterConfigRow key={`${c._id}-filters`} {...common} />;
+      case "sources":
+        return <SourceMappingsRow key={`${c._id}-source-mappings`} {...common} />;
+      case "logo":
+        return <LogoRow key={`${c._id}-logo`} {...common} />;
+      case "admin":
+        return <AdminAccountRow key={`${c._id}-admin`} company={c} onClose={() => onOpen(null)} onSaved={() => onOpen(null)} />;
+      case "email":
+        return <EmailReportsRow key={`${c._id}-email-reports`} company={c} onClose={() => onOpen(null)} />;
+      default:
+        return null;
+    }
+  })();
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl border bg-card shadow-card transition-[box-shadow,transform] duration-150 ${
+        tab ? "xl:col-span-2 border-accent/40 shadow-card-hover" : "border-border hover:-translate-y-px hover:shadow-card-hover"
+      } ${!c.active ? "opacity-80" : ""}`}
+    >
+      {/* brand accent bar */}
+      <div className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg, ${brand}, ${brand}88)` }} />
+
+      <div className="p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-3.5 min-w-0">
+            {c.logoUrl ? (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-white p-1.5">
+                <img src={c.logoUrl} alt="" className="max-h-full max-w-full object-contain" />
+              </div>
+            ) : (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-lg font-bold" style={{ background: brand, color: inkOn(brand) }}>
+                {initialsOf(c.name)}
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="m-0 truncate text-[17px] font-bold text-ink">{c.name}</h3>
+                <span className={`pill ${c.active ? "bg-success/10 text-success" : "bg-danger/10 text-danger"}`}>{c.active ? "Active" : "Inactive"}</span>
+              </div>
+              <div className="hint m-0 mt-0.5 truncate">
+                /{c.slug} · created {c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "—"}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1.5 text-[12px] text-muted cursor-pointer" title="Brand color">
+              <input
+                type="color"
+                value={brand}
+                onChange={(e) => onColorChange(c, e.target.value)}
+                className="h-7 w-8 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
+              />
+              <code className="text-[11px]">{brand}</code>
+            </label>
+            <button className="btn-sm" onClick={() => onToggleActive(c)}>
+              {c.active ? "Deactivate" : "Reactivate"}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-wrap gap-6">
+            <Stat label="Leads" value={c.leadCount.toLocaleString()} />
+            <Stat label="Agents" value={c.agentCount} />
+            <Stat label="Sheets" value={(c.sheets || []).length} />
+            <Stat label="API keys" value={c.apiKeyCount || 0} />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <Indicator ok={sheetConnected} label={sheetConnected ? "Google Sheet" : "No sheet"} detail={(c.sheets || []).map((s) => s.label || s.sheetId).join(", ")} />
+            <Indicator
+              ok={metaConnected}
+              label={metaConnected ? `Meta${metaSubscribed ? "" : " (unsubscribed)"}` : "No Meta page"}
+              detail={(c.metaPages || []).map((p) => p.pageName || p.pageId).join(", ")}
+            />
+            <Indicator ok={emailOn} label={emailOn ? `Daily email · ${c.emailRecipients}` : c.emailRecipients ? "Email set, auto off" : "No email report"} />
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-1.5 border-t border-border pt-4">
+          {MANAGE_TABS.map((t) => {
+            const active = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => onOpen(active ? null : t.key)}
+                className={`rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                  active ? "border-accent bg-accent text-white" : "border-border bg-card text-ink hover:border-accent/50 hover:bg-bg"
+                }`}
+                title={t.label}
+              >
+                {t.short}
+                {t.key === "sheet" && !sheetConnected && <span className="ml-1 text-[10px] font-bold text-[#b45309]">•</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {panel && (
+        <div className="border-t border-border bg-bg/60 px-5">
+          <div className="flex items-center justify-between py-3">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-accent">{MANAGE_TABS.find((t) => t.key === tab)?.label}</div>
+            <button className="btn-icon" onClick={() => onOpen(null)} title="Close">
+              &times;
+            </button>
+          </div>
+          <table className="w-full">
+            <tbody>{panel}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CompaniesPanel() {
   const toast = useToast();
   const [companies, setCompanies] = useState([]);
@@ -1458,14 +1653,11 @@ export default function CompaniesPanel() {
   const [brandColor, setBrandColor] = useState("#3d5afe");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState(null);
-  const [apiKeysId, setApiKeysId] = useState(null);
-  const [leadFieldsId, setLeadFieldsId] = useState(null);
-  const [logoRowId, setLogoRowId] = useState(null);
-  const [adminAccountId, setAdminAccountId] = useState(null);
-  const [filterConfigId, setFilterConfigId] = useState(null);
-  const [sourceMappingsId, setSourceMappingsId] = useState(null);
-  const [emailReportsId, setEmailReportsId] = useState(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all"); // all | active | inactive
+  // { id, tab } — one configuration panel open at a time, page-wide.
+  const [open, setOpen] = useState(null);
 
   const load = useCallback(async () => {
     const res = await apiFetch("/api/companies");
@@ -1497,6 +1689,7 @@ export default function CompaniesPanel() {
       setAdminPassword("");
       setLogoUrl("");
       setBrandColor("#3d5afe");
+      setShowCreate(false);
       toast("Company added");
       load();
     } catch (err) {
@@ -1529,326 +1722,147 @@ export default function CompaniesPanel() {
     else toast("Failed to update brand color", { type: "err" });
   }
 
+  const totals = {
+    companies: companies.length,
+    active: companies.filter((c) => c.active).length,
+    leads: companies.reduce((s, c) => s + (c.leadCount || 0), 0),
+    agents: companies.reduce((s, c) => s + (c.agentCount || 0), 0),
+    meta: companies.filter((c) => (c.metaPages || []).length > 0).length,
+  };
+  const q = search.trim().toLowerCase();
+  const visible = companies.filter((c) => {
+    if (statusFilter === "active" && !c.active) return false;
+    if (statusFilter === "inactive" && c.active) return false;
+    if (q && !`${c.name} ${c.slug}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
   return (
-    <div className="panel mt-6">
-      <div className="panel-header">
-        <h2>Companies</h2>
+    <div className="mt-6">
+      {/* Summary strip */}
+      <div className="dash-stat-grid">
+        {[
+          ["Companies", totals.companies, "rgb(var(--accent-rgb))", `${totals.active} active · ${totals.companies - totals.active} inactive`],
+          ["Total leads", totals.leads.toLocaleString(), "#2a78d6", "across all companies"],
+          ["Agents", totals.agents, "#1baf7a", "sales agents on the platform"],
+          ["Meta connected", totals.meta, "#eb6834", "companies receiving Facebook / Instagram leads"],
+        ].map(([label, value, accent, caption]) => (
+          <div className="dash-card" key={label} style={{ "--dash-accent": accent }}>
+            <div className="label">{label}</div>
+            <div className="value">{loading ? <Skeleton width={50} /> : value}</div>
+            <div className="dash-card-caption">{caption}</div>
+          </div>
+        ))}
       </div>
 
-      <div className="p-5">
-        <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end mb-5">
-          <div className="field mb-0">
-            <label>Company Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Motors" required />
-          </div>
-          <div className="field mb-0">
-            <label>Admin Username</label>
-            <input
-              value={adminUsername}
-              onChange={(e) => setAdminUsername(e.target.value)}
-              placeholder="acme-admin"
-              required
-            />
-          </div>
-          <div className="field mb-0">
-            <label>Admin Password</label>
-            <input
-              type="password"
-              value={adminPassword}
-              onChange={(e) => setAdminPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
-          </div>
-          <div className="field mb-0">
-            <label>Logo (optional)</label>
-            <LogoUploadField value={logoUrl} onChange={setLogoUrl} />
-          </div>
-          <div className="field mb-0">
-            <label>Brand Color</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={brandColor}
-                onChange={(e) => setBrandColor(e.target.value)}
-                className="h-9 w-12 rounded-md border border-border cursor-pointer p-0.5"
-              />
-              <input
-                value={brandColor}
-                onChange={(e) => setBrandColor(e.target.value)}
-                className="flex-1"
-                placeholder="#3d5afe"
-              />
-            </div>
-          </div>
-          <div className="sm:col-span-4">
-            <button className="btn" type="submit" disabled={saving}>
-              {saving ? "Adding..." : "Add Company"}
+      {/* Toolbar */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <input className="search-input" placeholder="Search companies…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="flex gap-1.5">
+          {[
+            ["all", "All"],
+            ["active", "Active"],
+            ["inactive", "Inactive"],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setStatusFilter(key)}
+              className={`rounded-full border px-3 py-1.5 text-[12.5px] font-semibold ${
+                statusFilter === key ? "border-accent bg-accent text-white" : "border-border bg-card text-ink hover:bg-bg"
+              }`}
+            >
+              {label}
             </button>
-          </div>
-        </form>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Slug</th>
-              <th>Color</th>
-              <th>Agents</th>
-              <th>Leads</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <tr key={i}>
-                  {Array.from({ length: 7 }).map((_, j) => (
-                    <td key={j}><Skeleton /></td>
-                  ))}
-                </tr>
-              ))
-            ) : (
-              <>
-                {companies.map((c) => (
-                  <Fragment key={c._id}>
-                    <tr>
-                      <td>{c.name}</td>
-                      <td className="text-muted">{c.slug}</td>
-                      <td>
-                        <input
-                          type="color"
-                          value={c.brandColor || "#3d5afe"}
-                          onChange={(e) => changeBrandColor(c, e.target.value)}
-                          className="h-7 w-9 rounded border border-border cursor-pointer p-0.5"
-                          title="Company brand color"
-                        />
-                      </td>
-                      <td>{c.agentCount}</td>
-                      <td>{c.leadCount}</td>
-                      <td>
-                        <span className={`pill ${c.active ? "bg-success/10 text-success" : "bg-danger/10 text-danger"}`}>
-                          {c.active ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            className="btn-sm"
-                            onClick={() => {
-                              setEmailReportsId(null);
-                              setApiKeysId(null);
-                              setLeadFieldsId(null);
-                              setLogoRowId(null);
-                              setAdminAccountId(null);
-                              setFilterConfigId(null);
-                              setSourceMappingsId(null);
-                              setEditingId(editingId === c._id ? null : c._id);
-                            }}
-                          >
-                            {editingId === c._id ? "Cancel" : c.sheets?.length ? "Sheet Config" : "Connect Sheet"}
-                          </button>
-                          <button
-                            className="btn-sm"
-                            onClick={() => {
-                              setEmailReportsId(null);
-                              setEditingId(null);
-                              setLeadFieldsId(null);
-                              setLogoRowId(null);
-                              setAdminAccountId(null);
-                              setFilterConfigId(null);
-                              setSourceMappingsId(null);
-                              setApiKeysId(apiKeysId === c._id ? null : c._id);
-                            }}
-                          >
-                            {apiKeysId === c._id ? "Cancel" : "Lead Source API Keys"}
-                          </button>
-                          <button
-                            className="btn-sm"
-                            onClick={() => {
-                              setEmailReportsId(null);
-                              setEditingId(null);
-                              setApiKeysId(null);
-                              setLogoRowId(null);
-                              setAdminAccountId(null);
-                              setFilterConfigId(null);
-                              setSourceMappingsId(null);
-                              setLeadFieldsId(leadFieldsId === c._id ? null : c._id);
-                            }}
-                          >
-                            {leadFieldsId === c._id ? "Cancel" : "Table Columns"}
-                          </button>
-                          <button
-                            className="btn-sm"
-                            onClick={() => {
-                              setEmailReportsId(null);
-                              setEditingId(null);
-                              setApiKeysId(null);
-                              setLeadFieldsId(null);
-                              setAdminAccountId(null);
-                              setFilterConfigId(null);
-                              setSourceMappingsId(null);
-                              setLogoRowId(logoRowId === c._id ? null : c._id);
-                            }}
-                          >
-                            {logoRowId === c._id ? "Cancel" : "Logo"}
-                          </button>
-                          <button
-                            className="btn-sm"
-                            onClick={() => {
-                              setEmailReportsId(null);
-                              setEditingId(null);
-                              setApiKeysId(null);
-                              setLeadFieldsId(null);
-                              setLogoRowId(null);
-                              setFilterConfigId(null);
-                              setSourceMappingsId(null);
-                              setAdminAccountId(adminAccountId === c._id ? null : c._id);
-                            }}
-                          >
-                            {adminAccountId === c._id ? "Cancel" : "Admin Login"}
-                          </button>
-                          <button
-                            className="btn-sm"
-                            onClick={() => {
-                              setEmailReportsId(null);
-                              setEditingId(null);
-                              setApiKeysId(null);
-                              setLeadFieldsId(null);
-                              setLogoRowId(null);
-                              setAdminAccountId(null);
-                              setSourceMappingsId(null);
-                              setFilterConfigId(filterConfigId === c._id ? null : c._id);
-                            }}
-                          >
-                            {filterConfigId === c._id ? "Cancel" : "Filters"}
-                          </button>
-                          <button
-                            className="btn-sm"
-                            onClick={() => {
-                              setEmailReportsId(null);
-                              setEditingId(null);
-                              setApiKeysId(null);
-                              setLeadFieldsId(null);
-                              setLogoRowId(null);
-                              setAdminAccountId(null);
-                              setFilterConfigId(null);
-                              setSourceMappingsId(sourceMappingsId === c._id ? null : c._id);
-                            }}
-                          >
-                            {sourceMappingsId === c._id ? "Cancel" : "Source Mappings"}
-                          </button>
-                          <button
-                            className="btn-sm"
-                            onClick={() => {
-                              setEditingId(null);
-                              setApiKeysId(null);
-                              setLeadFieldsId(null);
-                              setLogoRowId(null);
-                              setAdminAccountId(null);
-                              setFilterConfigId(null);
-                              setSourceMappingsId(null);
-                              setEmailReportsId(emailReportsId === c._id ? null : c._id);
-                            }}
-                          >
-                            {emailReportsId === c._id ? "Cancel" : "Email Reports"}
-                          </button>
-                          <button className="btn-sm" onClick={() => toggleActive(c)}>
-                            {c.active ? "Deactivate" : "Reactivate"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                    {editingId === c._id && (
-                      <SheetConfigRow
-                        key={`${c._id}-config`}
-                        company={c}
-                        onClose={() => setEditingId(null)}
-                        onSaved={() => {
-                          setEditingId(null);
-                          load();
-                        }}
-                      />
-                    )}
-                    {apiKeysId === c._id && (
-                      <ApiKeysRow key={`${c._id}-keys`} company={c} onClose={() => setApiKeysId(null)} />
-                    )}
-                    {leadFieldsId === c._id && (
-                      <LeadFieldColumnsRow
-                        key={`${c._id}-lead-fields`}
-                        company={c}
-                        onClose={() => setLeadFieldsId(null)}
-                        onSaved={() => {
-                          setLeadFieldsId(null);
-                          load();
-                        }}
-                      />
-                    )}
-                    {logoRowId === c._id && (
-                      <LogoRow
-                        key={`${c._id}-logo`}
-                        company={c}
-                        onClose={() => setLogoRowId(null)}
-                        onSaved={() => {
-                          setLogoRowId(null);
-                          load();
-                        }}
-                      />
-                    )}
-                    {adminAccountId === c._id && (
-                      <AdminAccountRow
-                        key={`${c._id}-admin`}
-                        company={c}
-                        onClose={() => setAdminAccountId(null)}
-                        onSaved={() => setAdminAccountId(null)}
-                      />
-                    )}
-                    {filterConfigId === c._id && (
-                      <FilterConfigRow
-                        key={`${c._id}-filters`}
-                        company={c}
-                        onClose={() => setFilterConfigId(null)}
-                        onSaved={() => {
-                          setFilterConfigId(null);
-                          load();
-                        }}
-                      />
-                    )}
-                    {sourceMappingsId === c._id && (
-                      <SourceMappingsRow
-                        key={`${c._id}-source-mappings`}
-                        company={c}
-                        onClose={() => setSourceMappingsId(null)}
-                        onSaved={() => {
-                          setSourceMappingsId(null);
-                          load();
-                        }}
-                      />
-                    )}
-                    {emailReportsId === c._id && (
-                      <EmailReportsRow key={`${c._id}-email-reports`} company={c} onClose={() => setEmailReportsId(null)} />
-                    )}
-                  </Fragment>
-                ))}
-                {companies.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="empty-state">
-                      No companies yet — add one above.
-                    </td>
-                  </tr>
-                )}
-              </>
-            )}
-          </tbody>
-        </table>
-        <div className="hint mt-3">
-          Each company gets its own admin login, own Google Sheet config, own agents, and own leads — completely
-          isolated from every other company. Only the platform admin manages each company's Google Sheet connection
-          and its Lead Source API keys (for integrations like CarDekho/CarWale); company admins see sync status
-          only. Email Reports configures who at each company receives its day-wise lead report and when it goes
-          out automatically. Deactivating a company blocks its sync and hides it from new onboarding, but keeps its data intact.
+          ))}
         </div>
+        <div className="flex-1" />
+        <button className="btn" type="button" onClick={() => setShowCreate((v) => !v)}>
+          {showCreate ? "Close" : "+ New company"}
+        </button>
+      </div>
+
+      {/* Create form */}
+      {showCreate && (
+        <div className="panel mb-5">
+          <div className="panel-header">
+            <h2>New company</h2>
+            <span className="hint">Creates the company with its own admin login, sheet config, agents and leads — fully isolated.</span>
+          </div>
+          <form onSubmit={handleCreate} className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4 items-end">
+            <div className="field mb-0">
+              <label>Company Name</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Motors" required autoFocus />
+            </div>
+            <div className="field mb-0">
+              <label>Admin Username</label>
+              <input value={adminUsername} onChange={(e) => setAdminUsername(e.target.value)} placeholder="acme-admin" required />
+            </div>
+            <div className="field mb-0">
+              <label>Admin Password</label>
+              <input type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="••••••••" required />
+            </div>
+            <div className="field mb-0">
+              <label>Brand Color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={brandColor}
+                  onChange={(e) => setBrandColor(e.target.value)}
+                  className="h-9 w-12 cursor-pointer rounded-md border border-border p-0.5"
+                />
+                <input value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className="flex-1" placeholder="#3d5afe" />
+              </div>
+            </div>
+            <div className="field mb-0 sm:col-span-2">
+              <label>Logo (optional)</label>
+              <LogoUploadField value={logoUrl} onChange={setLogoUrl} />
+            </div>
+            <div className="sm:col-span-2 flex items-end justify-end gap-2">
+              <button className="btn-sm" type="button" onClick={() => setShowCreate(false)} disabled={saving}>
+                Cancel
+              </button>
+              <button className="btn" type="submit" disabled={saving}>
+                {saving ? "Adding..." : "Add Company"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Cards */}
+      {loading ? (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border border-border bg-card p-5 shadow-card">
+              <Skeleton height={56} width={56} />
+              <Skeleton className="mt-3" count={3} />
+            </div>
+          ))}
+        </div>
+      ) : visible.length === 0 ? (
+        <div className="panel p-8 text-center hint">{companies.length === 0 ? "No companies yet — click “+ New company” to add the first one." : "No companies match."}</div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {visible.map((c) => (
+            <CompanyCard
+              key={c._id}
+              company={c}
+              open={open?.id === c._id ? open.tab : null}
+              onOpen={(tab) => setOpen(tab ? { id: c._id, tab } : null)}
+              onToggleActive={toggleActive}
+              onColorChange={changeBrandColor}
+              onSaved={load}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="hint mt-4">
+        Each company gets its own admin login, Google Sheet config, agents and leads — completely isolated from every other company.
+        Only the platform admin manages a company&apos;s Google Sheet connection, Lead Source API keys, Meta pages and email reports;
+        company admins see sync status only. Deactivating a company blocks its sync and hides it from new onboarding, but keeps its
+        data intact.
       </div>
     </div>
   );

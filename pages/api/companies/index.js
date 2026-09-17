@@ -4,6 +4,7 @@ const Admin = require("../../../models/Admin");
 const Agent = require("../../../models/Agent");
 const Lead = require("../../../models/Lead");
 const Settings = require("../../../models/Settings");
+const ApiKey = require("../../../models/ApiKey");
 const { hashPassword, isPasswordStrongEnough, MIN_PASSWORD_LENGTH, requireSuperAdmin } = require("../../../lib/auth");
 
 function slugify(name) {
@@ -21,6 +22,8 @@ async function handler(req, res) {
     const companies = await Company.find({}).sort({ createdAt: 1 }).lean();
     const leadCounts = await Lead.aggregate([{ $group: { _id: "$companyId", count: { $sum: 1 } } }]);
     const agentCounts = await Agent.aggregate([{ $group: { _id: "$companyId", count: { $sum: 1 } } }]);
+    const apiKeyCounts = await ApiKey.aggregate([{ $match: { active: true } }, { $group: { _id: "$companyId", count: { $sum: 1 } } }]);
+    const apiKeyMap = Object.fromEntries(apiKeyCounts.map((c) => [String(c._id), c.count]));
     const allSettings = await Settings.find({}).lean();
     const leadMap = Object.fromEntries(leadCounts.map((c) => [String(c._id), c.count]));
     const agentMap = Object.fromEntries(agentCounts.map((c) => [String(c._id), c.count]));
@@ -39,6 +42,11 @@ async function handler(req, res) {
           createdAt: c.createdAt,
           leadCount: leadMap[String(c._id)] || 0,
           agentCount: agentMap[String(c._id)] || 0,
+          // Integration indicators for the Companies page cards.
+          apiKeyCount: apiKeyMap[String(c._id)] || 0,
+          metaPages: (s?.meta?.pages || []).map((p) => ({ pageId: p.pageId, pageName: p.pageName || "", subscribed: Boolean(p.subscribed) })),
+          emailRecipients: (s?.emailReports?.recipients || []).length,
+          emailDailyEnabled: Boolean(s?.emailReports?.dailyEnabled),
           sheets: (s?.sheets || []).map((sh) => ({ _id: sh._id, label: sh.label, sheetId: sh.sheetId, sheetName: sh.sheetName })),
           syncIntervalMinutes: s?.syncIntervalMinutes || 1,
           leadFieldColumns: (s?.leadFieldColumns || []).map((c) => ({ key: c.key, label: c.label, matchers: c.matchers || [] })),
