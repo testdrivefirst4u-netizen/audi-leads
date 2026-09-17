@@ -1,7 +1,16 @@
 const connectDB = require("../../../lib/db");
 const Settings = require("../../../models/Settings");
 const { requireCompanyMemberOrSuperAdmin } = require("../../../lib/auth");
-const { getPage, subscribePageToLeadgen, getPageSubscriptions, debugToken, MetaApiError, redact } = require("../../../lib/meta/graph");
+const {
+  getPage,
+  subscribePageToLeadgen,
+  getPageSubscriptions,
+  debugToken,
+  exchangeForLongLivedUserToken,
+  getPageAccessToken,
+  MetaApiError,
+  redact,
+} = require("../../../lib/meta/graph");
 const { encryptSecret, decryptSecret, tokenPreview } = require("../../../lib/meta/crypto");
 
 // Manages the Facebook Pages connected to a company. POST { action, … }:
@@ -45,6 +54,34 @@ async function inspectToken(token) {
   }
 }
 
+// Admins almost always paste the USER token Graph API Explorer shows by
+// default (short-lived, and useless for POST /{page}/subscribed_apps). Turn
+// whatever was pasted into what the CRM actually needs — the Page's own,
+// non-expiring token — so the dropdown-in-the-Explorer step is no longer
+// something the admin has to get right:
+//   user token → long-lived user token → GET /{page}?fields=access_token
+// A token that is already a Page token is used as-is.
+async function resolvePageToken(pageId, pastedToken) {
+  const info = await inspectToken(pastedToken);
+  const type = String(info.type || "").toUpperCase();
+  if (type === "PAGE" || info.valid === null) return { token: pastedToken, info, converted: false };
+
+  let userToken = pastedToken;
+  try {
+    userToken = await exchangeForLongLivedUserToken(pastedToken);
+  } catch (err) {
+    console.warn("[meta-connect] long-lived exchange failed, using the short-lived token:", redact(err.message));
+  }
+  const pageToken = await getPageAccessToken(pageId, userToken);
+  if (!pageToken) {
+    throw new MetaApiError(
+      "The Facebook account this token belongs to has no admin role on this Page (Meta returned no page access token)",
+      { code: 200 }
+    );
+  }
+  return { token: pageToken, info: await inspectToken(pageToken), converted: true };
+}
+
 async function handler(req, res) {
   if (req.session.role === "agent") return res.status(403).json({ error: "Admin access required" });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -64,16 +101,20 @@ async function handler(req, res) {
       const owner = await Settings.findOne({ "meta.pages.pageId": pageId, companyId: { $ne: companyId } }).select("companyId").lean();
       if (owner) return res.status(409).json({ error: "This Page is already connected to another company" });
 
-      const token = String(rawToken || "").trim() || (existing ? tokenFor(existing) : process.env.META_ACCESS_TOKEN || "");
-      if (!token) return res.status(400).json({ error: "A Page access token is required (or set META_ACCESS_TOKEN on the server)" });
+      const pasted = String(rawToken || "").trim() || (existing ? tokenFor(existing) : process.env.META_ACCESS_TOKEN || "");
+      if (!pasted) return res.status(400).json({ error: "A Page access token is required (or set META_ACCESS_TOKEN on the server)" });
 
+      const { token, info: tokenInfo, converted } = await resolvePageToken(pageId, pasted);
       const page = await getPage(pageId, token);
-      const tokenInfo = await inspectToken(token);
+      // Store the (possibly converted) page token whenever we ended up with
+      // one that differs from what is already stored — including the case
+      // where the server-wide META_ACCESS_TOKEN was a user token.
+      const storeToken = Boolean(rawToken) || converted;
       const entry = {
         pageId,
         pageName: page.name || "",
-        accessTokenEnc: rawToken ? encryptSecret(token) : existing?.accessTokenEnc || "",
-        tokenPreview: rawToken ? tokenPreview(token) : existing?.tokenPreview || "",
+        accessTokenEnc: storeToken ? encryptSecret(token) : existing?.accessTokenEnc || "",
+        tokenPreview: storeToken ? tokenPreview(token) : existing?.tokenPreview || "",
         instagramAccountId: page.instagram_business_account?.id || "",
         instagramUsername: page.instagram_business_account?.username || "",
         subscribed: existing?.subscribed || false,
@@ -84,15 +125,23 @@ async function handler(req, res) {
       if (existing) Object.assign(existing, entry);
       else settings.meta.pages.push(entry);
       await settings.save();
-      return res.status(200).json({ ok: true, page: { pageId, pageName: entry.pageName, instagramUsername: entry.instagramUsername }, tokenInfo });
+      return res.status(200).json({ ok: true, page: { pageId, pageName: entry.pageName, instagramUsername: entry.instagramUsername }, tokenInfo, converted });
     }
 
     if (!existing) return res.status(404).json({ error: "This Page is not connected to this company" });
 
     if (action === "verify") {
-      const token = tokenFor(existing);
+      let token = tokenFor(existing);
+      let tokenInfo = await inspectToken(token);
+      // A stored/user token that isn't a Page token gets upgraded in place.
+      if (String(tokenInfo.type || "").toUpperCase() === "USER") {
+        const upgraded = await resolvePageToken(pageId, token);
+        token = upgraded.token;
+        tokenInfo = upgraded.info;
+        existing.accessTokenEnc = encryptSecret(token);
+        existing.tokenPreview = tokenPreview(token);
+      }
       const page = await getPage(pageId, token);
-      const tokenInfo = await inspectToken(token);
       let subscribed = existing.subscribed;
       try {
         const subs = await getPageSubscriptions(pageId, token);
@@ -112,7 +161,14 @@ async function handler(req, res) {
     }
 
     if (action === "subscribe") {
-      const token = tokenFor(existing);
+      let token = tokenFor(existing);
+      const info = await inspectToken(token);
+      if (String(info.type || "").toUpperCase() === "USER") {
+        const upgraded = await resolvePageToken(pageId, token);
+        token = upgraded.token;
+        existing.accessTokenEnc = encryptSecret(token);
+        existing.tokenPreview = tokenPreview(token);
+      }
       const result = await subscribePageToLeadgen(pageId, token);
       existing.subscribed = Boolean(result?.success);
       existing.lastVerifiedAt = new Date();

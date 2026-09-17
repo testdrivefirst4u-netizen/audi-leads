@@ -132,7 +132,8 @@ export default function MetaIntegrationPanel({ companyId }) {
     const d = await pageAction("connect", newPageId.trim(), { accessToken: newToken.trim() }, "connect");
     if (!d) return;
     const missing = d.tokenInfo?.missingScopes?.length ? ` — token is missing: ${d.tokenInfo.missingScopes.join(", ")}` : "";
-    toast(`Connected "${d.page.pageName || d.page.pageId}"${d.page.instagramUsername ? ` (Instagram @${d.page.instagramUsername})` : ""}${missing}`, {
+    const conv = d.converted ? " — your user token was converted to the Page's own non-expiring token" : "";
+    toast(`Connected "${d.page.pageName || d.page.pageId}"${d.page.instagramUsername ? ` (Instagram @${d.page.instagramUsername})` : ""}${conv}${missing}`, {
       type: missing ? "err" : "ok",
     });
     setNewPageId("");
@@ -415,9 +416,9 @@ export default function MetaIntegrationPanel({ companyId }) {
             </button>
           </form>
           <div className="hint mt-2">
-            The token is checked against Meta, stored encrypted, and never shown again. Generate a long-lived Page token for a user who is an
-            admin of the Page (Graph API Explorer → your app → Page token, or via a System User in Business settings) with{" "}
-            <code>leads_retrieval</code>, <code>pages_show_list</code> and <code>pages_manage_metadata</code>.
+            Paste any token generated in Graph API Explorer for your app by an admin of the Page, with <code>leads_retrieval</code>,{" "}
+            <code>pages_show_list</code> and <code>pages_manage_metadata</code> — a user token is fine: the CRM exchanges it for the
+            Page&apos;s own non-expiring token automatically. It is checked against Meta, stored encrypted, and never shown again.
           </div>
         </div>
       </div>
