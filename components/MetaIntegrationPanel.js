@@ -146,7 +146,15 @@ export default function MetaIntegrationPanel({ companyId }) {
     const info = d.tokenInfo || {};
     if (info.valid === false) toast("Token is no longer valid — re-connect this page with a fresh token", { type: "err" });
     else if (info.missingScopes?.length) toast(`Token is missing permissions: ${info.missingScopes.join(", ")}`, { type: "err" });
-    else toast(`Page verified${d.subscribed ? " · leadgen webhook subscribed" : " · not yet subscribed to leadgen"}`);
+    else {
+      const type = info.type ? `token type: ${String(info.type).toUpperCase()}` : "token type unknown";
+      const exp = info.expiresAt ? `expires ${new Date(info.expiresAt).toLocaleDateString()}` : info.expiresAt === null ? "never expires" : "";
+      const scopes = info.scopes?.length ? `permissions: ${info.scopes.join(", ")}` : "";
+      toast(
+        `Page verified · ${d.subscribed ? "leadgen webhook subscribed" : "not yet subscribed to leadgen"} · ${[type, exp, scopes].filter(Boolean).join(" · ")}`,
+        { type: info.type && String(info.type).toUpperCase() !== "PAGE" ? "err" : "ok" }
+      );
+    }
     load();
   }
 
