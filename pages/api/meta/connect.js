@@ -135,7 +135,9 @@ async function handler(req, res) {
         existing.lastVerifyError = message;
         await settings.save().catch(() => {});
       }
-      return res.status(err.isAuthError ? 401 : 502).json({
+      // Never 401 here: lib/apiFetch.js treats a 401 as an expired CRM
+      // session and bounces the admin to /login, hiding Meta's message.
+      return res.status(err.isAuthError ? 422 : 502).json({
         error: err.isAuthError ? `Meta rejected the access token: ${message}` : `Meta Graph API error: ${message}`,
         code: err.code,
       });
