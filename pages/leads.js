@@ -13,7 +13,11 @@ import { apiFetch } from "../lib/apiFetch";
 // page feeling current without re-running this endpoint's queries 7x more
 // often than the data can change.
 const POLL_INTERVAL_MS = 20000;
-const PAGE_SIZE = 20;
+// Rows per page: 100 by default, changeable from the table footer (20 / 50
+// / 100 / 200 — the API caps at 200) and remembered per browser.
+const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
+const DEFAULT_PAGE_SIZE = 100;
+const PAGE_SIZE_STORAGE_KEY = "broaddcast:leads-page-size";
 
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);
@@ -94,6 +98,24 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
   const [leadFieldColumns, setLeadFieldColumns] = useState([]);
   const [agents, setAgents] = useState([]);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  useEffect(() => {
+    try {
+      const saved = Number(window.localStorage.getItem(PAGE_SIZE_STORAGE_KEY));
+      if (PAGE_SIZE_OPTIONS.includes(saved)) setPageSize(saved);
+    } catch {
+      /* private mode etc. — keep the default */
+    }
+  }, []);
+  function handlePageSizeChange(size) {
+    setPageSize(size);
+    setPage(1);
+    try {
+      window.localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(size));
+    } catch {
+      /* ignore */
+    }
+  }
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [exportPreset, setExportPreset] = useState("all");
@@ -125,7 +147,7 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
         sortBy: filters.sortBy || "updatedAt",
         sortDir: filters.sortDir || "desc",
         page: String(filters.page || 1),
-        pageSize: String(PAGE_SIZE),
+        pageSize: String(filters.pageSize || DEFAULT_PAGE_SIZE),
       });
       if (isSuperAdminView) params.set("companyId", filters.viewCompanyId);
       return apiFetch(`/api/leads?${params.toString()}`)
@@ -170,6 +192,7 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
     sortBy,
     sortDir,
     page,
+    pageSize,
     datePreset: exportPreset,
     customRange,
     viewCompanyId,
@@ -179,13 +202,13 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
     const timeout = setTimeout(() => fetchLeads(filters), 250);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, model, status, agentFilter, locationFilter, sourceFilter, channelFilter, campaignFilter, platformFilter, formFilter, adFilter, bucketFilter, followUpFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, viewCompanyId, fetchLeads]);
+  }, [search, model, status, agentFilter, locationFilter, sourceFilter, channelFilter, campaignFilter, platformFilter, formFilter, adFilter, bucketFilter, followUpFilter, hotOnly, sortBy, sortDir, page, pageSize, exportPreset, customRange, viewCompanyId, fetchLeads]);
 
   useEffect(() => {
     const interval = setInterval(() => fetchLeads(filters), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, model, status, agentFilter, locationFilter, sourceFilter, channelFilter, campaignFilter, platformFilter, formFilter, adFilter, bucketFilter, followUpFilter, hotOnly, sortBy, sortDir, page, exportPreset, customRange, viewCompanyId, fetchLeads]);
+  }, [search, model, status, agentFilter, locationFilter, sourceFilter, channelFilter, campaignFilter, platformFilter, formFilter, adFilter, bucketFilter, followUpFilter, hotOnly, sortBy, sortDir, page, pageSize, exportPreset, customRange, viewCompanyId, fetchLeads]);
 
   function handleSearchChange(value) {
     setSearch(value);
@@ -470,7 +493,9 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
         page={page}
         totalPages={totalPages}
         total={total}
-        pageSize={PAGE_SIZE}
+        pageSize={pageSize}
+        pageSizeOptions={PAGE_SIZE_OPTIONS}
+        onPageSizeChange={handlePageSizeChange}
         onPageChange={setPage}
         exportPreset={exportPreset}
         onExportPresetChange={handleExportPresetChange}

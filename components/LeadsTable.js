@@ -250,6 +250,8 @@ export default function LeadsTable({
   totalPages,
   total,
   pageSize,
+  pageSizeOptions,
+  onPageSizeChange,
   onPageChange,
   exportPreset,
   onExportPresetChange,
@@ -844,8 +846,23 @@ export default function LeadsTable({
           </div>
 
           <div className="pagination">
-            <span className="hint">
+            <span className="hint flex items-center gap-2">
               {firstRow}-{lastRow} of {total}
+              {onPageSizeChange && (
+                <>
+                  <span className="text-muted">·</span>
+                  <label className="flex items-center gap-1.5">
+                    Rows
+                    <select value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value))} className="text-[12px] py-1">
+                      {(pageSizeOptions || [20, 50, 100, 200]).map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
             </span>
             <div className="pagination-controls">
               <button className="btn-sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
