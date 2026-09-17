@@ -7,9 +7,13 @@ const AgentSchema = new mongoose.Schema(
     passwordHash: { type: String, required: true },
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true, index: true },
     active: { type: Boolean, default: true, index: true },
-    // Which showroom this agent covers ("" = any/unassigned — falls back to
-    // the general pool for auto-assignment). One of leadFields.js's
-    // SHOWROOM_LOCATIONS, kept as a free string here since that list can grow.
+    // Which showroom locations this agent covers — empty means "any"
+    // (general pool) for auto-assignment. Values come from the company's own
+    // location options (Settings.locationOptions / discovered lead locations)
+    // or leadFields.js's SHOWROOM_LOCATIONS; kept as free strings since those
+    // lists can grow. `location` is the pre-multi-select single value, still
+    // written (as locations[0]) so anything reading it keeps working.
+    locations: { type: [String], default: [], index: true },
     location: { type: String, default: "", index: true },
   },
   { timestamps: true }

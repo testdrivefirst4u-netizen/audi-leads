@@ -761,9 +761,9 @@ export default function LeadsTable({
                   </th>
                   <th>Type</th>
                   <th>Source</th>
+                  <th>Agent</th>
                   <th>Phone</th>
                   <th>Email</th>
-                  <th>Agent</th>
                   <SortableHeader label="Status" field="status" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th>Bucket</th>
                   <th>Calls</th>
@@ -804,13 +804,13 @@ export default function LeadsTable({
                       <td className="text-muted">
                         <SourceCell lead={lead} />
                       </td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <AgentCell lead={lead} agents={agents} role={role} readOnly={readOnly} onReassign={handleReassign} />
+                      </td>
                       <td>
                         <PhoneCell phone={lead.phone} />
                       </td>
                       <td className="text-muted">{lead.email || "-"}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <AgentCell lead={lead} agents={agents} role={role} readOnly={readOnly} onReassign={handleReassign} />
-                      </td>
                       <td>
                         <StatusBadge status={lead.status} />
                       </td>

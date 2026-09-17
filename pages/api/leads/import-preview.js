@@ -8,10 +8,10 @@ const { canonicalModelFor } = require("../../../lib/leadFields");
 const { getLeadSource, guessColumnMapping, extractLeadFields, CRM_FIELDS } = require("../../../lib/leadSources");
 const { requireSuperAdmin } = require("../../../lib/auth");
 
-// Same ceiling as pages/api/leads/import.js — this route does no writes, but
-// it does one duplicate-check query per unique (model, phone/email) pair, so
-// the same cap keeps a very large file from blowing the request budget.
-const MAX_ROWS = 2000;
+// Same per-file ceiling as pages/api/leads/import.js (which ingests in
+// 500-row chunks) — this route does no writes and a single batched
+// duplicate-check query, so the cap is about payload size, not DB time.
+const MAX_ROWS = 5000;
 const PREVIEW_ROWS = 20;
 
 // Read-only echo of dedupeAndCreateLead's own match rule (companyId +

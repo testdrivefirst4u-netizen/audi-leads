@@ -40,6 +40,7 @@ export default function ImportLeadsPage({ username }) {
   const [parseResult, setParseResult] = useState(null); // { headers, suggestedMapping, unmappedColumns, crmFields, preview, rows, counts }
   const [mapping, setMapping] = useState({});
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(null); // { done, total }
   const [result, setResult] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [history, setHistory] = useState([]);
@@ -179,17 +180,47 @@ export default function ImportLeadsPage({ username }) {
     if (data) setStep("preview");
   }
 
+  // The file is posted in chunks of CHUNK_ROWS, one request after another,
+  // all appended to the same import batch on the server — each request
+  // stays short (one bulk write), so big files can't hit a serverless
+  // timeout, and the page can show real progress.
+  const CHUNK_ROWS = 500;
   async function handleImport() {
     setImporting(true);
+    const rows = parseResult.rows;
+    setImportProgress({ done: 0, total: rows.length });
     try {
-      const res = await apiFetch("/api/leads/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyId, sourceSlug, mapping, rows: parseResult.rows, filename: file?.name || "" }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Import failed");
-      setResult({ type: "ok", data });
+      let batchId = null;
+      let data = null;
+      const allErrors = [];
+      for (let offset = 0; offset < rows.length; offset += CHUNK_ROWS) {
+        const chunk = rows.slice(offset, offset + CHUNK_ROWS);
+        const res = await apiFetch("/api/leads/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            companyId,
+            sourceSlug,
+            mapping,
+            rows: chunk,
+            filename: file?.name || "",
+            batchId,
+            totalRows: rows.length,
+            rowOffset: offset,
+            isLast: offset + CHUNK_ROWS >= rows.length,
+          }),
+        });
+        data = await res.json();
+        if (!res.ok) {
+          throw new Error(
+            `${data.error || "Import failed"}${offset > 0 ? ` (${offset.toLocaleString()} of ${rows.length.toLocaleString()} rows were imported before the error — see Import History to revoke if needed)` : ""}`
+          );
+        }
+        batchId = data.batchId;
+        allErrors.push(...(data.errors || []));
+        setImportProgress({ done: Math.min(offset + chunk.length, rows.length), total: rows.length });
+      }
+      setResult({ type: "ok", data: { ...data, errors: allErrors.slice(0, 20) } });
       setStep("result");
       toast(`Imported ${data.created} new lead${data.created === 1 ? "" : "s"}`);
       loadHistory();
@@ -199,6 +230,7 @@ export default function ImportLeadsPage({ username }) {
       toast(err.message, { type: "err" });
     } finally {
       setImporting(false);
+      setImportProgress(null);
     }
   }
 
@@ -293,7 +325,7 @@ export default function ImportLeadsPage({ username }) {
               ) : (
                 <>
                   <strong>Drag &amp; drop a CSV or Excel file here</strong>
-                  <span className="mt-1 hint">or click to browse — .csv, .xlsx, .xls (up to 2000 rows)</span>
+                  <span className="mt-1 hint">or click to browse — .csv, .xlsx, .xls (up to 5,000 rows)</span>
                 </>
               )}
             </div>
@@ -447,7 +479,11 @@ export default function ImportLeadsPage({ username }) {
 
           <div className="flex gap-2 mt-4">
             <button className="btn" onClick={handleImport} disabled={importing || parseResult.counts.validLeads === 0}>
-              {importing ? "Importing..." : `Import ${parseResult.counts.validLeads.toLocaleString()} Leads`}
+              {importing
+                ? importProgress
+                  ? `Importing… ${importProgress.done.toLocaleString()} / ${importProgress.total.toLocaleString()}`
+                  : "Importing..."
+                : `Import ${parseResult.counts.validLeads.toLocaleString()} Leads`}
             </button>
             <button className="btn-sm" onClick={() => setStep("mapping")} disabled={importing}>
               Back to Mapping

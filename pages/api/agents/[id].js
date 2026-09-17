@@ -11,24 +11,35 @@ async function handler(req, res) {
 
   if (req.method === "PATCH") {
     // Day-to-day agent management (activate/deactivate, relocate, rename,
-    // reset password) stays company-admin-only — same access as before.
+    // reset password): the company's own admin, or the super admin acting
+    // on a company via ?companyId= (same convention as everywhere else).
     // Sessions issued before agent accounts existed have no role claim —
     // treated as admin, matching lib/auth.js's requireAdmin.
-    if (req.session.role && req.session.role !== "admin") {
+    if (req.session.role === "super_admin") {
+      const companyId = req.query.companyId;
+      if (!companyId) return res.status(400).json({ error: "companyId is required" });
+      const company = await Company.findById(companyId).select("_id").lean();
+      if (!company) return res.status(404).json({ error: "Company not found" });
+      req.session.companyId = String(companyId);
+    } else if (req.session.role && req.session.role !== "admin") {
       return res.status(403).json({ error: "Admin access required" });
     }
     if (!req.session.companyId) {
       return res.status(403).json({ error: "This account is not a member of a company" });
     }
 
-    const { active, name, password, location } = req.body || {};
+    const { active, name, password, location, locations } = req.body || {};
     if (password && !isPasswordStrongEnough(password)) {
       return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
     }
     const update = {};
     if (active !== undefined) update.active = Boolean(active);
     if (name !== undefined) update.name = String(name).trim();
-    if (location !== undefined) update.location = String(location).trim();
+    if (locations !== undefined || location !== undefined) {
+      const list = Array.isArray(locations) ? locations : [location];
+      update.locations = [...new Set(list.map((l) => String(l || "").trim()).filter(Boolean))];
+      update.location = update.locations[0] || "";
+    }
     if (password) update.passwordHash = await hashPassword(password);
 
     const agent = await Agent.findOneAndUpdate({ _id: id, companyId: req.session.companyId }, update, { new: true });
@@ -37,7 +48,7 @@ async function handler(req, res) {
     invalidate(`leads-agents:${req.session.companyId}`);
 
     return res.status(200).json({
-      agent: { _id: agent._id, name: agent.name, username: agent.username, active: agent.active, location: agent.location },
+      agent: { _id: agent._id, name: agent.name, username: agent.username, active: agent.active, location: agent.location, locations: agent.locations || [] },
     });
   }
 

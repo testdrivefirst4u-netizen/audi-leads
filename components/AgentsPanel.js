@@ -1,9 +1,85 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Skeleton from "react-loading-skeleton";
 import { apiFetch } from "../lib/apiFetch";
 import { useToast } from "./ToastProvider";
 import CompanySwitcher from "./CompanySwitcher";
 import { SHOWROOM_LOCATIONS } from "../lib/leadFields";
+
+// Multi-select for showroom locations: a button showing the chosen ones,
+// opening a checkbox list. Empty selection = "Any (general pool)". Options
+// come from the company (Settings.locationOptions / discovered locations /
+// default showroom cities — see /api/agents). `onCommit` fires when the
+// list closes, so an inline edit saves once, not on every tick.
+function LocationMultiSelect({ value, options, onChange, onCommit, compact = false, disabled = false }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const selected = Array.isArray(value) ? value : [];
+  // Keep a value that is no longer in the option list selectable/visible.
+  const all = [...new Set([...(options || []), ...selected])];
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function onDocClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        onCommit?.(selected);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, selected]);
+
+  function toggle(loc) {
+    onChange(selected.includes(loc) ? selected.filter((l) => l !== loc) : [...selected, loc]);
+  }
+
+  const label = selected.length === 0 ? "Any (general pool)" : selected.length <= 2 ? selected.join(", ") : `${selected.length} locations`;
+
+  return (
+    <div ref={ref} className="relative" style={{ minWidth: compact ? 160 : undefined }}>
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen((v) => !v)}
+        disabled={disabled}
+        className={`flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-bg text-left text-ink ${
+          compact ? "px-2.5 py-1.5 text-[13px]" : "px-3 py-2.5 text-sm"
+        } disabled:opacity-60`}
+        title={selected.join(", ") || "Any (general pool)"}
+      >
+        <span className="truncate">{label}</span>
+        <span className="text-muted text-xs">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 w-full min-w-[220px] rounded-lg border border-border bg-card p-2 shadow-card">
+          <label className="flex items-center gap-2 px-1.5 py-1 text-[13px] cursor-pointer text-muted">
+            <input type="checkbox" checked={selected.length === 0} onChange={() => onChange([])} />
+            Any (general pool)
+          </label>
+          {all.map((loc) => (
+            <label key={loc} className="flex items-center gap-2 px-1.5 py-1 text-[13px] cursor-pointer">
+              <input type="checkbox" checked={selected.includes(loc)} onChange={() => toggle(loc)} />
+              {loc}
+            </label>
+          ))}
+          {all.length === 0 && <div className="hint px-1.5 py-1">No locations configured for this company yet.</div>}
+          <div className="flex justify-end pt-1">
+            <button
+              type="button"
+              className="btn-sm"
+              onClick={() => {
+                setOpen(false);
+                onCommit?.(selected);
+              }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AgentsPanel({ role }) {
   const toast = useToast();
@@ -13,7 +89,10 @@ export default function AgentsPanel({ role }) {
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [location, setLocation] = useState("");
+  const [locations, setLocations] = useState([]);
+  const [locationOptions, setLocationOptions] = useState(SHOWROOM_LOCATIONS);
+  // Inline edits: agentId -> pending selection while the dropdown is open.
+  const [editing, setEditing] = useState({});
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deleteArmedId, setDeleteArmedId] = useState(null);
@@ -27,6 +106,7 @@ export default function AgentsPanel({ role }) {
     if (!res.ok) return;
     const data = await res.json();
     setAgents(data.agents || []);
+    setLocationOptions(data.locationOptions?.length ? data.locationOptions : SHOWROOM_LOCATIONS);
     setLoading(false);
   }, [isSuperAdminView, viewCompanyId]);
 
@@ -44,7 +124,7 @@ export default function AgentsPanel({ role }) {
       const res = await apiFetch(`/api/agents${params.toString() ? `?${params.toString()}` : ""}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, username, password, location }),
+        body: JSON.stringify({ name, username, password, locations }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -53,7 +133,7 @@ export default function AgentsPanel({ role }) {
       setName("");
       setUsername("");
       setPassword("");
-      setLocation("");
+      setLocations([]);
       toast("Agent added");
       load();
     } catch (err) {
@@ -74,14 +154,23 @@ export default function AgentsPanel({ role }) {
     load();
   }
 
-  async function changeLocation(agent, newLocation) {
-    const res = await apiFetch(`/api/agents/${agent._id}`, {
+  async function saveLocations(agent, newLocations) {
+    const current = agent.locations || [];
+    if (newLocations.length === current.length && newLocations.every((l) => current.includes(l))) return; // unchanged
+    const params = new URLSearchParams();
+    if (isSuperAdminView) params.set("companyId", viewCompanyId);
+    const res = await apiFetch(`/api/agents/${agent._id}${params.toString() ? `?${params}` : ""}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ location: newLocation }),
+      body: JSON.stringify({ locations: newLocations }),
     });
-    if (res.ok) toast(`${agent.name}'s location updated`);
-    else toast("Failed to update location", { type: "err" });
+    if (res.ok) toast(`${agent.name}'s locations updated${newLocations.length ? `: ${newLocations.join(", ")}` : " — general pool"}`);
+    else toast("Failed to update locations", { type: "err" });
+    setEditing((prev) => {
+      const next = { ...prev };
+      delete next[agent._id];
+      return next;
+    });
     load();
   }
 
@@ -142,15 +231,8 @@ export default function AgentsPanel({ role }) {
                 />
               </div>
               <div className="field mb-0">
-                <label>Showroom Location</label>
-                <select value={location} onChange={(e) => setLocation(e.target.value)}>
-                  <option value="">Any (general pool)</option>
-                  {SHOWROOM_LOCATIONS.map((loc) => (
-                    <option key={loc} value={loc}>
-                      {loc}
-                    </option>
-                  ))}
-                </select>
+                <label>Showroom Locations</label>
+                <LocationMultiSelect value={locations} options={locationOptions} onChange={setLocations} />
               </div>
               <div className="sm:col-span-4">
                 <button className="btn" type="submit" disabled={saving || !viewCompanyId}>
@@ -165,7 +247,7 @@ export default function AgentsPanel({ role }) {
               <tr>
                 <th>Name</th>
                 <th>Username</th>
-                <th>Location</th>
+                <th>Locations</th>
                 <th>Leads Assigned</th>
                 <th>Status</th>
                 <th></th>
@@ -187,18 +269,13 @@ export default function AgentsPanel({ role }) {
                       <td>{a.name}</td>
                       <td className="text-muted">{a.username}</td>
                       <td>
-                        {isSuperAdminView ? (
-                          a.location || "Any (general pool)"
-                        ) : (
-                          <select value={a.location || ""} onChange={(e) => changeLocation(a, e.target.value)}>
-                            <option value="">Any (general pool)</option>
-                            {SHOWROOM_LOCATIONS.map((loc) => (
-                              <option key={loc} value={loc}>
-                                {loc}
-                              </option>
-                            ))}
-                          </select>
-                        )}
+                        <LocationMultiSelect
+                          compact
+                          value={editing[a._id] ?? a.locations ?? []}
+                          options={locationOptions}
+                          onChange={(next) => setEditing((prev) => ({ ...prev, [a._id]: next }))}
+                          onCommit={(next) => saveLocations(a, next)}
+                        />
                       </td>
                       <td>{a.leadCount}</td>
                       <td>
@@ -236,8 +313,9 @@ export default function AgentsPanel({ role }) {
             </tbody>
           </table>
           <div className="hint mt-3">
-            New leads auto-assign to the least-loaded active agent covering that lead's showroom location. If no agent
-            covers that location (or the lead has no location filled in), it falls back to the least-loaded agent from
+            New leads auto-assign to the least-loaded active agent whose locations include that lead's showroom. An agent
+            with no locations is in the general pool. If no agent covers that location (or the lead has no location filled
+            in), it falls back to the least-loaded agent from
             the general pool ("Any"). Deactivating an agent stops new assignments but keeps their existing leads with
             them{isSuperAdminView && " — deleting an agent outright unassigns their leads instead, rather than leaving them pointed at a removed agent"}.
           </div>
@@ -274,7 +352,7 @@ export default function AgentsPanel({ role }) {
                   {agents.map((a) => (
                     <tr key={a._id}>
                       <td>{a.name}</td>
-                      <td className="text-muted">{a.location || "Any"}</td>
+                      <td className="text-muted">{a.locations?.length ? a.locations.join(", ") : "Any"}</td>
                       <td>{a.leadCount}</td>
                       <td>{a.contacted}</td>
                       <td className="text-success font-semibold">{a.won}</td>
