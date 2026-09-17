@@ -166,6 +166,30 @@ encrypted (key derived from `AUTH_SECRET`) and never returned to the browser.
    *Create lead*. Within seconds it appears under *Recent webhook events* as **Lead created**, and on the
    Leads page with a Facebook/Instagram badge. Delete the test lead in the Testing Tool afterwards.
 
+### 2b. Connect Facebook (Facebook Login for Business) — the normal way to connect a Page
+
+Instead of pasting a token, the admin clicks **Connect Facebook** on the Meta Lead Ads page:
+`GET /api/auth/meta` sets a signed, 10-minute state cookie and redirects to Facebook's login dialog
+(scopes: `pages_show_list`, `pages_manage_metadata`, `leads_retrieval`, `pages_read_engagement`);
+`GET /api/auth/meta/callback` checks the state, exchanges the code **server-side** (the app secret never
+leaves the server), upgrades to a long-lived token, lists the Pages the account manages (`/me/accounts`,
+each with its own Page token) and stores them encrypted as *pending*; the CRM then shows a **Select
+Facebook Page** dialog (`GET /api/meta/pages`, names/ids only) and `POST /api/meta/connect-page` moves the
+chosen Page + token into the company's connection and subscribes it to `leadgen`.
+`POST /api/meta/disconnect-page` removes it; `GET /api/meta/connection-status` reports state. A Page can
+belong to one company only; only Pages the signed-in Facebook account manages can be chosen.
+
+One-time Meta app setup for this:
+1. App Dashboard → **Add product → Facebook Login for Business** (or *Facebook Login*).
+2. Facebook Login → **Settings** → *Valid OAuth Redirect URIs*: `https://sales.broaddcast.com/api/auth/meta/callback`
+   (plus `http://localhost:3000/api/auth/meta/callback` for local testing, with `META_OAUTH_REDIRECT_URI`
+   set to that in `.env.local`). *Client OAuth login* and *Web OAuth login* on; *Enforce HTTPS* on.
+3. App settings → Basic → **App Domains**: `sales.broaddcast.com`.
+4. Optional: create a Login *Configuration* with the four permissions and put its ID in `META_LOGIN_CONFIG_ID`.
+
+The **Advanced** link on the page keeps the manual path (paste a System User / Page token) for
+automation-only setups.
+
 ### 3. Permissions & App Review
 
 - In **Development** mode the integration works for app admins/developers/testers and the Pages they manage —
@@ -195,7 +219,7 @@ encrypted (key derived from `AUTH_SECRET`) and never returned to the browser.
 ```
 node scripts/test-meta-integration.js
 ```
-Runs 34 checks with mock data only: webhook verification (right/wrong token), signature enforcement,
+Runs 43 checks with mock data only (incl. the Connect Facebook start/callback guards): webhook verification (right/wrong token), signature enforcement,
 duplicate deliveries, Facebook and Instagram leads, missing phone/email, custom questions, Graph API
 failure + retry, expired token, disabled connection, unauthorised admin routes, and that normal lead
 creation/assignment still works. It creates a throw-away company in the connected database and removes

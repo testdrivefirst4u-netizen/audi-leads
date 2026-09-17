@@ -90,6 +90,8 @@ const MetaPageSchema = new mongoose.Schema(
     instagramAccountId: { type: String, default: "" },
     instagramUsername: { type: String, default: "" },
     subscribed: { type: Boolean, default: false }, // page subscribed to this app's leadgen webhook
+    connectedVia: { type: String, enum: ["oauth", "manual", ""], default: "" },
+    connectedBy: { type: String, default: "" }, // Facebook user name (oauth) or CRM username (manual)
     connectedAt: { type: Date },
     lastVerifiedAt: { type: Date },
     lastVerifyError: { type: String, default: "" },
@@ -97,9 +99,41 @@ const MetaPageSchema = new mongoose.Schema(
   { _id: true }
 );
 
+// Facebook Login for Business state. After the admin authorises the app,
+// the callback stores every Page their Facebook account can manage here —
+// each with its own encrypted Page token — until they pick one on the
+// Meta Lead Ads page (connect-page moves it into `pages` above and clears
+// this). Kept short-lived (`expiresAt`) so a half-finished connection does
+// not leave usable tokens lying around. `fbUserName` is only for display
+// ("Connected via John's Facebook").
+const MetaPendingPageSchema = new mongoose.Schema(
+  {
+    pageId: { type: String, required: true },
+    pageName: { type: String, default: "" },
+    accessTokenEnc: { type: String, default: "" },
+    instagramAccountId: { type: String, default: "" },
+    instagramUsername: { type: String, default: "" },
+    tasks: { type: [String], default: [] },
+  },
+  { _id: false }
+);
+
+const MetaOAuthSchema = new mongoose.Schema(
+  {
+    fbUserId: { type: String, default: "" },
+    fbUserName: { type: String, default: "" },
+    authorizedAt: { type: Date },
+    pendingPages: { type: [MetaPendingPageSchema], default: [] },
+    expiresAt: { type: Date },
+    grantedScopes: { type: [String], default: [] },
+  },
+  { _id: false }
+);
+
 const MetaConfigSchema = new mongoose.Schema(
   {
     enabled: { type: Boolean, default: true },
+    oauth: { type: MetaOAuthSchema, default: () => ({}) },
     connectionName: { type: String, default: "" },
     businessPortfolio: { type: String, default: "" },
     pages: { type: [MetaPageSchema], default: [] },

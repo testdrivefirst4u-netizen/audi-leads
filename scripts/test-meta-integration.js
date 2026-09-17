@@ -134,6 +134,43 @@ async function httpTests() {
   check("POST /api/meta/connect without a session is 401", r.status === 401);
   r = await fetch(`${BASE_URL}/api/meta/events`);
   check("GET /api/meta/events without a session is 401", r.status === 401);
+  r = await fetch(`${BASE_URL}/api/auth/meta`, { redirect: "manual" });
+  check("GET /api/auth/meta (Connect Facebook) without a session is 401", r.status === 401);
+
+  // Facebook Login for Business flow, as the company admin (ADMIN_USERNAME /
+  // ADMIN_PASSWORD from .env). Facebook itself is never contacted: we stop
+  // at the redirect and drive the callback with error / bad-state inputs.
+  const au = process.env.ADMIN_USERNAME;
+  const ap = process.env.ADMIN_PASSWORD;
+  if (au && ap && process.env.META_APP_ID && process.env.META_APP_SECRET) {
+    const login = await fetch(`${BASE_URL}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: au, password: ap }) });
+    const session = /audi_session=([^;]+)/.exec(login.headers.get("set-cookie") || "")?.[1];
+    if (session) {
+      const cookie = `audi_session=${session}`;
+      r = await fetch(`${BASE_URL}/api/auth/meta`, { headers: { cookie }, redirect: "manual" });
+      const loc = r.headers.get("location") || "";
+      const stateCookie = /meta_oauth_state=([^;]+)/.exec(r.headers.get("set-cookie") || "")?.[1] || "";
+      const state = new URL(loc, "http://x").searchParams.get("state") || "";
+      check("Connect Facebook redirects to facebook.com/dialog/oauth with the app id and only the lead-ads scopes",
+        r.status === 302 && loc.startsWith("https://www.facebook.com/") && loc.includes(`client_id=${process.env.META_APP_ID}`) && /scope=pages_show_list%2Cpages_manage_metadata%2Cleads_retrieval%2Cpages_read_engagement/.test(loc) && !loc.includes(process.env.META_APP_SECRET));
+      check("…and sets a signed state cookie matching the state in the URL", Boolean(stateCookie) && stateCookie === state);
+      r = await fetch(`${BASE_URL}/api/auth/meta/callback?state=${state}x&code=abc`, { headers: { cookie: `${cookie}; meta_oauth_state=${stateCookie}` }, redirect: "manual" });
+      check("callback with a tampered state is refused (no code exchange)", r.status === 302 && /fb=error/.test(r.headers.get("location") || ""));
+      r = await fetch(`${BASE_URL}/api/auth/meta/callback?state=${state}&code=abc`, { headers: { cookie }, redirect: "manual" });
+      check("callback without the state cookie is refused (CSRF)", r.status === 302 && /fb=error/.test(r.headers.get("location") || ""));
+      r = await fetch(`${BASE_URL}/api/auth/meta/callback?state=${state}&error=access_denied&error_reason=user_denied`, { headers: { cookie: `${cookie}; meta_oauth_state=${stateCookie}` }, redirect: "manual" });
+      check("callback when the user cancels returns to the page with a reason", r.status === 302 && (r.headers.get("location") || "").includes("fb=error&reason=Facebook+login+was+cancelled"));
+      r = await fetch(`${BASE_URL}/api/meta/connect-page`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ pageId: "990000000000001" }) });
+      check("connect-page without a fresh Facebook login is refused (409)", r.status === 409);
+      r = await fetch(`${BASE_URL}/api/meta/pages`, { headers: { cookie } });
+      const pj = await r.json().catch(() => ({}));
+      check("GET /api/meta/pages never includes tokens", r.status === 200 && !JSON.stringify(pj).includes("accessToken") && !JSON.stringify(pj).includes("EAA"));
+    } else {
+      console.log("  (Facebook Login checks skipped - admin login failed)");
+    }
+  } else {
+    console.log("  (Facebook Login checks skipped - ADMIN_USERNAME/ADMIN_PASSWORD or META_APP_ID/SECRET not set)");
+  }
 }
 
 // ------------------------------------------------------------ pipeline half
@@ -178,6 +215,11 @@ async function pipelineTests() {
   const { createAgentAssigner } = require("../lib/syncService");
 
   await connectDB();
+
+  // OAuth state: signed, bound to a company, expiring, tamper-evident.
+  const { createState, verifyState } = require("../lib/meta/oauth");
+  const st = createState({ companyId: "abc", returnTo: "/meta-integration" });
+  check("OAuth state round-trips with its company and rejects tampering", verifyState(st)?.companyId === "abc" && verifyState(st.slice(0, -3) + "xyz") === null && verifyState("garbage") === null);
 
   // Pure mapping checks first — no DB involved.
   const m = mapMetaLeadToCrm({ lead: mockLead(), formName: "Q5 Test Drive Form", pageId: TEST_PAGE_ID, settings: {} });

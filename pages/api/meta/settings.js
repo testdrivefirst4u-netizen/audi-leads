@@ -2,6 +2,7 @@ const connectDB = require("../../../lib/db");
 const Settings = require("../../../models/Settings");
 const { requireCompanyMemberOrSuperAdmin } = require("../../../lib/auth");
 const { apiVersion } = require("../../../lib/meta/graph");
+const { redirectUri } = require("../../../lib/meta/oauth");
 
 // Per-company Meta Lead Ads settings (Pages Router equivalent of the
 // requested /api/admin/meta/settings):
@@ -22,6 +23,8 @@ function publicPage(p) {
     instagramAccountId: p.instagramAccountId || "",
     instagramUsername: p.instagramUsername || "",
     subscribed: Boolean(p.subscribed),
+    connectedVia: p.connectedVia || (p.accessTokenEnc ? "manual" : ""),
+    connectedBy: p.connectedBy || "",
     connectedAt: p.connectedAt || null,
     lastVerifiedAt: p.lastVerifiedAt || null,
     lastVerifyError: p.lastVerifyError || "",
@@ -53,6 +56,11 @@ async function handler(req, res) {
         lastLeadAt: meta.lastLeadAt || null,
         lastError: meta.lastError || "",
         lastErrorAt: meta.lastErrorAt || null,
+        oauth: {
+          fbUserName: meta.oauth?.fbUserName || "",
+          authorizedAt: meta.oauth?.authorizedAt || null,
+          pendingPages: meta.oauth?.expiresAt && new Date(meta.oauth.expiresAt) > new Date() ? (meta.oauth.pendingPages || []).length : 0,
+        },
       },
       app: {
         appId: process.env.META_APP_ID || "",
@@ -61,6 +69,8 @@ async function handler(req, res) {
         fallbackTokenSet: Boolean(process.env.META_ACCESS_TOKEN),
         apiVersion: apiVersion(),
         webhookUrl: webhookUrlFor(req),
+        oauthRedirectUri: redirectUri(req),
+        loginConfigured: Boolean(process.env.META_APP_ID && process.env.META_APP_SECRET),
         defaultPageId: process.env.META_PAGE_ID || "",
       },
     });

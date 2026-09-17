@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import Skeleton from "react-loading-skeleton";
 import { apiFetch } from "../lib/apiFetch";
 import { useToast } from "./ToastProvider";
@@ -29,6 +30,7 @@ const EVENT_STATUS = {
 
 export default function MetaIntegrationPanel({ companyId }) {
   const toast = useToast();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [events, setEvents] = useState([]);
@@ -42,6 +44,14 @@ export default function MetaIntegrationPanel({ companyId }) {
   const [enabled, setEnabled] = useState(true);
   const [newPageId, setNewPageId] = useState("");
   const [newToken, setNewToken] = useState("");
+  const [showManual, setShowManual] = useState(false);
+
+  // Facebook Login for Business: page picker shown after the OAuth
+  // callback has stored the admin's manageable Pages (see
+  // pages/api/auth/meta/callback.js).
+  const [picker, setPicker] = useState(null); // { fbUserName, pages: [...] }
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [choosing, setChoosing] = useState("");
 
   const qs = useCallback(() => (companyId ? `?companyId=${encodeURIComponent(companyId)}` : ""), [companyId]);
 
@@ -168,12 +178,83 @@ export default function MetaIntegrationPanel({ companyId }) {
 
   async function removePage(pageId) {
     if (!window.confirm("Disconnect this Page? New leads from it will stop arriving until it is connected again.")) return;
-    const d = await pageAction("remove", pageId);
-    if (d) {
+    setBusy(`${pageId}:remove`);
+    try {
+      const res = await apiFetch(`/api/meta/disconnect-page${qs()}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageId }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Failed to disconnect");
       toast("Page disconnected");
       load();
+    } catch (err) {
+      toast(err.message, { type: "err" });
+    } finally {
+      setBusy("");
     }
   }
+
+  // "Connect Facebook" — a full-page redirect through Facebook Login for
+  // Business; we come back to this page with ?fb=pick|error|nopages.
+  function connectFacebook() {
+    window.location.href = `/api/auth/meta${qs()}`;
+  }
+
+  const openPicker = useCallback(async () => {
+    setPickerLoading(true);
+    try {
+      const res = await apiFetch(`/api/meta/pages${qs()}`);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Could not load your Facebook Pages");
+      if (d.expired || !d.pages?.length) {
+        toast("The Facebook login has expired - click Connect Facebook again", { type: "err" });
+        return;
+      }
+      setPicker(d);
+    } catch (err) {
+      toast(err.message, { type: "err" });
+    } finally {
+      setPickerLoading(false);
+    }
+  }, [qs, toast]);
+
+  async function choosePage(pageId) {
+    setChoosing(pageId);
+    try {
+      const res = await apiFetch(`/api/meta/connect-page${qs()}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageId }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Could not connect the Page");
+      setPicker(null);
+      toast(
+        `Connected "${d.page.pageName || pageId}"${d.page.instagramUsername ? ` (Instagram @${d.page.instagramUsername})` : ""}${
+          d.page.subscribed ? " - leadgen webhook subscribed" : d.subscribeError ? ` - subscription failed: ${d.subscribeError}` : ""
+        }`,
+        { type: d.page.subscribed ? "ok" : "err" }
+      );
+      load();
+    } catch (err) {
+      toast(err.message, { type: "err" });
+    } finally {
+      setChoosing("");
+    }
+  }
+
+  // Handle the flags the OAuth callback appends when it sends us back.
+  useEffect(() => {
+    if (!router.isReady) return;
+    const { fb, reason, ...rest } = router.query;
+    if (!fb) return;
+    if (fb === "pick") openPicker();
+    else toast(reason || (fb === "nopages" ? "No Facebook Pages found for that account" : "Facebook connection failed"), { type: "err" });
+    router.replace({ pathname: router.pathname, query: rest }, undefined, { shallow: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.isReady]);
 
   async function retry(eventId) {
     setBusy(eventId ? `retry:${eventId}` : "retryFailed");
@@ -230,7 +311,7 @@ export default function MetaIntegrationPanel({ companyId }) {
         <div className="dash-card" style={{ "--dash-accent": connected ? "#1baf7a" : "#eda100" }}>
           <div className="label">Connection</div>
           <div className="value text-[18px]">{!config.enabled ? "Disabled" : connected ? `${config.pages.length} page${config.pages.length === 1 ? "" : "s"}` : "No pages"}</div>
-          <div className="dash-card-caption">{connected ? config.pages.map((p) => p.pageName || p.pageId).join(", ") : "Connect a Facebook Page below"}</div>
+          <div className="dash-card-caption">{connected ? config.pages.map((p) => p.pageName || p.pageId).join(", ") : "Use Connect Facebook below"}</div>
         </div>
         <div className="dash-card" style={{ "--dash-accent": "#2a78d6" }}>
           <div className="label">Last webhook received</div>
@@ -303,7 +384,7 @@ export default function MetaIntegrationPanel({ companyId }) {
       {/* Connection + pages */}
       <div className="panel mb-6">
         <div className="panel-header">
-          <h2>Meta connection</h2>
+          <h2>Facebook connection</h2>
         </div>
         <div className="p-5">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end mb-3">
@@ -325,103 +406,146 @@ export default function MetaIntegrationPanel({ companyId }) {
               </button>
             </div>
           </div>
-          <div className="hint mb-5">
-            App ID <code>{app.appId || "—"}</code> comes from the server environment (META_APP_ID) and is shared by every company; each company
-            connects its own Facebook Page(s) here. Instagram lead ads run through the Instagram account linked to the Page, so they need no
-            separate connection.
-          </div>
 
-          <label className="block mb-1.5 text-sm font-semibold">Connected Facebook Pages</label>
-          <div className="table-scroll mb-4">
-            <table>
-              <thead>
-                <tr>
-                  <th>Page</th>
-                  <th>Instagram</th>
-                  <th>Access token</th>
-                  <th>Leadgen webhook</th>
-                  <th>Last verified</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {config.pages.map((p) => (
-                  <tr key={p.pageId}>
-                    <td>
-                      <strong>{p.pageName || "Untitled page"}</strong>
-                      <div className="hint m-0">ID {p.pageId}</div>
-                    </td>
-                    <td className="text-muted">{p.instagramUsername ? `@${p.instagramUsername}` : p.instagramAccountId || "—"}</td>
-                    <td>
-                      {p.hasToken ? (
-                        <>
-                          <code>{p.tokenPreview}</code>
-                          {p.lastVerifyError && <div className="hint m-0 text-danger whitespace-normal">{p.lastVerifyError}</div>}
-                        </>
-                      ) : app.fallbackTokenSet ? (
-                        <span className="hint">Using server token</span>
-                      ) : (
-                        <StatusPill ok={false}>No token</StatusPill>
-                      )}
-                    </td>
-                    <td>
-                      <StatusPill ok={p.subscribed} warn={!p.subscribed}>
-                        {p.subscribed ? "Subscribed" : "Not subscribed"}
-                      </StatusPill>
-                    </td>
-                    <td className="text-muted">{fmt(p.lastVerifiedAt)}</td>
-                    <td>
-                      <div className="flex gap-2 flex-wrap">
-                        <button className="btn-sm" onClick={() => verifyPage(p.pageId)} disabled={busy === `${p.pageId}:verify`}>
-                          {busy === `${p.pageId}:verify` ? "Checking…" : "Verify"}
-                        </button>
+          {config.pages.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border bg-bg p-5 text-center">
+              <div className="font-semibold mb-1">No Facebook Page connected</div>
+              <div className="hint mb-4">
+                Sign in with a Facebook account that manages this company&apos;s Page. You&apos;ll pick the Page on the next screen; the
+                CRM stores its access token encrypted and subscribes it to lead notifications automatically.
+              </div>
+              <button type="button" className="btn" onClick={connectFacebook} disabled={!app.loginConfigured}>
+                Connect Facebook
+              </button>
+              {!app.loginConfigured && <div className="hint mt-2 text-danger">META_APP_ID / META_APP_SECRET must be set on the server first.</div>}
+              {config.oauth?.pendingPages > 0 && (
+                <div className="mt-3">
+                  <button type="button" className="btn-sm" onClick={openPicker} disabled={pickerLoading}>
+                    {pickerLoading ? "Loading…" : `Choose from ${config.oauth.pendingPages} Page${config.oauth.pendingPages === 1 ? "" : "s"} found`}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {config.pages.map((p) => (
+                <div key={p.pageId} className="rounded-xl border border-border bg-bg p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-[15px]">{p.pageName || "Untitled page"}</span>
+                        <StatusPill ok={p.hasToken || app.fallbackTokenSet}>{p.hasToken ? "Connected" : app.fallbackTokenSet ? "Server token" : "No token"}</StatusPill>
+                        <StatusPill ok={p.subscribed} warn={!p.subscribed}>
+                          {p.subscribed ? "Leadgen webhook subscribed" : "Webhook not subscribed"}
+                        </StatusPill>
+                      </div>
+                      <div className="hint mt-1">
+                        Page ID {p.pageId}
+                        {p.instagramUsername ? ` · Instagram @${p.instagramUsername}` : ""}
+                        {p.connectedVia === "oauth" ? ` · connected via Facebook Login${p.connectedBy ? ` (${p.connectedBy})` : ""}` : p.connectedVia === "manual" ? " · manual token" : ""}
+                        {p.connectedAt ? ` · since ${new Date(p.connectedAt).toLocaleDateString()}` : ""}
+                        {p.lastVerifiedAt ? ` · last checked ${fmt(p.lastVerifiedAt)}` : ""}
+                      </div>
+                      {p.lastVerifyError && <div className="hint mt-1 text-danger whitespace-normal">{p.lastVerifyError}</div>}
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      <button className="btn-sm" onClick={() => verifyPage(p.pageId)} disabled={busy === `${p.pageId}:verify`}>
+                        {busy === `${p.pageId}:verify` ? "Testing…" : "Test connection"}
+                      </button>
+                      {!p.subscribed && (
                         <button className="btn-sm" onClick={() => subscribePage(p.pageId)} disabled={busy === `${p.pageId}:subscribe`}>
                           {busy === `${p.pageId}:subscribe` ? "Subscribing…" : "Subscribe leadgen"}
                         </button>
-                        <button className="btn-sm" onClick={() => removePage(p.pageId)} disabled={busy === `${p.pageId}:remove`}>
-                          Disconnect
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {config.pages.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="empty-state">
-                      No Facebook Page connected yet — add one below.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                      )}
+                      <button className="btn-sm" onClick={connectFacebook} disabled={!app.loginConfigured}>
+                        Reconnect
+                      </button>
+                      <button className="btn-sm" onClick={() => removePage(p.pageId)} disabled={busy === `${p.pageId}:remove`}>
+                        {busy === `${p.pageId}:remove` ? "Removing…" : "Disconnect"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div>
+                <button type="button" className="btn-sm" onClick={connectFacebook} disabled={!app.loginConfigured}>
+                  + Connect another Page
+                </button>
+              </div>
+            </div>
+          )}
 
-          <form onSubmit={connectPage} className="grid grid-cols-1 sm:grid-cols-[220px_1fr_auto] gap-3 items-end">
-            <div className="field mb-0">
-              <label>Facebook Page ID</label>
-              <input value={newPageId} onChange={(e) => setNewPageId(e.target.value)} placeholder="1234567890" required />
-            </div>
-            <div className="field mb-0">
-              <label>Page access token {app.fallbackTokenSet ? "(optional — server token is used if blank)" : ""}</label>
-              <input
-                type="password"
-                value={newToken}
-                onChange={(e) => setNewToken(e.target.value)}
-                placeholder="EAAG… (long-lived Page token with leads_retrieval)"
-                autoComplete="off"
-              />
-            </div>
-            <button className="btn" type="submit" disabled={busy === "connect"}>
-              {busy === "connect" ? "Connecting…" : config.pages.some((p) => p.pageId === newPageId.trim()) ? "Update token" : "Connect Page"}
+          <div className="hint mt-4">
+            <button type="button" className="text-accent font-semibold underline-offset-2 hover:underline" onClick={() => setShowManual((v) => !v)}>
+              {showManual ? "Hide" : "Advanced:"} connect with a System User token instead
             </button>
-          </form>
-          <div className="hint mt-2">
-            Paste any token generated in Graph API Explorer for your app by an admin of the Page, with <code>leads_retrieval</code>,{" "}
-            <code>pages_show_list</code> and <code>pages_manage_metadata</code> — a user token is fine: the CRM exchanges it for the
-            Page&apos;s own non-expiring token automatically. It is checked against Meta, stored encrypted, and never shown again.
           </div>
+          {showManual && (
+            <form onSubmit={connectPage} className="mt-3 grid grid-cols-1 sm:grid-cols-[220px_1fr_auto] gap-3 items-end">
+              <div className="field mb-0">
+                <label>Facebook Page ID</label>
+                <input value={newPageId} onChange={(e) => setNewPageId(e.target.value)} placeholder="1234567890" required />
+              </div>
+              <div className="field mb-0">
+                <label>Page access token</label>
+                <input
+                  type="password"
+                  value={newToken}
+                  onChange={(e) => setNewToken(e.target.value)}
+                  placeholder="EAA… (System User or Page token with leads_retrieval)"
+                  autoComplete="off"
+                />
+              </div>
+              <button className="btn-sm" type="submit" disabled={busy === "connect"}>
+                {busy === "connect" ? "Connecting…" : "Connect with token"}
+              </button>
+            </form>
+          )}
         </div>
       </div>
+
+      {/* Page picker modal (after Facebook Login) */}
+      {picker && (
+        <div className="modal-backdrop" onClick={() => setPicker(null)}>
+          <div className="modal max-w-[560px]" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2>Select the Facebook Page for this company</h2>
+                {picker.fbUserName && <div className="hint mt-0.5">Signed in as {picker.fbUserName}</div>}
+              </div>
+              <button className="btn-icon" onClick={() => setPicker(null)}>
+                &times;
+              </button>
+            </div>
+            <div className="p-5 flex flex-col gap-2">
+              {picker.pages.map((p) => {
+                const blocked = p.connectedToOtherCompany || !p.hasToken || !p.canManage;
+                return (
+                  <div key={p.pageId} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-bg px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="font-semibold truncate">{p.pageName || "Untitled page"}</div>
+                      <div className="hint m-0">
+                        ID {p.pageId}
+                        {p.instagramUsername ? ` · Instagram @${p.instagramUsername}` : ""}
+                        {p.alreadyConnected ? " · already connected here" : ""}
+                        {p.connectedToOtherCompany ? " · connected to another company" : ""}
+                        {!p.hasToken ? " · no access token (needs Manage role)" : ""}
+                      </div>
+                    </div>
+                    <button className="btn-sm btn-export" onClick={() => choosePage(p.pageId)} disabled={blocked || Boolean(choosing)}>
+                      {choosing === p.pageId ? "Connecting…" : p.alreadyConnected ? "Reconnect" : "Connect"}
+                    </button>
+                  </div>
+                );
+              })}
+              <div className="hint mt-1">
+                Only Pages your Facebook account manages are listed. If the Page you need is missing, cancel and use Connect Facebook
+                again, making sure that Page is ticked in the Facebook dialog.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Events */}
       <div className="panel">

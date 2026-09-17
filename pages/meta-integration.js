@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import CompanySwitcher from "../components/CompanySwitcher";
 import MetaIntegrationPanel from "../components/MetaIntegrationPanel";
@@ -22,7 +23,10 @@ export async function getServerSideProps(context) {
 
 export default function MetaIntegrationPage({ username, role, companyName, companyLogoUrl, companyBrandColor }) {
   const isSuperAdminView = role === "super_admin";
-  const [viewCompanyId, setViewCompanyId] = useState("");
+  const router = useRouter();
+  // After Facebook Login the callback sends the super admin back with the
+  // company they were connecting, so the switcher lands on it again.
+  const [viewCompanyId, setViewCompanyId] = useState(() => (typeof router.query.companyId === "string" ? router.query.companyId : ""));
 
   return (
     <Layout username={username} role={role} companyName={companyName} companyLogoUrl={companyLogoUrl} companyBrandColor={companyBrandColor}>
