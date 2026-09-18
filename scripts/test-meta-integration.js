@@ -137,17 +137,31 @@ async function httpTests() {
   r = await fetch(`${BASE_URL}/api/auth/meta`, { redirect: "manual" });
   check("GET /api/auth/meta (Connect Facebook) without a session is 401", r.status === 401);
 
-  // Facebook Login for Business flow, as the company admin (ADMIN_USERNAME /
-  // ADMIN_PASSWORD from .env). Facebook itself is never contacted: we stop
-  // at the redirect and drive the callback with error / bad-state inputs.
-  const au = process.env.ADMIN_USERNAME;
-  const ap = process.env.ADMIN_PASSWORD;
+  // Facebook Login for Business flow, as the super admin (SUPER_ADMIN_USERNAME
+  // / SUPER_ADMIN_PASSWORD from .env) acting on the first company. Facebook
+  // itself is never contacted: we stop at the redirect and drive the callback
+  // with error / bad-state inputs. A company admin must be refused.
+  const au = process.env.SUPER_ADMIN_USERNAME;
+  const ap = process.env.SUPER_ADMIN_PASSWORD;
+  if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
+    const l = await fetch(`${BASE_URL}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: process.env.ADMIN_USERNAME, password: process.env.ADMIN_PASSWORD }) });
+    const adminSession = /audi_session=([^;]+)/.exec(l.headers.get("set-cookie") || "")?.[1];
+    if (adminSession) {
+      r = await fetch(`${BASE_URL}/api/auth/meta`, { headers: { cookie: `audi_session=${adminSession}` }, redirect: "manual" });
+      check("a company admin cannot start Connect Facebook (super admin only)", r.status === 403);
+      r = await fetch(`${BASE_URL}/api/meta/settings`, { headers: { cookie: `audi_session=${adminSession}` } });
+      check("a company admin cannot read Meta settings (super admin only)", r.status === 403);
+    }
+  }
   if (au && ap && process.env.META_APP_ID && process.env.META_APP_SECRET) {
     const login = await fetch(`${BASE_URL}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: au, password: ap }) });
     const session = /audi_session=([^;]+)/.exec(login.headers.get("set-cookie") || "")?.[1];
-    if (session) {
+    const companies = session ? await (await fetch(`${BASE_URL}/api/companies`, { headers: { cookie: `audi_session=${session}` } })).json().catch(() => ({})) : {};
+    const companyId = companies.companies?.[0]?._id;
+    if (session && companyId) {
       const cookie = `audi_session=${session}`;
-      r = await fetch(`${BASE_URL}/api/auth/meta`, { headers: { cookie }, redirect: "manual" });
+      const cq = `?companyId=${companyId}`;
+      r = await fetch(`${BASE_URL}/api/auth/meta${cq}`, { headers: { cookie }, redirect: "manual" });
       const loc = r.headers.get("location") || "";
       const stateCookie = /meta_oauth_state=([^;]+)/.exec(r.headers.get("set-cookie") || "")?.[1] || "";
       const state = new URL(loc, "http://x").searchParams.get("state") || "";
@@ -160,16 +174,16 @@ async function httpTests() {
       check("callback without the state cookie is refused (CSRF)", r.status === 302 && /fb=error/.test(r.headers.get("location") || ""));
       r = await fetch(`${BASE_URL}/api/auth/meta/callback?state=${state}&error=access_denied&error_reason=user_denied`, { headers: { cookie: `${cookie}; meta_oauth_state=${stateCookie}` }, redirect: "manual" });
       check("callback when the user cancels returns to the page with a reason", r.status === 302 && (r.headers.get("location") || "").includes("fb=error&reason=Facebook+login+was+cancelled"));
-      r = await fetch(`${BASE_URL}/api/meta/connect-page`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ pageId: "990000000000001" }) });
+      r = await fetch(`${BASE_URL}/api/meta/connect-page${cq}`, { method: "POST", headers: { cookie, "Content-Type": "application/json" }, body: JSON.stringify({ pageId: "990000000000001" }) });
       check("connect-page without a fresh Facebook login is refused (409)", r.status === 409);
-      r = await fetch(`${BASE_URL}/api/meta/pages`, { headers: { cookie } });
+      r = await fetch(`${BASE_URL}/api/meta/pages${cq}`, { headers: { cookie } });
       const pj = await r.json().catch(() => ({}));
       check("GET /api/meta/pages never includes tokens", r.status === 200 && !JSON.stringify(pj).includes("accessToken") && !JSON.stringify(pj).includes("EAA"));
     } else {
-      console.log("  (Facebook Login checks skipped - admin login failed)");
+      console.log("  (Facebook Login checks skipped - super admin login failed or no company)");
     }
   } else {
-    console.log("  (Facebook Login checks skipped - ADMIN_USERNAME/ADMIN_PASSWORD or META_APP_ID/SECRET not set)");
+    console.log("  (Facebook Login checks skipped - SUPER_ADMIN_USERNAME/PASSWORD or META_APP_ID/SECRET not set)");
   }
 }
 
