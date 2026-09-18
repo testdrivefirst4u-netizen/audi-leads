@@ -225,3 +225,27 @@ failure + retry, expired token, disabled connection, unauthorised admin routes, 
 creation/assignment still works. It creates a throw-away company in the connected database and removes
 it afterwards. For the HTTP half, set `META_APP_SECRET` and `META_VERIFY_TOKEN` for the dev server (any
 test values) before running.
+
+## Instant sheet push (leads within seconds, no waiting for the sync)
+
+The scheduled sync reads every tab of every sheet (~25 s for 36 tabs) and on Vercel runs once a day, so a
+row added to the sheet can wait hours. `POST /api/public/sheet-rows` is the push alternative: a small
+Google Apps Script attached to the lead sheet sends each newly appended row the moment it lands, and the
+CRM runs it through the very same ingestion as the sync (`ingestTabRows` in `lib/syncService.js`), so the
+daily full sync later recognises those rows as already imported (same tab + row number).
+
+Setup, per lead sheet (5 minutes):
+1. CRM → **Companies → API Keys** for the company → generate a key (source name e.g. "Google Sheets").
+2. Open the Google Sheet → **Extensions → Apps Script** → paste
+   [`scripts/google-apps-script/push-new-rows.gs`](scripts/google-apps-script/push-new-rows.gs), set `API_KEY`
+   to the key from step 1 → **Save**.
+3. Select the `setupTriggers` function → **Run** → approve the permissions. That installs an *on change*
+   trigger plus a 1-minute safety sweep and records the current row count of every tab as the baseline.
+
+From then on: new row → pushed within seconds (on change) or within a minute (sweep) → lead with the usual
+dedup/assignment. Failed pushes are retried automatically on the next run; every push is logged under the
+key's *Logs* in Companies → API Keys. Only rows added after installation are pushed; history is covered by
+the regular sync. `node scripts/test-sheet-push.js` exercises the endpoint end to end.
+
+For Facebook/Instagram lead forms specifically, the Meta Lead Ads webhook (above) is the more direct route —
+it delivers the lead the moment it is submitted, without the sheet in between.
