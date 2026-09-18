@@ -17,6 +17,7 @@ import {
   bucketColor,
 } from "../lib/leadFields";
 import { WhatsAppIcon, SortIcon, FireIcon } from "./icons";
+import SourceBadge from "./SourceBadge";
 
 function formatDate(value) {
   if (!value) return "-";
@@ -83,21 +84,8 @@ function LatestEnquiryCell({ lead }) {
 // Facebook / Instagram badge for Meta Lead Ads leads (platform is set by
 // the webhook pipeline); every other source renders as plain text.
 export function SourceCell({ lead }) {
-  if (lead.platform === "facebook") {
-    return (
-      <span className="pill bg-[#eef3ff] text-[#1d4ed8]" title={`Facebook Lead Ads${lead.metaFormName ? ` · ${lead.metaFormName}` : ""}`}>
-        <span aria-hidden="true">f</span>&nbsp;Facebook
-      </span>
-    );
-  }
-  if (lead.platform === "instagram") {
-    return (
-      <span className="pill bg-[#fdf2f8] text-[#be185d]" title={`Instagram Lead Ads${lead.metaFormName ? ` · ${lead.metaFormName}` : ""}`}>
-        <span aria-hidden="true">◎</span>&nbsp;Instagram
-      </span>
-    );
-  }
-  return <span>{lead.source || "Meta Ads"}</span>;
+  const detail = lead.metaFormName ? ` · ${lead.metaFormName}` : lead.campaign ? ` · ${lead.campaign}` : "";
+  return <SourceBadge source={lead.source} platform={lead.platform} title={`${lead.platform === "facebook" ? "Facebook Lead Ads" : lead.platform === "instagram" ? "Instagram Lead Ads" : lead.source || "Meta Ads"}${detail}`} />;
 }
 
 const NEW_LEAD_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -712,6 +700,7 @@ export default function LeadsTable({
                   </div>
                   <div className="flex flex-wrap items-center gap-2 mb-2">
                     <ModelBadge lead={lead} />
+                    <SourceCell lead={lead} />
                     <LeadTypeBadge lead={lead} />
                     <BucketBadge lead={lead} />
                   </div>

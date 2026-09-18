@@ -5,6 +5,7 @@ import { apiFetch } from "../lib/apiFetch";
 import { useToast } from "../components/ToastProvider";
 import { UploadIcon } from "../components/icons";
 import { LEAD_SOURCES } from "../lib/leadSources";
+import SourceBadge from "../components/SourceBadge";
 
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);
@@ -324,8 +325,8 @@ export default function ImportLeadsPage({ username }) {
                           active ? "border-accent bg-accent-soft ring-[3px] ring-accent/15" : "border-border bg-card hover:border-accent/40 hover:bg-bg"
                         }`}
                       >
-                        <div className={`text-[13px] font-semibold ${active ? "text-accent" : "text-ink"}`}>{s.name}</div>
-                        <div className="hint m-0">{s.channel}</div>
+                        <SourceBadge source={s.name} compact />
+                        <div className="hint m-0 mt-1">{s.channel}</div>
                       </button>
                     );
                   })}

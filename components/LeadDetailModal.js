@@ -4,6 +4,7 @@ import { useToast } from "./ToastProvider";
 import { LEAD_STATUSES, CANONICAL_MODELS, statusColor, pickField, prettify, prettyBucket, bucketColor, BUCKET_ACTIONS } from "../lib/leadFields";
 import { WhatsAppIcon, PhoneIcon, NoteIcon, CalendarIcon } from "./icons";
 import { enquiryTimeline } from "../lib/leadFields";
+import SourceBadge from "./SourceBadge";
 
 function formatDate(d) {
   if (!d) return "-";
@@ -611,7 +612,7 @@ export default function LeadDetailModal({
                   ) : (
                     <Field label="Model" value={lead.canonicalModel || lead.model} />
                   )}
-                  <Field label="Source" value={lead.source || "Meta Ads"} />
+                  <Field label="Source" value={<SourceBadge source={lead.source} platform={lead.platform} />} />
                   {leadFieldColumns.map((col) => (
                     <Field
                       key={col.key}
@@ -656,7 +657,7 @@ export default function LeadDetailModal({
               {(lead.channel || lead.campaign || lead.utmSource || lead.utmMedium || lead.utmCampaign || lead.landingPage) && (
                 <Section title="Source Information">
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
-                    <Field label="Source" value={lead.source || "Meta Ads"} />
+                    <Field label="Source" value={<SourceBadge source={lead.source} platform={lead.platform} />} />
                     <Field label="Channel" value={lead.channel} />
                     <Field label="Campaign" value={lead.campaign} />
                     <Field label="Ad Set" value={lead.adSet} />
