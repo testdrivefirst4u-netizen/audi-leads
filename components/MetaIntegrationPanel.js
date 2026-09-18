@@ -26,6 +26,7 @@ const EVENT_STATUS = {
   received: { label: "Received", cls: "bg-accent-soft text-accent" },
   unmapped: { label: "Page not connected", cls: "bg-[#f5f3ff] text-[#6d28d9]" },
   failed: { label: "Failed", cls: "bg-danger/10 text-danger" },
+  test: { label: "Test lead received", cls: "bg-[#eef3ff] text-[#1d4ed8]" },
 };
 
 export default function MetaIntegrationPanel({ companyId }) {

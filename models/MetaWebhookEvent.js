@@ -16,6 +16,9 @@ const mongoose = require("mongoose");
 //               it as a repeat enquiry (leadId points at that lead)
 //   unmapped  → no company has connected this Page ID yet; retried once a
 //               company does (Retry button / daily cron)
+//   test      → Meta Lead Ads Testing Tool dummy lead: delivery proven, no
+//               Lead document created (same as the sheet sync skipping
+//               "<test lead: dummy data …>" rows)
 //   failed    → Graph API / DB error; `lastError` says what, retried later
 const MetaWebhookEventSchema = new mongoose.Schema(
   {
@@ -27,7 +30,7 @@ const MetaWebhookEventSchema = new mongoose.Schema(
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", index: true },
     status: {
       type: String,
-      enum: ["received", "processed", "duplicate", "unmapped", "failed"],
+      enum: ["received", "processed", "duplicate", "unmapped", "failed", "test"],
       default: "received",
       index: true,
     },
