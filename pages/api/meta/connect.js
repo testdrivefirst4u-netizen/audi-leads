@@ -1,6 +1,6 @@
 const connectDB = require("../../../lib/db");
 const Settings = require("../../../models/Settings");
-const { requireCompanyMemberOrSuperAdmin } = require("../../../lib/auth");
+const { requireSuperAdminForCompany } = require("../../../lib/auth");
 const {
   getPage,
   subscribePageToLeadgen,
@@ -203,4 +203,4 @@ async function handler(req, res) {
   }
 }
 
-export default requireCompanyMemberOrSuperAdmin(handler);
+export default requireSuperAdminForCompany(handler);

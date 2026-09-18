@@ -1,24 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Skeleton from "react-loading-skeleton";
 import Layout from "../components/Layout";
 import CompanySwitcher from "../components/CompanySwitcher";
 import { useToast } from "../components/ToastProvider";
 import { getSessionFromCookieHeader } from "../lib/auth";
-import { getCompanyBranding } from "../lib/companyBranding";
 import { apiFetch } from "../lib/apiFetch";
 
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);
   if (!session) return { redirect: { destination: "/login", permanent: false } };
-  // Agents only see their own assigned leads; the whole-sheet reconciliation
-  // is an admin's view of the import pipeline.
-  if (session.role === "agent") return { redirect: { destination: "/leads", permanent: false } };
-  if (session.role === "super_admin") {
-    return { props: { username: session.username, role: "super_admin" } };
-  }
-  const branding = await getCompanyBranding(session.companyId);
-  return { props: { username: session.username, role: session.role || "admin", ...branding } };
+  // Platform-level page: super admin only. Company admins and agents are
+  // sent to their own dashboard.
+  if (session.role !== "super_admin") return { redirect: { destination: "/", permanent: false } };
+  return { props: { username: session.username, role: "super_admin" } };
 }
 
 // Status vocabulary comes from lib/importAudit.js — keep the two in sync.
@@ -50,6 +45,10 @@ const FILTERS = [
   { key: "all", label: "All rows" },
 ];
 
+function emptyTotals() {
+  return { totalRows: 0, imported: 0, merged: 0, skipped: 0, missing: 0, mismatch: 0, orphaned: 0, leadsInCrm: 0, duplicateLeads: 0 };
+}
+
 function formatDateTime(d) {
   return d ? new Date(d).toLocaleString() : "-";
 }
@@ -65,6 +64,8 @@ export default function ImportAuditPage({ username, role, companyName, companyLo
   const [filter, setFilter] = useState("attention");
   const [tabFilter, setTabFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [progress, setProgress] = useState(null); // { done, total, current }
+  const runRef = useRef(0); // bumps per run so a stale run stops updating state
 
   const companyParam = useCallback(() => {
     const params = new URLSearchParams();
@@ -72,26 +73,81 @@ export default function ImportAuditPage({ username, role, companyName, companyLo
     return params;
   }, [isSuperAdminView, viewCompanyId]);
 
-  const load = useCallback(
-    async ({ refresh = false } = {}) => {
-      if (isSuperAdminView && !viewCompanyId) return;
-      setLoading(true);
-      setError("");
+  // The audit is fetched one sheet tab per request (each ~1 s) rather than
+  // one request for the whole sheet — a 36-tab sheet takes ~25 s in total,
+  // longer than a serverless function may run — and the table fills in
+  // tab by tab with a progress bar.
+  const load = useCallback(async () => {
+    if (isSuperAdminView && !viewCompanyId) return;
+    const run = ++runRef.current;
+    setLoading(true);
+    setError("");
+    setAudit(null);
+    setProgress(null);
+    try {
       const params = companyParam();
-      if (refresh) params.set("refresh", "1");
-      try {
-        const res = await apiFetch(`/api/import-audit?${params.toString()}`);
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "Failed to run the import audit");
-        setAudit(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      params.set("mode", "tabs");
+      const res = await apiFetch(`/api/import-audit?${params.toString()}`);
+      const head = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(head.error || "Failed to start the import audit");
+      if (head.error) {
+        setAudit({ tabs: [], rows: [], duplicates: [], totals: emptyTotals(), lastSync: head.lastSync, error: head.error, auditedAt: new Date() });
+        return;
       }
-    },
-    [isSuperAdminView, viewCompanyId, companyParam]
-  );
+      const acc = { tabs: [], rows: [], duplicates: [], totals: emptyTotals(), lastSync: head.lastSync, auditedAt: null };
+      for (let i = 0; i < head.tabs.length; i++) {
+        if (runRef.current !== run) return; // company changed / re-run started
+        const t = head.tabs[i];
+        setProgress({ done: i, total: head.tabs.length, current: t.tab });
+        const p = companyParam();
+        p.set("mode", "tab");
+        p.set("sheetId", t.sheetId);
+        p.set("tab", t.tab);
+        const r = await apiFetch(`/api/import-audit?${p.toString()}`);
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(`${t.tab}: ${d.error || "audit failed"}`);
+        acc.tabs.push(d.tab);
+        acc.rows.push(...d.rows);
+        acc.duplicates.push(...d.duplicates);
+        for (const k of Object.keys(acc.totals)) acc.totals[k] += d.tab[k] || 0;
+        setAudit({ ...acc, tabs: [...acc.tabs], rows: [...acc.rows], duplicates: [...acc.duplicates], totals: { ...acc.totals } });
+      }
+      if (runRef.current !== run) return;
+      acc.auditedAt = new Date();
+      setAudit({ ...acc });
+    } catch (err) {
+      if (runRef.current === run) setError(err.message);
+    } finally {
+      if (runRef.current === run) {
+        setLoading(false);
+        setProgress(null);
+      }
+    }
+  }, [isSuperAdminView, viewCompanyId, companyParam]);
+
+  // Excel export, built in the browser from what was audited.
+  async function downloadExcel() {
+    if (!audit) return;
+    const XLSX = await import("xlsx");
+    const header = ["Status", "Sheet", "Tab", "Sheet Row", "Name", "Phone", "Email", "Created Time", "CRM Lead", "Details"];
+    const rowsAoa = audit.rows.map((r) => [STATUS_META[r.status]?.label || r.status, r.sheetLabel, r.tab, r.sheetRow, r.name, r.phone, r.email, r.createdTime, r.leadName || "", r.reason || ""]);
+    const summary = [
+      ["Tab", "Sheet rows", "Imported", "Merged", "Skipped", "Missing", "Mismatch", "Leads in CRM", "Duplicate records", "Orphaned leads"],
+      ...audit.tabs.map((t) => [t.tab, t.totalRows, t.imported, t.merged, t.skipped, t.missing, t.mismatch, t.leadsInCrm, t.duplicateLeads, t.orphaned]),
+      ["TOTAL", ...["totalRows", "imported", "merged", "skipped", "missing", "mismatch", "leadsInCrm", "duplicateLeads", "orphaned"].map((k) => audit.totals[k])],
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "Summary");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...rowsAoa]), "All Rows");
+    const attention = audit.rows.map((r, i) => [r, rowsAoa[i]]).filter(([r]) => NEEDS_ATTENTION.includes(r.status)).map(([, a]) => a);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...attention]), `Needs Attention (${attention.length})`);
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([["Tab", "Sheet Row", "Name", "Phone", "Lead records", "Lead IDs"], ...audit.duplicates.map((d) => [d.tab, d.sheetRow, d.name, d.phone, d.count, d.leadIds.join(", ")])]),
+      `Duplicate Records (${audit.duplicates.length})`
+    );
+    XLSX.writeFile(wb, `import-audit-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
 
   useEffect(() => {
     setAudit(null);
@@ -111,7 +167,7 @@ export default function ImportAuditPage({ username, role, companyName, companyLo
       } else {
         toast(log.errorMessage || `Sync ${log.status}`, { type: "err" });
       }
-      await load({ refresh: true });
+      await load();
     } catch (err) {
       toast(err.message, { type: "err" });
     } finally {
@@ -136,11 +192,6 @@ export default function ImportAuditPage({ username, role, companyName, companyLo
 
   const totals = audit?.totals;
   const attentionCount = totals ? totals.missing + totals.mismatch + totals.skipped : 0;
-  const exportUrl = `/api/import-audit?${(() => {
-    const p = companyParam();
-    p.set("format", "xlsx");
-    return p.toString();
-  })()}`;
 
   return (
     <Layout username={username} role={role} companyName={companyName} companyLogoUrl={companyLogoUrl} companyBrandColor={companyBrandColor}>
@@ -161,21 +212,34 @@ export default function ImportAuditPage({ username, role, companyName, companyLo
               <span className="font-semibold">Last sync:</span> {formatDateTime(audit.lastSync.at)} ·{" "}
               <span className={audit.lastSync.status === "success" ? "text-success" : "text-danger"}>{audit.lastSync.status}</span>
               {audit.lastSync.errorMessage && <div className="hint mt-1 text-danger">{audit.lastSync.errorMessage}</div>}
-              <div className="hint mt-1">Sheet checked {formatDateTime(audit.auditedAt)}</div>
+              <div className="hint mt-1">{audit.auditedAt ? `Sheet checked ${formatDateTime(audit.auditedAt)}` : "Checking sheet…"}</div>
             </div>
           ) : (
             <span className="hint">No sync has run yet.</span>
           )}
         </div>
-        <button className="btn-sm" onClick={() => load({ refresh: true })} disabled={loading || syncing}>
+        <button className="btn-sm" onClick={() => load()} disabled={loading || syncing}>
           {loading ? "Checking..." : "Re-check sheet"}
         </button>
         <button className="btn" onClick={syncNow} disabled={syncing || loading}>
           {syncing ? "Syncing..." : "Sync now"}
         </button>
-        <a className="btn-sm" href={exportUrl} onClick={(e) => (loading || !audit) && e.preventDefault()}>
+        <button className="btn-sm" onClick={downloadExcel} disabled={loading || !audit || !audit.tabs?.length}>
           Download Excel
-        </a>
+        </button>
+        {progress && (
+          <div className="w-full">
+            <div className="mb-1 flex justify-between text-[12px] font-semibold">
+              <span>Checking sheet tabs… {progress.current}</span>
+              <span>
+                {progress.done} / {progress.total}
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-bg">
+              <div className="h-2 rounded-full bg-accent transition-[width]" style={{ width: `${Math.round((progress.done / Math.max(progress.total, 1)) * 100)}%` }} />
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -196,7 +260,7 @@ export default function ImportAuditPage({ username, role, companyName, companyLo
         ].map(([label, value, accent, caption]) => (
           <div className="dash-card" key={label} style={{ "--dash-accent": accent }}>
             <div className="label">{label}</div>
-            <div className="value">{loading ? <Skeleton width={50} /> : value ?? 0}</div>
+            <div className="value">{loading && !audit ? <Skeleton width={50} /> : value ?? 0}</div>
             <div className="dash-card-caption">{caption}</div>
           </div>
         ))}
@@ -234,7 +298,7 @@ export default function ImportAuditPage({ username, role, companyName, companyLo
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && !audit?.tabs?.length ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <tr key={i}>
                     {Array.from({ length: 11 }).map((_, j) => (
@@ -380,7 +444,7 @@ export default function ImportAuditPage({ username, role, companyName, companyLo
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && !audit?.rows?.length ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
                     {Array.from({ length: 9 }).map((_, j) => (

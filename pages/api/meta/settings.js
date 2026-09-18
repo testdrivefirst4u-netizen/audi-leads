@@ -1,6 +1,6 @@
 const connectDB = require("../../../lib/db");
 const Settings = require("../../../models/Settings");
-const { requireCompanyMemberOrSuperAdmin } = require("../../../lib/auth");
+const { requireSuperAdminForCompany } = require("../../../lib/auth");
 const { apiVersion } = require("../../../lib/meta/graph");
 const { redirectUri } = require("../../../lib/meta/oauth");
 
@@ -90,4 +90,4 @@ async function handler(req, res) {
   res.status(405).json({ error: "Method not allowed" });
 }
 
-export default requireCompanyMemberOrSuperAdmin(handler);
+export default requireSuperAdminForCompany(handler);

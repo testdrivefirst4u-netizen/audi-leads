@@ -4,7 +4,6 @@ import Layout from "../components/Layout";
 import CompanySwitcher from "../components/CompanySwitcher";
 import MetaIntegrationPanel from "../components/MetaIntegrationPanel";
 import { getSessionFromCookieHeader } from "../lib/auth";
-import { getCompanyBranding } from "../lib/companyBranding";
 
 // Meta Lead Ads settings — the "admin settings → Meta integration" page.
 // A company admin manages their own company's connection; the super admin
@@ -13,12 +12,10 @@ import { getCompanyBranding } from "../lib/companyBranding";
 export async function getServerSideProps(context) {
   const session = getSessionFromCookieHeader(context.req.headers.cookie);
   if (!session) return { redirect: { destination: "/login", permanent: false } };
-  if (session.role === "agent") return { redirect: { destination: "/leads", permanent: false } };
-  if (session.role === "super_admin") {
-    return { props: { username: session.username, role: "super_admin" } };
-  }
-  const branding = await getCompanyBranding(session.companyId);
-  return { props: { username: session.username, role: session.role || "admin", ...branding } };
+  // Platform-level page: super admin only. Company admins and agents are
+  // sent to their own dashboard.
+  if (session.role !== "super_admin") return { redirect: { destination: "/", permanent: false } };
+  return { props: { username: session.username, role: "super_admin" } };
 }
 
 export default function MetaIntegrationPage({ username, role, companyName, companyLogoUrl, companyBrandColor }) {

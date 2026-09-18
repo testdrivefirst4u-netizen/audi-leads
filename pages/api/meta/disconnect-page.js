@@ -1,6 +1,6 @@
 const connectDB = require("../../../lib/db");
 const Settings = require("../../../models/Settings");
-const { requireCompanyMemberOrSuperAdmin } = require("../../../lib/auth");
+const { requireSuperAdminForCompany } = require("../../../lib/auth");
 
 // POST /api/meta/disconnect-page { pageId } — removes the Page and its
 // token from this company. Stored webhook events and leads are kept; new
@@ -19,4 +19,4 @@ async function handler(req, res) {
   res.status(200).json({ ok: true });
 }
 
-export default requireCompanyMemberOrSuperAdmin(handler);
+export default requireSuperAdminForCompany(handler);

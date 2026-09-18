@@ -44,7 +44,7 @@ async function handler(req, res) {
   // The admin who started the flow must be the one finishing it (same
   // company, or the super admin).
   const session = req.session;
-  if (session.role === "agent" || (session.role !== "super_admin" && String(session.companyId) !== String(state.companyId))) {
+  if (session.role !== "super_admin") {
     return back(res, returnTo, { fb: "error", reason: "Not authorised to connect this company" });
   }
   const companyId = state.companyId;

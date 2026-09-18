@@ -1,7 +1,7 @@
 const connectDB = require("../../../lib/db");
 const Settings = require("../../../models/Settings");
 const MetaWebhookEvent = require("../../../models/MetaWebhookEvent");
-const { requireCompanyMemberOrSuperAdmin } = require("../../../lib/auth");
+const { requireSuperAdminForCompany } = require("../../../lib/auth");
 const { retryFailedEvents, processEvent } = require("../../../lib/meta/processEvent");
 const { invalidate } = require("../../../lib/serverCache");
 
@@ -75,4 +75,4 @@ async function handler(req, res) {
   res.status(405).json({ error: "Method not allowed" });
 }
 
-export default requireCompanyMemberOrSuperAdmin(handler);
+export default requireSuperAdminForCompany(handler);

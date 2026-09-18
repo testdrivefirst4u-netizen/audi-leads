@@ -1,4 +1,4 @@
-const { requireCompanyMemberOrSuperAdmin } = require("../../../../lib/auth");
+const { requireSuperAdminForCompany } = require("../../../../lib/auth");
 const { createState, stateCookie, redirectUri, buildAuthorizeUrl } = require("../../../../lib/meta/oauth");
 
 // GET /api/auth/meta — start "Connect Facebook" (Facebook Login for
@@ -19,4 +19,4 @@ async function handler(req, res) {
   res.redirect(302, buildAuthorizeUrl({ state, redirect: redirectUri(req) }));
 }
 
-export default requireCompanyMemberOrSuperAdmin(handler);
+export default requireSuperAdminForCompany(handler);

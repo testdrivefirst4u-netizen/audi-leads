@@ -1,6 +1,6 @@
 const connectDB = require("../../../lib/db");
 const Settings = require("../../../models/Settings");
-const { requireCompanyMemberOrSuperAdmin } = require("../../../lib/auth");
+const { requireSuperAdminForCompany } = require("../../../lib/auth");
 
 // GET /api/meta/pages — the Pages the admin's Facebook account can manage,
 // fetched by the OAuth callback and waiting to be chosen. Ids/names only;
@@ -41,4 +41,4 @@ async function handler(req, res) {
   });
 }
 
-export default requireCompanyMemberOrSuperAdmin(handler);
+export default requireSuperAdminForCompany(handler);
