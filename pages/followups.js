@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import Skeleton from "react-loading-skeleton";
+import Link from "next/link";
 import Layout from "../components/Layout";
 import { bucketFollowUps } from "../components/FollowUpsCard";
 import { useToast } from "../components/ToastProvider";
@@ -19,13 +20,10 @@ function formatDate(d) {
   return new Date(d).toLocaleDateString();
 }
 
-function tomorrowISODate() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
-function FollowUpGroup({ title, items, onComplete, onSnooze, onReopen, numbered, loading }) {
+// Follow-ups are actioned from the lead itself (Leads → Overdue / Due Today
+// tabs → Manage → Mark done / Snooze), so this page is a reminder list
+// only: each row links to the lead rather than duplicating those controls.
+function FollowUpGroup({ title, items, onReopen, numbered, loading }) {
   return (
     <div className="panel" style={{ marginBottom: 16 }}>
       <div className="panel-header">
@@ -49,8 +47,8 @@ function FollowUpGroup({ title, items, onComplete, onSnooze, onReopen, numbered,
               <th>Model</th>
               <th>Phone</th>
               <th>Note</th>
-              {(onComplete || onSnooze) && <th></th>}
               {onReopen && <th>Completed</th>}
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -62,26 +60,6 @@ function FollowUpGroup({ title, items, onComplete, onSnooze, onReopen, numbered,
                 <td>{f.model || "-"}</td>
                 <td>{f.phone || "-"}</td>
                 <td>{f.note || "-"}</td>
-                {(onComplete || onSnooze) && (
-                  <td>
-                    <div className="flex gap-2">
-                      {onComplete && (
-                        <button className="btn-sm" onClick={() => onComplete(f)}>
-                          Mark Done
-                        </button>
-                      )}
-                      {onSnooze && (
-                        <button
-                          className="btn-sm"
-                          onClick={() => onSnooze(f)}
-                          title="Push to tomorrow without logging any activity"
-                        >
-                          Snooze
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                )}
                 {onReopen && (
                   <td>
                     {f.completedAt ? formatDate(f.completedAt) : "-"}{" "}
@@ -90,6 +68,11 @@ function FollowUpGroup({ title, items, onComplete, onSnooze, onReopen, numbered,
                     </button>
                   </td>
                 )}
+                <td>
+                  <Link href={`/leads?q=${encodeURIComponent(f.phone || f.name || "")}`} className="btn-sm inline-block">
+                    Open lead
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -115,26 +98,6 @@ export default function FollowUpsPage({ username, role, companyName, companyLogo
     load();
   }, [load]);
 
-  async function markDone(followUp) {
-    const res = await apiFetch(`/api/leads/${followUp.leadId}/followups/${followUp.followUpId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ completed: true }),
-    });
-    toast(res.ok ? "Follow-up marked done" : "Failed to update follow-up", { type: res.ok ? "ok" : "err" });
-    load();
-  }
-
-  async function snooze(followUp) {
-    const res = await apiFetch(`/api/leads/${followUp.leadId}/followups/${followUp.followUpId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: tomorrowISODate() }),
-    });
-    toast(res.ok ? "Follow-up snoozed to tomorrow" : "Failed to snooze follow-up", { type: res.ok ? "ok" : "err" });
-    load();
-  }
-
   async function reopen(followUp) {
     const res = await apiFetch(`/api/leads/${followUp.leadId}/followups/${followUp.followUpId}`, {
       method: "PATCH",
@@ -154,9 +117,9 @@ export default function FollowUpsPage({ username, role, companyName, companyLogo
   return (
     <Layout username={username} role={role} companyName={companyName} companyLogoUrl={companyLogoUrl} companyBrandColor={companyBrandColor}>
       <h1 className="page-title">Follow-up Reminders</h1>
-      <FollowUpGroup title="Overdue" items={overdue} onComplete={markDone} onSnooze={snooze} loading={loading} />
-      <FollowUpGroup title="Due Today" items={today} onComplete={markDone} onSnooze={snooze} loading={loading} />
-      <FollowUpGroup title="Upcoming" items={upcoming} onComplete={markDone} loading={loading} />
+      <FollowUpGroup title="Overdue" items={overdue} loading={loading} />
+      <FollowUpGroup title="Due Today" items={today} loading={loading} />
+      <FollowUpGroup title="Upcoming" items={upcoming} loading={loading} />
       <FollowUpGroup title="Completed History" items={completed} onReopen={reopen} numbered loading={loading} />
     </Layout>
   );
