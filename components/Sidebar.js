@@ -16,6 +16,7 @@ import {
   UserIcon,
   ChecklistIcon,
   MetaIcon,
+  ActivityIcon,
 } from "./icons";
 
 const NAV_ITEMS = [
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { href: "/import", label: "Import Leads", Icon: UploadIcon, superAdminOnly: true, group: "platform" },
   { href: "/import-audit", label: "Import Audit", Icon: ChecklistIcon, superAdminOnly: true, group: "platform" },
   { href: "/meta-integration", label: "Meta Lead Ads", Icon: MetaIcon, superAdminOnly: true, group: "platform" },
+  { href: "/login-activity", label: "Login Activity", Icon: ActivityIcon, superAdminOnly: true, group: "platform" },
   { href: "/account", label: "Account", Icon: UserIcon, superAdminOnly: true, group: "platform" },
 ];
 

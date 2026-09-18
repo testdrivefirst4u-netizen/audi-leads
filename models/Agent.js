@@ -15,6 +15,7 @@ const AgentSchema = new mongoose.Schema(
     // written (as locations[0]) so anything reading it keeps working.
     locations: { type: [String], default: [], index: true },
     location: { type: String, default: "", index: true },
+    lastSeenAt: { type: Date },
   },
   { timestamps: true }
 );

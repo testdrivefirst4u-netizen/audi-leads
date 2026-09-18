@@ -5,6 +5,7 @@ const { verifyPassword, signSessionToken, serializeSessionCookie } = require("..
 const { ensureSeeded } = require("../../../lib/seedAdmin");
 const { withTiming } = require("../../../lib/perfMonitor");
 const { isLocked, recordFailure, resetLimit } = require("../../../lib/rateLimit");
+const { recordLogin } = require("../../../lib/loginActivity");
 
 // Locks a username out after this many failed attempts, for 15 minutes (see
 // models/RateLimitHit.js's TTL) — keyed by the submitted username itself
@@ -30,6 +31,7 @@ async function handler(req, res) {
     await ensureSeeded();
 
     if (await isLocked(rateLimitKey, MAX_FAILED_ATTEMPTS)) {
+      await recordLogin(req, { success: false, reason: "Locked out (too many failed attempts)", username });
       return res.status(429).json({ error: "Too many failed login attempts. Try again in a few minutes." });
     }
 
@@ -38,16 +40,19 @@ async function handler(req, res) {
       const valid = await verifyPassword(password, admin.passwordHash);
       if (!valid) {
         await recordFailure(rateLimitKey);
+        await recordLogin(req, { success: false, reason: "Invalid password", role: admin.companyId ? "admin" : "super_admin", userId: admin._id, username: admin.username, companyId: admin.companyId });
         return res.status(401).json({ error: "Invalid username or password" });
       }
       await resetLimit(rateLimitKey);
 
       // No companyId = the platform-level super admin; otherwise a company admin.
       if (!admin.companyId) {
+        await recordLogin(req, { success: true, role: "super_admin", userId: admin._id, username: admin.username });
         const token = signSessionToken({ sub: String(admin._id), username: admin.username, role: "super_admin" });
         res.setHeader("Set-Cookie", serializeSessionCookie(token));
         return res.status(200).json({ username: admin.username, role: "super_admin" });
       }
+      await recordLogin(req, { success: true, role: "admin", userId: admin._id, username: admin.username, companyId: admin.companyId });
 
       const token = signSessionToken({
         sub: String(admin._id),
@@ -62,15 +67,18 @@ async function handler(req, res) {
     const agent = await Agent.findOne({ username, active: true });
     if (!agent) {
       await recordFailure(rateLimitKey);
+      await recordLogin(req, { success: false, reason: "Unknown username (or deactivated agent)", username });
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
     const valid = await verifyPassword(password, agent.passwordHash);
     if (!valid) {
       await recordFailure(rateLimitKey);
+      await recordLogin(req, { success: false, reason: "Invalid password", role: "agent", userId: agent._id, username: agent.username, name: agent.name, companyId: agent.companyId });
       return res.status(401).json({ error: "Invalid username or password" });
     }
     await resetLimit(rateLimitKey);
+    await recordLogin(req, { success: true, role: "agent", userId: agent._id, username: agent.username, name: agent.name, companyId: agent.companyId });
 
     const token = signSessionToken({
       sub: String(agent._id),
