@@ -33,6 +33,39 @@ export default function TemplatesPanel({ companyId = "", channel: onlyChannel = 
   const [editing, setEditing] = useState(null); // template object or EMPTY copy
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState(onlyChannel || "email");
+  const [testing, setTesting] = useState(null); // template being test-sent
+  const [testTo, setTestTo] = useState("");
+  const [sendingTest, setSendingTest] = useState(false);
+
+  function openTest(t) {
+    let remembered = "";
+    try {
+      remembered = localStorage.getItem(`msg-test-to-${t.channel}`) || "";
+    } catch {}
+    setTestTo(remembered);
+    setTesting(t);
+  }
+
+  async function sendTest() {
+    if (!testTo.trim()) return toast(testing.channel === "whatsapp" ? "Enter your WhatsApp number" : "Enter your email", { type: "err" });
+    setSendingTest(true);
+    try {
+      const res = await apiFetch(`/api/messaging/templates${qs(companyId, { action: "test", id: testing._id })}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: testTo.trim() }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) return toast(d.error || "Test send failed", { type: "err" });
+      try {
+        localStorage.setItem(`msg-test-to-${testing.channel}`, testTo.trim());
+      } catch {}
+      toast(`Test sent to ${d.to}`, { type: "ok" });
+      setTesting(null);
+    } finally {
+      setSendingTest(false);
+    }
+  }
 
   const load = useCallback(async () => {
     const res = await apiFetch(`/api/messaging/templates${qs(companyId)}`);
@@ -153,6 +186,9 @@ export default function TemplatesPanel({ companyId = "", channel: onlyChannel = 
                 </div>
               )}
               <div className="flex items-center gap-2 mt-3">
+                <button className="btn-sm btn-export" onClick={() => openTest(t)} disabled={t.channel === "whatsapp" && t.waStatus && t.waStatus !== "APPROVED"} title="Send this template to your own number / email with sample values">
+                  Send test
+                </button>
                 <button className="btn-sm" onClick={() => setEditing({ ...t })}>
                   Edit
                 </button>
@@ -162,6 +198,47 @@ export default function TemplatesPanel({ companyId = "", channel: onlyChannel = 
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {testing && (
+        <div className="modal-backdrop" onClick={() => setTesting(null)}>
+          <div className="modal max-w-[460px]" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Send test — {testing.name}</h2>
+              <button className="btn-icon" onClick={() => setTesting(null)} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <div className="p-5">
+              <div className="field mb-0">
+                <label>{testing.channel === "whatsapp" ? "Your WhatsApp number" : "Your email"}</label>
+                <input
+                  autoFocus
+                  value={testTo}
+                  onChange={(e) => setTestTo(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !sendingTest && sendTest()}
+                  placeholder={testing.channel === "whatsapp" ? "91 98765 43210" : "you@example.com"}
+                />
+              </div>
+              <p className="hint mt-2 mb-0">
+                Sent with sample values (Ravi Kumar, Q5, Hyderabad…) from this company's {testing.channel === "whatsapp" ? "WhatsApp number" : "email sender"}.
+                {testing.channel === "whatsapp" && " On a Meta test number, only recipients added under “To” in the App Dashboard receive it."}
+              </p>
+              <div className="mt-3 rounded-xl bg-bg px-3 py-2.5 text-[12.5px] text-ink whitespace-pre-wrap" style={{ lineHeight: 1.45 }}>
+                {testing.channel === "email" && <div className="font-semibold mb-1">{testing.subjectPreview}</div>}
+                {testing.preview}
+              </div>
+              <div className="flex items-center justify-end gap-2 mt-4">
+                <button className="btn-sm" onClick={() => setTesting(null)}>
+                  Cancel
+                </button>
+                <button className="btn-sm btn-export" disabled={sendingTest} onClick={sendTest}>
+                  {sendingTest ? "Sending…" : "Send test"}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

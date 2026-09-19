@@ -6,6 +6,7 @@ const { requireAdminOrSuperAdmin } = require("../../../lib/auth");
 const { decryptSecret } = require("../../../lib/meta/crypto");
 const { listTemplates, mapMetaTemplate } = require("../../../lib/messaging/whatsappCloud");
 const { VARIABLES, renderText, sampleVariables } = require("../../../lib/messaging/render");
+const { sendTestMessage } = require("../../../lib/messaging/engine");
 
 // Message templates for campaigns.
 //   GET                  → { templates, variables }
@@ -14,6 +15,8 @@ const { VARIABLES, renderText, sampleVariables } = require("../../../lib/messagi
 //                          also be entered by hand)
 //   POST ?action=sync    → pull the approved WhatsApp templates of the
 //                          company's WABA from Meta into MessageTemplate rows
+//   POST ?action=test&id= → { to } send this template to one number/email
+//                          with sample values (nothing recorded on a lead)
 //   PATCH ?id=           → update
 //   DELETE ?id=          → archive
 
@@ -94,6 +97,18 @@ async function handler(req, res) {
   if (!id) return res.status(400).json({ error: "id is required" });
   const t = await MessageTemplate.findOne({ _id: id, companyId });
   if (!t) return res.status(404).json({ error: "Template not found" });
+
+  if (req.method === "POST" && req.query.action === "test") {
+    const to = String(req.body?.to || "").trim();
+    if (!to) return res.status(400).json({ error: "Enter the number or email to send the test to" });
+    if (t.channel === "whatsapp" && t.waStatus && t.waStatus !== "APPROVED") return res.status(422).json({ error: `Template is ${t.waStatus.toLowerCase()} — only approved templates can be sent` });
+    try {
+      const r = await sendTestMessage({ companyId, template: t.toObject(), to });
+      return res.status(200).json({ ok: true, ...r });
+    } catch (err) {
+      return res.status(422).json({ error: err.message });
+    }
+  }
 
   if (req.method === "PATCH") {
     const b = req.body || {};

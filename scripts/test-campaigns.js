@@ -238,6 +238,20 @@ global.fetch = async (url, opts = {}) => {
     m = await CampaignMessage.findById(priyaEm._id).lean();
     check("bounce matched by email address when message-id missing", m.status === "bounced" && /mailbox/.test(m.error));
 
+    console.log("\nSend test");
+    const tw = await engine.sendTestMessage({ companyId: company._id, template: waTemplate.toObject(), to: "98765 00000" });
+    const lastWa = outbound.wa[outbound.wa.length - 1];
+    check("WhatsApp test send: 91 added, sample params, nothing recorded on leads", tw.to === "919876500000" && lastWa.to === "919876500000" && lastWa.template.components[0].parameters[0].text === "Ravi" && (await CampaignMessage.countDocuments({ companyId: company._id, to: "919876500000" })) === 0, JSON.stringify(tw));
+    const te = await engine.sendTestMessage({ companyId: company._id, template: emailTpl.toObject(), to: "Me@Example.com" });
+    check("email test send: [TEST] subject, lower-cased address", te.to === "me@example.com" && outbound.brevo[outbound.brevo.length - 1].subject.startsWith("[TEST] Ravi, Q5"), JSON.stringify(te));
+    let bad = "";
+    try {
+      await engine.sendTestMessage({ companyId: company._id, template: waTemplate.toObject(), to: "12" });
+    } catch (e) {
+      bad = e.message;
+    }
+    check("invalid test number rejected", /country code/.test(bad), bad);
+
     console.log("\nScheduler");
     const c7 = await Campaign.create({ companyId: company._id, name: "Scheduled", channel: "email", templateId: emailTpl._id, audience: { model: "A4", excludeMessagedDays: 0 }, status: "scheduled", scheduledAt: new Date(Date.now() - 1000) });
     const c8 = await Campaign.create({ companyId: company._id, name: "Future", channel: "email", templateId: emailTpl._id, audience: {}, status: "scheduled", scheduledAt: new Date(Date.now() + 3600000) });
