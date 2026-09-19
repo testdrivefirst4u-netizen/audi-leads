@@ -103,6 +103,10 @@ export default function MessagingSettingsPanel({ companyId = "", compact = false
             <div className="hint m-0">
               Quality {w.qualityRating || "n/a"} · token {w.tokenPreview} · verified {fmtDate(w.verifiedAt)}
             </div>
+            <div className={`text-[12px] font-semibold mt-1 ${w.webhookSubscribed ? "text-success" : "text-[#b45309]"}`}>
+              {w.webhookSubscribed ? "✓ Webhooks reach this CRM (app subscribed to the WhatsApp account)" : "⚠ CRM app is not subscribed to this WhatsApp account — replies will not arrive. Click Save & verify again."}
+              {w.tokenAppName && <span className="text-muted font-normal"> · token app: {w.tokenAppName}</span>}
+            </div>
           </div>
         )}
         {w.lastError && <div className="save-msg text-danger mb-2">{w.lastError}</div>}

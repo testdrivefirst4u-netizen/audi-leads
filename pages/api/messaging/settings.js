@@ -2,7 +2,7 @@ const connectDB = require("../../../lib/db");
 const Settings = require("../../../models/Settings");
 const { requireAdminOrSuperAdmin } = require("../../../lib/auth");
 const { encryptSecret, decryptSecret, tokenPreview } = require("../../../lib/meta/crypto");
-const { getPhoneNumber } = require("../../../lib/messaging/whatsappCloud");
+const { getPhoneNumber, tokenApp, subscribedApps, subscribeApp } = require("../../../lib/messaging/whatsappCloud");
 const { isMailConfigured } = require("../../../lib/mailer");
 
 // Per-company messaging (marketing) settings — each client connects its OWN
@@ -30,6 +30,10 @@ function publicConfig(m = {}) {
       hasToken: Boolean(w.accessTokenEnc),
       tokenPreview: w.tokenPreview || "",
       qualityRating: w.qualityRating || "",
+      tokenAppId: w.tokenAppId || "",
+      tokenAppName: w.tokenAppName || "",
+      tokenAppMatches: !w.tokenAppId || !process.env.META_APP_ID || w.tokenAppId === process.env.META_APP_ID,
+      webhookSubscribed: Boolean(w.webhookSubscribed),
       verifiedAt: w.verifiedAt || null,
       lastError: w.lastError || "",
       templatesSyncedAt: w.templatesSyncedAt || null,
@@ -64,7 +68,8 @@ async function handler(req, res) {
   await connectDB();
   const companyId = req.session.companyId;
   const base = webhookBase(req);
-  const app = {
+  const appInfo = {
+    appId: process.env.META_APP_ID || "",
     whatsappWebhookUrl: `${base}/api/webhooks/whatsapp`,
     emailWebhookUrl: `${base}/api/webhooks/email?token=<BREVO_WEBHOOK_SECRET>`,
     verifyTokenSet: Boolean(process.env.META_VERIFY_TOKEN),
@@ -74,7 +79,7 @@ async function handler(req, res) {
 
   if (req.method === "GET") {
     const settings = await Settings.findOne({ companyId }).select("messaging").lean();
-    return res.status(200).json({ config: publicConfig(settings?.messaging), app });
+    return res.status(200).json({ config: publicConfig(settings?.messaging), app: appInfo });
   }
 
   if (req.method !== "PATCH") {
@@ -101,7 +106,31 @@ async function handler(req, res) {
       }
       if (m.whatsapp.phoneNumberId && m.whatsapp.accessTokenEnc) {
         try {
-          const info = await getPhoneNumber(m.whatsapp.phoneNumberId, decryptSecret(m.whatsapp.accessTokenEnc));
+          const token = decryptSecret(m.whatsapp.accessTokenEnc);
+          const info = await getPhoneNumber(m.whatsapp.phoneNumberId, token);
+          // The token must come from THIS app, otherwise Meta delivers the
+          // number's webhooks (replies, delivery ticks) to some other app.
+          const app = await tokenApp(token).catch(() => ({}));
+          m.whatsapp.tokenAppId = app.id || "";
+          m.whatsapp.tokenAppName = app.name || "";
+          if (process.env.META_APP_ID && app.id && app.id !== process.env.META_APP_ID) {
+            m.whatsapp.lastError = `This token belongs to the Meta app "${app.name}" (${app.id}), not to the CRM app. Generate the system-user token with the CRM app selected so replies reach the CRM.`;
+            m.whatsapp.verifiedAt = null;
+            settings.markModified("messaging");
+            await settings.save();
+            return res.status(422).json({ error: m.whatsapp.lastError, config: publicConfig(settings.messaging), app: appInfo });
+          }
+          // Subscribe the CRM app to the WABA so its webhooks arrive here.
+          m.whatsapp.webhookSubscribed = false;
+          if (m.whatsapp.wabaId) {
+            try {
+              await subscribeApp(m.whatsapp.wabaId, token);
+              const subs = await subscribedApps(m.whatsapp.wabaId, token);
+              m.whatsapp.webhookSubscribed = subs.some((a) => a.id === (process.env.META_APP_ID || app.id));
+            } catch (err) {
+              console.warn("[messaging] could not subscribe app to WABA:", err.message);
+            }
+          }
           m.whatsapp.provider = "cloud";
           m.whatsapp.displayPhone = info.display_phone_number || "";
           m.whatsapp.displayName = info.verified_name || "";
@@ -113,7 +142,7 @@ async function handler(req, res) {
           m.whatsapp.verifiedAt = null;
           settings.markModified("messaging");
           await settings.save();
-          return res.status(422).json({ error: `WhatsApp number could not be verified: ${err.message}`, config: publicConfig(settings.messaging), app });
+          return res.status(422).json({ error: `WhatsApp number could not be verified: ${err.message}`, config: publicConfig(settings.messaging), app: appInfo });
         }
       }
     }
@@ -163,7 +192,7 @@ async function handler(req, res) {
 
   settings.markModified("messaging");
   await settings.save();
-  return res.status(200).json({ ok: true, config: publicConfig(settings.messaging), app });
+  return res.status(200).json({ ok: true, config: publicConfig(settings.messaging), app: appInfo });
 }
 
 export default requireAdminOrSuperAdmin(handler);

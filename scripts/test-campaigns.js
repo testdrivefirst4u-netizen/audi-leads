@@ -46,6 +46,8 @@ global.fetch = async (url, opts = {}) => {
       outbound.wa.push(body);
       return new Response(JSON.stringify({ messages: [{ id: `wamid.${outbound.wa.length}` }] }), { status: 200 });
     }
+    if (/\/app\?/.test(u)) return new Response(JSON.stringify({ id: process.env.META_APP_ID || "APP1", name: "Broadcast CRM Integration" }), { status: 200 });
+    if (/\/subscribed_apps/.test(u)) return new Response(JSON.stringify(opts.method === "POST" ? { success: true } : { data: [{ whatsapp_business_api_data: { id: process.env.META_APP_ID || "APP1", name: "Broadcast CRM Integration" } }] }), { status: 200 });
     // phone number lookup
     return new Response(JSON.stringify({ display_phone_number: "+91 98765 00000", verified_name: "Test Motors", quality_rating: "GREEN" }), { status: 200 });
   }
@@ -281,10 +283,13 @@ global.fetch = async (url, opts = {}) => {
     const dup = await chat.recordInbound({ phoneNumberId: "PN1", from: "919811111111", text: "Hi, is the Q3 available?", type: "text", messageId: "wamid.in1", timestamp: new Date() });
     check("Meta redelivery (same message id) is ignored", dup.duplicate === true && (await WaConversation.findById(conv1._id).lean()).unread === 1);
     // Existing unassigned lead messages → gets an agent, message lands on that lead
-    await Lead.updateOne({ _id: priya._id }, { $set: { assignedTo: null } });
+    // (Priya has two leads on the same phone; either may own the chat.)
+    await Lead.updateMany({ companyId: company._id, phone: "9876543211" }, { $set: { assignedTo: null } });
     const inb2 = await chat.recordInbound({ phoneNumberId: "PN1", from: "919876543211", text: "YES please", type: "text", messageId: "wamid.in2", timestamp: new Date() });
-    const priyaAfter = await Lead.findById(priya._id).lean();
-    check("existing unassigned lead → assigned to next agent on first message, no new lead created", !inb2.created && String(inb2.leadId) === String(priya._id) && String(priyaAfter.assignedTo) === String(agent._id));
+    const priyaIds = (await Lead.find({ companyId: company._id, phone: "9876543211" }).select("_id").lean()).map((l) => String(l._id));
+    const chatLead = await Lead.findById(inb2.leadId).lean();
+    check("existing unassigned lead → assigned to next agent on first message, no new lead created", !inb2.created && priyaIds.includes(String(inb2.leadId)) && String(chatLead.assignedTo) === String(agent._id));
+    if (String(inb2.leadId) !== String(priya._id)) await Lead.updateOne({ _id: priya._id }, { $set: { assignedTo: agent._id } });
     // Agent scope + unread
     const agentList = await chat.listConversations({ companyId: company._id, session: agentSession });
     const adminList = await chat.listConversations({ companyId: company._id, session: adminSession });

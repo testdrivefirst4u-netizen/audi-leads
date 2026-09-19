@@ -162,6 +162,11 @@ const MessagingSchema = new mongoose.Schema(
       accessTokenEnc: { type: String, default: "" },
       tokenPreview: { type: String, default: "" },
       qualityRating: { type: String, default: "" },
+      // Meta app the stored token belongs to, and whether the CRM app is
+      // subscribed to the WABA (i.e. webhooks reach this CRM).
+      tokenAppId: { type: String, default: "" },
+      tokenAppName: { type: String, default: "" },
+      webhookSubscribed: { type: Boolean, default: false },
       verifiedAt: { type: Date },
       lastError: { type: String, default: "" },
       templatesSyncedAt: { type: Date },
