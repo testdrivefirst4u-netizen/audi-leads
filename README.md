@@ -280,3 +280,15 @@ Sending runs in batches: the campaign report page drives it while open (like the
 scheduled campaigns and pushes unfinished ones forward. Environment: `BREVO_API_KEY` (optional platform
 fallback), `BREVO_WEBHOOK_SECRET`; the WhatsApp webhook reuses `META_VERIFY_TOKEN` / `META_APP_SECRET`.
 `node scripts/test-campaigns.js` runs the feature end to end with the Cloud API and Brevo stubbed.
+
+## Chats (WhatsApp inbox)
+
+**Chats** in the sidebar is a two-way inbox on the company's official WhatsApp number (the one connected under
+Campaigns → Senders & rules). Every inbound message on `/api/webhooks/whatsapp` is routed to the agent who owns
+the lead; an unassigned lead gets an agent through the same least-loaded, location-aware assignment as new
+sheet/Meta leads, and an unknown number becomes a new lead (source *WhatsApp*) and is assigned the same way.
+Agents see only their own conversations; admins see all and can reassign (the lead's agent moves with it).
+Free-text replies are allowed inside WhatsApp's 24-hour window after the customer's last message; after that
+the reply box offers an approved template instead. Campaign sends and agent replies both appear in the
+thread, with delivered/read ticks from the webhook, and every message is mirrored as a remark on the lead.
+The sidebar badge (`/api/chats/unread`) shows conversations with unread customer messages.

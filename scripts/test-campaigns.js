@@ -65,6 +65,9 @@ global.fetch = async (url, opts = {}) => {
   const Campaign = require("../models/Campaign");
   const CampaignMessage = require("../models/CampaignMessage");
   const MessageTemplate = require("../models/MessageTemplate");
+  const WaConversation = require("../models/WaConversation");
+  const WaMessage = require("../models/WaMessage");
+  const chat = require("../lib/messaging/chat");
   const { encryptSecret } = require("../lib/meta/crypto");
   const render = require("../lib/messaging/render");
   const wa = require("../lib/messaging/whatsappCloud");
@@ -76,6 +79,8 @@ global.fetch = async (url, opts = {}) => {
   const cleanup = async () => {
     await Promise.all([
       CampaignMessage.deleteMany({ companyId: company._id }),
+      WaConversation.deleteMany({ companyId: company._id }),
+      WaMessage.deleteMany({ companyId: company._id }),
       Campaign.deleteMany({ companyId: company._id }),
       MessageTemplate.deleteMany({ companyId: company._id }),
       Lead.deleteMany({ companyId: company._id }),
@@ -252,6 +257,66 @@ global.fetch = async (url, opts = {}) => {
     }
     check("invalid test number rejected", /country code/.test(bad), bad);
 
+    console.log("\nChats (inbox)");
+    const agentSession = { role: "agent", agentId: String(agent._id), name: "Spandana" };
+    const adminSession = { role: "admin" };
+    // Campaign sends were recorded into the thread
+    const priya = await Lead.findOne({ companyId: company._id, name: "Priya" }).lean();
+    const priyaThread = await chat.getThread({ companyId: company._id, session: adminSession, leadId: priya._id, markRead: false });
+    check("campaign template sends appear in the customer's chat thread", priyaThread && priyaThread.messages.length >= 1 && priyaThread.messages[0].direction === "out" && priyaThread.messages[0].kind === "template" && /^Campaign:/.test(priyaThread.messages[0].sentBy), JSON.stringify(priyaThread?.messages?.length));
+    check("no inbound yet → 24h window closed", priyaThread.conversation.windowOpen === false);
+    let threw2 = "";
+    try {
+      await chat.sendReply({ companyId: company._id, leadId: priya._id, text: "hello", session: agentSession });
+    } catch (e) {
+      threw2 = e.message;
+    }
+    check("free-text reply refused when the window is closed", /24-hour/.test(threw2), threw2);
+    // Unknown number messages the business → lead created + assigned
+    const inb1 = await chat.recordInbound({ phoneNumberId: "PN1", from: "919811111111", text: "Hi, is the Q3 available?", type: "text", messageId: "wamid.in1", timestamp: new Date(), profileName: "Kiran" });
+    const newLead = await Lead.findOne({ companyId: company._id, phone: "9811111111" }).lean();
+    check("unknown number → new lead (source WhatsApp, 10-digit phone, profile name) auto-assigned to an agent", inb1.handled && inb1.created && newLead && newLead.source === "WhatsApp" && newLead.name === "Kiran" && String(newLead.assignedTo) === String(agent._id), JSON.stringify({ created: inb1.created, assignedTo: newLead?.assignedTo }));
+    const conv1 = await WaConversation.findOne({ companyId: company._id, leadId: newLead._id }).lean();
+    check("conversation created with unread=1, assigned to the same agent, window open", conv1.unread === 1 && String(conv1.assignedTo) === String(agent._id) && chat.windowOpen(conv1));
+    const dup = await chat.recordInbound({ phoneNumberId: "PN1", from: "919811111111", text: "Hi, is the Q3 available?", type: "text", messageId: "wamid.in1", timestamp: new Date() });
+    check("Meta redelivery (same message id) is ignored", dup.duplicate === true && (await WaConversation.findById(conv1._id).lean()).unread === 1);
+    // Existing unassigned lead messages → gets an agent, message lands on that lead
+    await Lead.updateOne({ _id: priya._id }, { $set: { assignedTo: null } });
+    const inb2 = await chat.recordInbound({ phoneNumberId: "PN1", from: "919876543211", text: "YES please", type: "text", messageId: "wamid.in2", timestamp: new Date() });
+    const priyaAfter = await Lead.findById(priya._id).lean();
+    check("existing unassigned lead → assigned to next agent on first message, no new lead created", !inb2.created && String(inb2.leadId) === String(priya._id) && String(priyaAfter.assignedTo) === String(agent._id));
+    // Agent scope + unread
+    const agentList = await chat.listConversations({ companyId: company._id, session: agentSession });
+    const adminList = await chat.listConversations({ companyId: company._id, session: adminSession });
+    const otherSession = { role: "agent", agentId: String(new (require("mongoose").Types.ObjectId)()) };
+    const otherList = await chat.listConversations({ companyId: company._id, session: otherSession });
+    check("agents see only their own conversations; admins see all", agentList.length >= 2 && adminList.length >= agentList.length && otherList.length === 0, JSON.stringify({ agent: agentList.length, admin: adminList.length, other: otherList.length }));
+    const unread = await chat.unreadCount({ companyId: company._id, session: agentSession });
+    check("unread badge counts conversations with unread messages", unread.conversations === 2 && unread.messages === 2, JSON.stringify(unread));
+    const unreadList = await chat.listConversations({ companyId: company._id, session: adminSession, box: "unread" });
+    const searched = await chat.listConversations({ companyId: company._id, session: adminSession, q: "Kiran" });
+    check("unread box and name search filter the list", unreadList.length === 2 && searched.length === 1 && searched[0].lead.name === "Kiran");
+    // Reply within window
+    const reply = await chat.sendReply({ companyId: company._id, leadId: newLead._id, text: "Yes, the Q3 is in stock. Shall I book a test drive?", session: agentSession });
+    check("agent free-text reply sent via Cloud API and stored with sender name", /^wamid\./.test(reply.waMessageId) && reply.direction === "out" && reply.sentBy === "Spandana" && reply.status === "sent");
+    const t1 = await chat.getThread({ companyId: company._id, session: agentSession, leadId: newLead._id });
+    check("opening the thread marks it read and lists both messages in order", t1.messages.length === 2 && t1.messages[0].direction === "in" && t1.messages[1].direction === "out" && (await WaConversation.findById(conv1._id).lean()).unread === 0);
+    await chat.applyStatus({ messageId: reply.waMessageId, status: "delivered" });
+    await chat.applyStatus({ messageId: reply.waMessageId, status: "read" });
+    await chat.applyStatus({ messageId: reply.waMessageId, status: "delivered" });
+    check("delivery ticks update the reply (delivered → read, no regression)", (await WaMessage.findById(reply._id).lean()).status === "read");
+    // Template re-open with lead variables
+    const tmsg = await chat.sendTemplateToLead({ companyId: company._id, leadId: priya._id, templateId: waTemplate._id, session: adminSession });
+    const lastWa2 = outbound.wa[outbound.wa.length - 1];
+    check("template send from the inbox renders the lead's own variables", tmsg.kind === "template" && lastWa2.to === "919876543211" && lastWa2.template.components[0].parameters[0].text === "Priya" && /^Hi Priya, your Q5/.test(tmsg.text), tmsg.text);
+    // Reassign
+    const agent2 = await Agent.create({ name: "Ravi Agent", username: `camp-agent2-${Date.now()}`, passwordHash: "x", companyId: company._id, active: true });
+    await chat.reassign({ companyId: company._id, leadId: newLead._id, agentId: agent2._id });
+    const afterRe = await WaConversation.findById(conv1._id).lean();
+    check("reassign moves both the conversation and the lead to the new agent", String(afterRe.assignedTo) === String(agent2._id) && String((await Lead.findById(newLead._id).lean()).assignedTo) === String(agent2._id));
+    check("agent no longer sees a conversation reassigned away", !(await chat.listConversations({ companyId: company._id, session: agentSession })).some((c) => String(c.leadId) === String(newLead._id)));
+    check("phone variants cover 10-digit / 0-prefixed / 91-prefixed", JSON.stringify(chat.phoneVariants("919876543210").sort()) === JSON.stringify(["09876543210", "9876543210", "919876543210"].sort()) && chat.storedPhone("919876543210") === "9876543210");
+
     console.log("\nScheduler");
     const c7 = await Campaign.create({ companyId: company._id, name: "Scheduled", channel: "email", templateId: emailTpl._id, audience: { model: "A4", excludeMessagedDays: 0 }, status: "scheduled", scheduledAt: new Date(Date.now() - 1000) });
     const c8 = await Campaign.create({ companyId: company._id, name: "Future", channel: "email", templateId: emailTpl._id, audience: {}, status: "scheduled", scheduledAt: new Date(Date.now() + 3600000) });
@@ -308,7 +373,7 @@ global.fetch = async (url, opts = {}) => {
         check("invalid quiet hour rejected (400)", res.status === 400);
         res = await realFetch(`${BASE_URL}/api/messaging/options?companyId=${company._id}`, { headers: h });
         const opts = await res.json();
-        check("options endpoint lists models/agents/counts for the audience builder", res.status === 200 && opts.models.includes("Q5") && opts.agents.length === 1 && opts.counts.withPhone >= 5, JSON.stringify(opts.counts));
+        check("options endpoint lists models/agents/counts for the audience builder", res.status === 200 && opts.models.includes("Q5") && opts.agents.length >= 1 && opts.counts.withPhone >= 5, JSON.stringify(opts.counts));
         res = await realFetch(`${BASE_URL}/api/messaging/campaigns?companyId=${company._id}&preview=1`, { method: "POST", headers: h, body: JSON.stringify({ channel: "email", audience: { model: "A4", excludeMessagedDays: 0 } }) });
         const pv = await res.json();
         check("campaign preview returns eligible count", res.status === 200 && pv.preview.matched === 1, JSON.stringify(pv.preview));
@@ -329,6 +394,21 @@ global.fetch = async (url, opts = {}) => {
         check("lead marketing endpoint lists campaign messages + opt-out flags", res.status === 200 && mk2.emailOptOut === true && mk2.messages.length >= 3, JSON.stringify({ n: mk2.messages?.length, e: mk2.emailOptOut }));
         res = await realFetch(`${BASE_URL}/api/leads/${ravi._id}/marketing?companyId=${company._id}`, { method: "PATCH", headers: h, body: JSON.stringify({ emailOptOut: false }) });
         check("opt-out can be cleared by staff", res.status === 200 && (await Lead.findById(ravi._id).lean()).emailOptOut === false);
+        res = await realFetch(`${BASE_URL}/api/messaging/templates?companyId=${company._id}&action=test&id=${emailTpl._id}`, { method: "POST", headers: h, body: JSON.stringify({ to: "" }) });
+        const tj = await res.json();
+        check("POST ?action=test&id= reaches the test branch (400 asks for a recipient, not for a channel)", res.status === 400 && /recipient|number or email/i.test(tj.error), JSON.stringify(tj));
+        res = await realFetch(`${BASE_URL}/api/messaging/templates?companyId=${company._id}&action=test&id=${waTemplate._id}`, { method: "POST", headers: h, body: JSON.stringify({ to: "919876500000" }) });
+        const tj2 = await res.json();
+        check("test send with a fake token surfaces the Meta error (422), not a validation error", res.status === 422 && !/channel/.test(tj2.error), JSON.stringify(tj2));
+        res = await realFetch(`${BASE_URL}/api/chats`);
+        check("chats without session → 401", res.status === 401);
+        res = await realFetch(`${BASE_URL}/api/chats?companyId=${company._id}`, { headers: h });
+        const chatsList = await res.json();
+        check("super admin lists the company inbox", res.status === 200 && chatsList.conversations.length >= 2, String(chatsList.conversations?.length));
+        const kiranLead = await Lead.findOne({ companyId: company._id, phone: "9811111111" }).select("_id").lean();
+        res = await realFetch(`${BASE_URL}/api/chats/${kiranLead._id}?companyId=${company._id}`, { headers: h });
+        const th = await res.json();
+        check("thread endpoint returns messages + window state", res.status === 200 && th.messages.length === 2 && typeof th.conversation.windowOpen === "boolean");
         // Agent must be refused from campaign management.
         const { hashPassword } = require("../lib/auth");
         await Agent.updateOne({ _id: agent._id }, { $set: { passwordHash: await hashPassword("Agent#Pass123") } });
@@ -337,6 +417,13 @@ global.fetch = async (url, opts = {}) => {
         if (as) {
           res = await realFetch(`${BASE_URL}/api/messaging/campaigns`, { headers: { cookie: `audi_session=${as}` } });
           check("agent cannot manage campaigns (403)", res.status === 403, String(res.status));
+          res = await realFetch(`${BASE_URL}/api/chats`, { headers: { cookie: `audi_session=${as}` } });
+          const agentChats = await res.json();
+          check("agent inbox scoped to own leads (Kiran reassigned away → not listed)", res.status === 200 && !agentChats.conversations.some((c) => c.lead?.name === "Kiran"), String(agentChats.conversations?.length));
+          res = await realFetch(`${BASE_URL}/api/chats/${kiranLead._id}`, { method: "POST", headers: { cookie: `audi_session=${as}`, "Content-Type": "application/json" }, body: JSON.stringify({ text: "hi" }) });
+          check("agent cannot reply on another agent's conversation (403)", res.status === 403, String(res.status));
+          res = await realFetch(`${BASE_URL}/api/chats/unread`, { headers: { cookie: `audi_session=${as}` } });
+          check("unread badge endpoint works for agents", res.status === 200 && typeof (await res.json()).conversations === "number");
         } else {
           console.log("  (agent login not available — skipped agent 403 check)");
         }

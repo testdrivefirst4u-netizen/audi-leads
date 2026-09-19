@@ -220,6 +220,15 @@ export function ChecklistIcon(props) {
   );
 }
 
+export function ChatIcon(props) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" {...props}>
+      <path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z" />
+      <path d="M8 12h.01M12 12h.01M16 12h.01" />
+    </svg>
+  );
+}
+
 export function MegaphoneIcon(props) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" {...props}>

@@ -69,7 +69,9 @@ async function handler(req, res) {
     return res.status(200).json({ ok: true, total: remote.length, created, updated });
   }
 
-  if (req.method === "POST") {
+  // Create — only when no template id is targeted (the id-based actions
+  // below, e.g. ?action=test&id=, also arrive as POST).
+  if (req.method === "POST" && !req.query.id) {
     const b = req.body || {};
     if (!["whatsapp", "email"].includes(b.channel)) return res.status(400).json({ error: "channel must be whatsapp or email" });
     if (!b.name?.trim()) return res.status(400).json({ error: "Template name is required" });

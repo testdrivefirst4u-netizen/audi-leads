@@ -25,6 +25,8 @@ async function handler(req, res) {
     { new: true }
   ).populate("assignedTo", "name");
   if (!lead) return res.status(404).json({ error: "Lead not found" });
+  // The WhatsApp conversation (Chats page) follows the lead's agent.
+  await require("../../../../models/WaConversation").updateOne({ companyId, leadId: lead._id }, { $set: { assignedTo: agentId || null } });
 
   res.status(200).json({ lead });
 }

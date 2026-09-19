@@ -19,6 +19,7 @@ export default function Layout({ children, username, role, companyName, companyL
   const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [followUpBadge, setFollowUpBadge] = useState(null);
+  const [chatBadge, setChatBadge] = useState(null);
   const triplets = brandColorTriplets(role === "super_admin" ? SUPER_ADMIN_ACCENT : companyBrandColor);
 
   useEffect(() => {
@@ -29,9 +30,10 @@ export default function Layout({ children, username, role, companyName, companyL
 
     let cancelled = false;
     async function poll() {
-      const res = await apiFetch("/api/followups/count");
-      if (!res.ok || cancelled) return;
-      setFollowUpBadge(await res.json());
+      const [res, chatRes] = await Promise.all([apiFetch("/api/followups/count"), apiFetch("/api/chats/unread")]);
+      if (cancelled) return;
+      if (res.ok) setFollowUpBadge(await res.json());
+      if (chatRes.ok) setChatBadge(await chatRes.json());
     }
     poll();
     const interval = setInterval(poll, FOLLOWUP_BADGE_POLL_MS);
@@ -77,6 +79,7 @@ export default function Layout({ children, username, role, companyName, companyL
         companyName={companyName}
         companyLogoUrl={companyLogoUrl}
         followUpBadge={followUpBadge}
+        chatBadge={chatBadge}
         onLogout={handleLogout}
         open={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}

@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const connectDB = require("../../../lib/db");
 const { parseWebhook } = require("../../../lib/messaging/whatsappCloud");
 const { applyWhatsAppStatus, applyWhatsAppInbound } = require("../../../lib/messaging/engine");
+const chat = require("../../../lib/messaging/chat");
 const { withTiming } = require("../../../lib/perfMonitor");
 
 // WhatsApp Business Platform webhook — https://<crm-domain>/api/webhooks/whatsapp
@@ -89,9 +90,18 @@ async function handler(req, res) {
   try {
     await connectDB();
     let matched = 0;
-    for (const s of statuses) if (await applyWhatsAppStatus(s)) matched++;
+    for (const s of statuses) {
+      if (await applyWhatsAppStatus(s)) matched++;
+      await chat.applyStatus(s);
+    }
     const inbound = [];
-    for (const m of messages) inbound.push(await applyWhatsAppInbound(m));
+    for (const m of messages) {
+      // Inbox first (creates/assigns the lead if needed), then campaign
+      // bookkeeping (reply stats, STOP opt-out, remark on the lead).
+      const r = await chat.recordInbound(m);
+      inbound.push(r);
+      await applyWhatsAppInbound(m);
+    }
     return res.status(200).json({ received: true, statuses: statuses.length, matched, inbound: inbound.length });
   } catch (err) {
     console.error("[whatsapp-webhook] failed:", err.message);

@@ -18,12 +18,14 @@ import {
   MetaIcon,
   ActivityIcon,
   MegaphoneIcon,
+  ChatIcon,
 } from "./icons";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", Icon: DashboardIcon, superAdminVisible: true, group: "monitor" },
   { href: "/leads", label: "Leads", Icon: UsersIcon, superAdminVisible: true, group: "monitor" },
   { href: "/followups", label: "Follow-ups", Icon: BellIcon },
+  { href: "/chats", label: "Chats", Icon: ChatIcon, superAdminVisible: true, group: "monitor" },
   { href: "/reports", label: "Reports", Icon: ReportIcon, superAdminVisible: true, group: "monitor" },
   { href: "/agents", label: "Agents", Icon: AgentIcon, adminOnly: true, superAdminVisible: true, group: "monitor" },
   { href: "/campaigns", label: "Campaigns", Icon: MegaphoneIcon, adminOnly: true, superAdminVisible: true, group: "monitor" },
@@ -107,7 +109,7 @@ function NavItemLight({ href, label, Icon, active, collapsed, badgeCount, badgeU
   );
 }
 
-export default function Sidebar({ role, companyName, companyLogoUrl, followUpBadge, onLogout, open, onClose }) {
+export default function Sidebar({ role, companyName, companyLogoUrl, followUpBadge, chatBadge, onLogout, open, onClose }) {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const isSuperAdmin = role === "super_admin";
@@ -228,8 +230,9 @@ export default function Sidebar({ role, companyName, companyLogoUrl, followUpBad
                 // agent opens the app, not just after they happen to click
                 // into the Follow-ups page — matches the count already
                 // reflected there.
-                const badgeCount = item.href === "/followups" && followUpBadge ? followUpBadge.overdue + followUpBadge.today : 0;
-                const badgeUrgent = item.href === "/followups" && followUpBadge?.overdue > 0;
+                const badgeCount =
+                  item.href === "/followups" && followUpBadge ? followUpBadge.overdue + followUpBadge.today : item.href === "/chats" && chatBadge ? chatBadge.conversations : 0;
+                const badgeUrgent = (item.href === "/followups" && followUpBadge?.overdue > 0) || (item.href === "/chats" && chatBadge?.conversations > 0);
                 return (
                   <NavItemLight
                     key={item.href}

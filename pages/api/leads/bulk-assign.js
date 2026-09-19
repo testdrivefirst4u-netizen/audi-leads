@@ -35,6 +35,8 @@ async function handler(req, res) {
   }
 
   const result = await Lead.updateMany({ _id: { $in: ids }, companyId }, { $set: { assignedTo: agentId || null } });
+  // WhatsApp conversations (Chats page) follow their lead's agent.
+  await require("../../../models/WaConversation").updateMany({ companyId, leadId: { $in: ids } }, { $set: { assignedTo: agentId || null } });
 
   // Hand back the updated rows so the table can refresh in place without a
   // full refetch (which would also lose the user's current page/filters).
