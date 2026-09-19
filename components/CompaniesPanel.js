@@ -4,6 +4,7 @@ import { apiFetch } from "../lib/apiFetch";
 import { useToast } from "./ToastProvider";
 import LogoUploadField from "./LogoUploadField";
 import EmailReportsRow from "./EmailReportsRow";
+import MessagingSettingsPanel from "./MessagingSettingsPanel";
 import { LEAD_SOURCES, CRM_FIELDS } from "../lib/leadSources";
 
 const EMPTY_SHEET = { label: "", sheetId: "", sheetName: "" };
@@ -1464,6 +1465,7 @@ const MANAGE_TABS = [
   { key: "logo", label: "Logo", short: "Logo" },
   { key: "admin", label: "Admin Login", short: "Admin" },
   { key: "email", label: "Email Reports", short: "Email" },
+  { key: "messaging", label: "Messaging (WhatsApp & Email campaigns)", short: "Messaging" },
 ];
 
 function initialsOf(name) {
@@ -1534,6 +1536,14 @@ function CompanyCard({ company: c, open, onOpen, onToggleActive, onColorChange, 
         return <AdminAccountRow key={`${c._id}-admin`} company={c} onClose={() => onOpen(null)} onSaved={() => onOpen(null)} />;
       case "email":
         return <EmailReportsRow key={`${c._id}-email-reports`} company={c} onClose={() => onOpen(null)} />;
+      case "messaging":
+        return (
+          <tr key={`${c._id}-messaging`}>
+            <td colSpan={7} style={{ whiteSpace: "normal", padding: 16 }}>
+              <MessagingSettingsPanel companyId={c._id} compact />
+            </td>
+          </tr>
+        );
       default:
         return null;
     }

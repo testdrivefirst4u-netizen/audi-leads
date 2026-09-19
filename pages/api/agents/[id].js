@@ -28,13 +28,14 @@ async function handler(req, res) {
       return res.status(403).json({ error: "This account is not a member of a company" });
     }
 
-    const { active, name, password, location, locations } = req.body || {};
+    const { active, name, password, location, locations, phone } = req.body || {};
     if (password && !isPasswordStrongEnough(password)) {
       return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
     }
     const update = {};
     if (active !== undefined) update.active = Boolean(active);
     if (name !== undefined) update.name = String(name).trim();
+    if (phone !== undefined) update.phone = String(phone || "").trim();
     if (locations !== undefined || location !== undefined) {
       const list = Array.isArray(locations) ? locations : [location];
       update.locations = [...new Set(list.map((l) => String(l || "").trim()).filter(Boolean))];

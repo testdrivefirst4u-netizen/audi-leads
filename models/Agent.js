@@ -16,6 +16,8 @@ const AgentSchema = new mongoose.Schema(
     locations: { type: [String], default: [], index: true },
     location: { type: String, default: "", index: true },
     lastSeenAt: { type: Date },
+    // Shown to customers as {{agent_phone}} in campaign messages (optional).
+    phone: { type: String, default: "" },
   },
   { timestamps: true }
 );

@@ -5,6 +5,7 @@ import { LEAD_STATUSES, CANONICAL_MODELS, statusColor, pickField, prettify, pret
 import { WhatsAppIcon, PhoneIcon, NoteIcon, CalendarIcon } from "./icons";
 import { enquiryTimeline } from "../lib/leadFields";
 import SourceBadge from "./SourceBadge";
+import LeadMarketingSection from "./LeadMarketingSection";
 
 function formatDate(d) {
   if (!d) return "-";
@@ -765,6 +766,10 @@ export default function LeadDetailModal({
                     </li>
                   ))}
                 </ul>
+              </Section>
+
+              <Section title="Marketing" meta="campaign messages · opt-out" collapsible defaultOpen={false}>
+                <LeadMarketingSection leadId={lead._id} companyId={manageCompanyId} readOnly={readOnly} />
               </Section>
 
               <Section title={lead.metaLeadId ? "Form Answers" : "Sheet Details"} collapsible defaultOpen={false}>

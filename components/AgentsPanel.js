@@ -90,6 +90,7 @@ export default function AgentsPanel({ role }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [locations, setLocations] = useState([]);
+  const [phone, setPhone] = useState("");
   const [locationOptions, setLocationOptions] = useState(SHOWROOM_LOCATIONS);
   // Inline edits: agentId -> pending selection while the dropdown is open.
   const [editing, setEditing] = useState({});
@@ -124,7 +125,7 @@ export default function AgentsPanel({ role }) {
       const res = await apiFetch(`/api/agents${params.toString() ? `?${params.toString()}` : ""}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, username, password, locations }),
+        body: JSON.stringify({ name, username, password, locations, phone }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -134,6 +135,7 @@ export default function AgentsPanel({ role }) {
       setUsername("");
       setPassword("");
       setLocations([]);
+      setPhone("");
       toast("Agent added");
       load();
     } catch (err) {
@@ -233,6 +235,12 @@ export default function AgentsPanel({ role }) {
               <div className="field mb-0">
                 <label>Showroom Locations</label>
                 <LocationMultiSelect value={locations} options={locationOptions} onChange={setLocations} />
+              </div>
+              <div className="field mb-0">
+                <label>
+                  Phone <span className="text-muted font-normal">(for campaign messages)</span>
+                </label>
+                <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98765 43210" />
               </div>
               <div className="sm:col-span-4">
                 <button className="btn" type="submit" disabled={saving || !viewCompanyId}>

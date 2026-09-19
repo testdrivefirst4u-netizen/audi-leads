@@ -148,6 +148,16 @@ const LeadSchema = new mongoose.Schema(
     metaFormId: { type: String },
     metaFormName: { type: String },
     metaCreatedTime: { type: Date },
+    // Marketing consent (see lib/messaging). A customer who replies STOP on
+    // WhatsApp or clicks an email unsubscribe link is opted out for that
+    // channel only, for this company only. Campaign audiences always
+    // exclude opted-out leads; `lastMarketingAt` backs the "not messaged in
+    // the last N days" exclusion and the weekly frequency cap.
+    whatsappOptOut: { type: Boolean, default: false },
+    whatsappOptOutAt: { type: Date },
+    emailOptOut: { type: Boolean, default: false },
+    emailOptOutAt: { type: Date },
+    lastMarketingAt: { type: Date },
     // CRM fields managed from the dashboard, untouched by the sheet sync.
     // No enum here on purpose — see the LEAD_STATUSES comment above.
     status: { type: String, default: "New", index: true },

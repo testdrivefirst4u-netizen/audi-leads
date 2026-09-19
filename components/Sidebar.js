@@ -17,6 +17,7 @@ import {
   ChecklistIcon,
   MetaIcon,
   ActivityIcon,
+  MegaphoneIcon,
 } from "./icons";
 
 const NAV_ITEMS = [
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { href: "/followups", label: "Follow-ups", Icon: BellIcon },
   { href: "/reports", label: "Reports", Icon: ReportIcon, superAdminVisible: true, group: "monitor" },
   { href: "/agents", label: "Agents", Icon: AgentIcon, adminOnly: true, superAdminVisible: true, group: "monitor" },
+  { href: "/campaigns", label: "Campaigns", Icon: MegaphoneIcon, adminOnly: true, superAdminVisible: true, group: "monitor" },
 
   // { href: "/settings", label: "Settings", Icon: SettingsIcon },
   { href: "/companies", label: "Companies", Icon: AgentIcon, superAdminOnly: true, group: "platform" },

@@ -63,6 +63,7 @@ async function handler(req, res) {
           active: a.active,
           location: a.location || "",
           locations: agentLocations(a),
+          phone: a.phone || "",
           createdAt: a.createdAt,
           leadCount: total,
           contacted: p?.contacted || 0,
@@ -84,7 +85,7 @@ async function handler(req, res) {
     if (req.session.role !== "super_admin") {
       return res.status(403).json({ error: "Only the platform super admin can add new agents" });
     }
-    const { name, username, password, location, locations } = req.body || {};
+    const { name, username, password, location, locations, phone } = req.body || {};
     const locationList = cleanLocations(locations, location);
     if (!name || !username || !password) {
       return res.status(400).json({ error: "Name, username, and password are required" });
@@ -99,12 +100,12 @@ async function handler(req, res) {
     }
 
     const passwordHash = await hashPassword(password);
-    const agent = await Agent.create({ name, username, passwordHash, active: true, locations: locationList, location: locationList[0] || "", companyId });
+    const agent = await Agent.create({ name, username, passwordHash, active: true, locations: locationList, location: locationList[0] || "", phone: String(phone || "").trim(), companyId });
     // /api/leads.js caches the active-agent list for its reassign dropdown —
     // a newly-created agent should be selectable right away, not after the cache expires.
     invalidate(`leads-agents:${companyId}`);
     return res.status(201).json({
-      agent: { _id: agent._id, name: agent.name, username: agent.username, active: true, location: agent.location, locations: agent.locations },
+      agent: { _id: agent._id, name: agent.name, username: agent.username, active: true, location: agent.location, locations: agent.locations, phone: agent.phone },
     });
   }
 

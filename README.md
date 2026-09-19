@@ -249,3 +249,34 @@ the regular sync. `node scripts/test-sheet-push.js` exercises the endpoint end t
 
 For Facebook/Instagram lead forms specifically, the Meta Lead Ads webhook (above) is the more direct route —
 it delivers the lead the moment it is submitted, without the sheet in between.
+
+## Marketing campaigns (WhatsApp + email)
+
+**Campaigns** (sidebar, company admins and the super admin) sends bulk WhatsApp and email marketing to a
+company's own leads, with every company sending from **its own** WhatsApp Business number and **its own**
+email address - nothing is shared between clients.
+
+- **Senders & rules** tab (also Companies → *Messaging* for the super admin): the company's WhatsApp
+  Business Account ID, Phone number ID and a system-user access token (verified against the Cloud API on
+  save; stored encrypted like Meta page tokens), its email from-name/address and optional Brevo API key,
+  plus sending rules - timezone, quiet hours (default 9 PM-9 AM), max messages per customer per week.
+- **Templates** tab: email templates are written in the CRM with `{{name}}`, `{{first_name}}`, `{{model}}`,
+  `{{showroom}}`, `{{agent}}`, `{{agent_phone}}`, `{{company}}` variables. WhatsApp marketing must use
+  templates approved by Meta - create them in WhatsApp Manager, then **Sync from Meta** and map each `{{1}}`
+  placeholder to a lead variable.
+- **New campaign** wizard: channel → audience (the same filters as the Leads page, with a live eligible
+  count that already excludes opted-out customers, missing phone/email and anyone messaged in the last N
+  days) → template with a rendered preview → send now / schedule / save draft.
+- **Report** per campaign: audience → sent → delivered → read/opened → replies → failed, with the
+  per-customer message list. WhatsApp statuses and replies arrive on `/api/webhooks/whatsapp`; a reply of
+  STOP / unsubscribe opts the customer out and every reply is added as a remark on the lead. Email
+  delivery/opens/clicks/bounces/unsubscribes arrive from Brevo on `/api/webhooks/email?token=…`, and every
+  email carries a one-click unsubscribe link (`/api/messaging/unsubscribe`).
+- Opt-outs are per channel on the lead (`whatsappOptOut` / `emailOptOut`) and can be toggled by staff in the
+  lead's **Marketing** section.
+
+Sending runs in batches: the campaign report page drives it while open (like the chunked Excel import), and
+`/api/cron/campaigns` (daily on Vercel Hobby, every minute locally via `instrumentation.js`) starts
+scheduled campaigns and pushes unfinished ones forward. Environment: `BREVO_API_KEY` (optional platform
+fallback), `BREVO_WEBHOOK_SECRET`; the WhatsApp webhook reuses `META_VERIFY_TOKEN` / `META_APP_SECRET`.
+`node scripts/test-campaigns.js` runs the feature end to end with the Cloud API and Brevo stubbed.

@@ -145,6 +145,46 @@ const MetaConfigSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Per-company marketing identity (see lib/messaging). Each dealer sends
+// from ITS OWN WhatsApp Business number and ITS OWN email sender — a
+// campaign created inside a company can only use that company's identity,
+// and a WhatsApp delivery/reply webhook is routed back to the company by
+// the phone-number id it carries. Tokens/keys are stored encrypted
+// (lib/meta/crypto.js) and never returned to the browser.
+const MessagingSchema = new mongoose.Schema(
+  {
+    whatsapp: {
+      provider: { type: String, enum: ["cloud", ""], default: "" }, // Meta WhatsApp Cloud API
+      wabaId: { type: String, default: "" },
+      phoneNumberId: { type: String, default: "" },
+      displayPhone: { type: String, default: "" },
+      displayName: { type: String, default: "" },
+      accessTokenEnc: { type: String, default: "" },
+      tokenPreview: { type: String, default: "" },
+      qualityRating: { type: String, default: "" },
+      verifiedAt: { type: Date },
+      lastError: { type: String, default: "" },
+      templatesSyncedAt: { type: Date },
+    },
+    email: {
+      provider: { type: String, enum: ["brevo", "smtp", ""], default: "" },
+      fromName: { type: String, default: "" },
+      fromEmail: { type: String, default: "" },
+      replyTo: { type: String, default: "" },
+      brevoApiKeyEnc: { type: String, default: "" }, // per-company key; falls back to BREVO_API_KEY
+      keyPreview: { type: String, default: "" },
+      verifiedAt: { type: Date },
+      lastError: { type: String, default: "" },
+    },
+    // Sending rules
+    timezone: { type: String, default: "Asia/Kolkata" },
+    quietHoursStart: { type: Number, default: 21 }, // no marketing sends from 21:00…
+    quietHoursEnd: { type: Number, default: 9 }, // …until 09:00 (in `timezone`)
+    weeklyCap: { type: Number, default: 2 }, // max marketing messages per lead per channel per 7 days
+  },
+  { _id: false }
+);
+
 const SettingsSchema = new mongoose.Schema(
   {
     // Legacy single-tenant lookup key — no longer unique (every company's
@@ -192,6 +232,8 @@ const SettingsSchema = new mongoose.Schema(
     emailReports: { type: EmailReportConfigSchema, default: () => ({}) },
     // Meta Lead Ads connection — see MetaConfigSchema above and lib/meta/.
     meta: { type: MetaConfigSchema, default: () => ({}) },
+    // WhatsApp / email marketing identity + rules — see MessagingSchema.
+    messaging: { type: MessagingSchema, default: () => ({}) },
     // Advisory lock so two overlapping runSync() calls for the same company
     // (e.g. the local dev scheduler firing again before a long previous run
     // finished) can't both decide the same sheet row is new and each create
@@ -207,5 +249,7 @@ const SettingsSchema = new mongoose.Schema(
 // The webhook's first job is "which company owns this Page?" — one lookup
 // per event, so the page id is indexed.
 SettingsSchema.index({ "meta.pages.pageId": 1 });
+// WhatsApp webhooks identify the company by phone-number id.
+SettingsSchema.index({ "messaging.whatsapp.phoneNumberId": 1 });
 
 module.exports = mongoose.models.Settings || mongoose.model("Settings", SettingsSchema);

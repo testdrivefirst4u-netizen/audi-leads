@@ -50,4 +50,21 @@ export async function register() {
   };
   setTimeout(triggerReports, 15000);
   setInterval(triggerReports, 15 * 60 * 1000);
+
+  // Marketing campaigns (lib/messaging/engine.js) — starts scheduled
+  // campaigns and pushes any campaign still sending forward by a batch.
+  // The campaign report page drives sending too while it is open; this
+  // keeps scheduled ones moving unattended.
+  const triggerCampaigns = () => {
+    fetch(`http://localhost:${port}/api/cron/campaigns`, {
+      headers: secret ? { Authorization: `Bearer ${secret}` } : {},
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.started || (data.processed || []).some((p) => p.sent || p.failed) || data.error) console.log("[local-cron] campaigns:", data);
+      })
+      .catch((err) => console.error("[local-cron] campaigns failed:", err.message));
+  };
+  setTimeout(triggerCampaigns, 25000);
+  setInterval(triggerCampaigns, 60 * 1000);
 }
