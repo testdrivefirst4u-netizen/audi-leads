@@ -81,6 +81,154 @@ function LocationMultiSelect({ value, options, onChange, onCommit, compact = fal
   );
 }
 
+const TRANSFER_OPTIONS = [
+  { mode: "auto", title: "Share among active agents", body: "Each lead goes to the least-busy agent who covers its showroom — the same rule new leads use." },
+  { mode: "agent", title: "Move all to one agent", body: "Hand the whole list to a single agent." },
+  { mode: "unassign", title: "Unassign them", body: "Leads go back to Unassigned so you can assign them from the Leads page." },
+  { mode: "keep", title: "Keep them with this agent", body: "Nothing moves. Nobody will work these leads while the agent is inactive." },
+];
+
+// Asks where a departing agent's leads should go before deactivating them —
+// otherwise their open leads silently stay with someone who can't log in.
+function DeactivateAgentDialog({ agent, otherAgents, companyQuery, onClose, onDone }) {
+  // Also used for an already-inactive agent who still holds leads: then it only moves them.
+  const moveOnly = !agent.active;
+  const toast = useToast();
+  const [counts, setCounts] = useState(null);
+  const [mode, setMode] = useState(otherAgents.length ? "auto" : "unassign");
+  const [toAgentId, setToAgentId] = useState(otherAgents[0]?._id || "");
+  const [includeClosed, setIncludeClosed] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch(`/api/agents/${agent._id}${companyQuery}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => !cancelled && setCounts(data?.leads || { total: agent.leadCount, open: agent.leadCount, closed: 0 }));
+    return () => {
+      cancelled = true;
+    };
+  }, [agent, companyQuery]);
+
+  const moving = counts ? (includeClosed ? counts.total : counts.open) : 0;
+  const needsOthers = mode === "auto" || mode === "agent";
+
+  async function confirm() {
+    setSaving(true);
+    try {
+      const res = await apiFetch(`/api/agents/${agent._id}${companyQuery}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: false, transfer: { mode, toAgentId: mode === "agent" ? toAgentId : undefined, includeClosed } }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Couldn't deactivate the agent");
+      const t = data.transferred;
+      const verb = moveOnly ? `${agent.name}'s leads updated` : `${agent.name} deactivated`;
+      if (!t || t.moved === 0) toast(moveOnly ? "No leads to move" : verb);
+      else if (mode === "unassign") toast(`${verb} · ${t.moved} leads moved to Unassigned`);
+      else toast(`${verb} · ${t.moved} leads moved to ${t.byAgent.map((b) => `${b.name} (${b.count})`).join(", ")}`);
+      onDone();
+    } catch (err) {
+      toast(err.message, { type: "err" });
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal max-w-[560px]" role="dialog" aria-modal="true" aria-labelledby="deactivate-title" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 id="deactivate-title">{moveOnly ? `Move ${agent.name}'s leads` : `Deactivate ${agent.name}?`}</h2>
+          <button className="btn-icon" onClick={onClose} aria-label="Close">
+            ×
+          </button>
+        </div>
+        <div className="modal-body flex flex-col gap-4">
+          <p className="m-0 text-[14px] text-muted">
+            {moveOnly
+              ? `${agent.name} is inactive, so nobody is working these leads. Choose who should get them.`
+              : `${agent.name} won't be able to log in and won't get new leads. Choose what happens to the leads they have now.`}
+          </p>
+
+          <div className="grid grid-cols-3 gap-2.5">
+            {[
+              ["Total leads", counts?.total],
+              ["Open", counts?.open],
+              ["Won / lost", counts?.closed],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg bg-bg px-3.5 py-3">
+                <div className="text-[12px] text-muted">{label}</div>
+                <div className="mt-1 text-[24px] font-bold leading-none tracking-[-0.03em] tabular-nums">{value ?? <Skeleton width={36} />}</div>
+              </div>
+            ))}
+          </div>
+
+          <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+            <legend className="mb-2 text-[13px] font-semibold text-ink">Move their leads</legend>
+            {TRANSFER_OPTIONS.filter((o) => !(moveOnly && o.mode === "keep")).map((o) => {
+              const disabled = (o.mode === "auto" || o.mode === "agent") && otherAgents.length === 0;
+              const selected = mode === o.mode;
+              return (
+                <label
+                  key={o.mode}
+                  className={`flex cursor-pointer gap-3 rounded-lg border px-3.5 py-3 transition-colors ${
+                    selected ? "border-accent bg-accent-soft" : "border-border bg-card hover:bg-bg"
+                  } ${disabled ? "pointer-events-none opacity-50" : ""}`}
+                >
+                  <input type="radio" name="transfer-mode" className="mt-0.5 accent-[rgb(var(--accent-rgb))]" checked={selected} disabled={disabled} onChange={() => setMode(o.mode)} />
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-[14px] font-semibold text-ink">{o.title}</span>
+                    <span className="text-[12.5px] text-muted">{disabled ? "No other active agents in this company." : o.body}</span>
+                    {o.mode === "agent" && selected && (
+                      <select
+                        aria-label="Agent to receive the leads"
+                        className="mt-2 w-full rounded-lg border border-border bg-card px-3 py-2 text-[13px] font-medium text-ink"
+                        value={toAgentId}
+                        onChange={(e) => setToAgentId(e.target.value)}
+                      >
+                        {otherAgents.map((a) => (
+                          <option key={a._id} value={a._id}>
+                            {a.name} · {a.leadCount} leads{a.locations?.length ? ` · ${a.locations.join(", ")}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
+          </fieldset>
+
+          {mode !== "keep" && (
+            <label className="flex items-start gap-2.5 text-[13px] text-ink">
+              <input type="checkbox" className="mt-0.5" checked={includeClosed} onChange={(e) => setIncludeClosed(e.target.checked)} />
+              <span>
+                Also move won and lost leads
+                <span className="block text-[12px] text-muted">Off by default, so past results stay credited to {agent.name}.</span>
+              </span>
+            </label>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2.5 border-t border-border px-6 py-4">
+          <button className="btn-sm" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+          <button className={moveOnly ? "btn" : "btn bg-danger hover:bg-danger/90"} onClick={confirm} disabled={saving || !counts || (moveOnly && moving === 0) || (needsOthers && otherAgents.length === 0) || (mode === "agent" && !toAgentId)}>
+            {saving
+              ? "Saving..."
+              : moveOnly
+              ? `Move ${moving} leads`
+              : mode === "keep" || moving === 0
+              ? "Deactivate"
+              : `Deactivate and move ${moving} leads`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AgentsPanel({ role }) {
   const toast = useToast();
   const isSuperAdminView = role === "super_admin";
@@ -98,6 +246,8 @@ export default function AgentsPanel({ role }) {
   const [loading, setLoading] = useState(true);
   const [deleteArmedId, setDeleteArmedId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [deactivating, setDeactivating] = useState(null); // agent whose deactivate dialog is open
+  const companyQuery = isSuperAdminView && viewCompanyId ? `?companyId=${viewCompanyId}` : "";
 
   const load = useCallback(async () => {
     if (isSuperAdminView && !viewCompanyId) return;
@@ -146,7 +296,12 @@ export default function AgentsPanel({ role }) {
   }
 
   async function toggleActive(agent) {
-    const res = await apiFetch(`/api/agents/${agent._id}`, {
+    // Deactivating first asks where the agent's leads should go.
+    if (agent.active) {
+      setDeactivating(agent);
+      return;
+    }
+    const res = await apiFetch(`/api/agents/${agent._id}${companyQuery}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ active: !agent.active }),
@@ -202,6 +357,19 @@ export default function AgentsPanel({ role }) {
   return (
     <div>
       {isSuperAdminView && <CompanySwitcher companyId={viewCompanyId} onChange={setViewCompanyId} editable />}
+
+      {deactivating && (
+        <DeactivateAgentDialog
+          agent={deactivating}
+          otherAgents={agents.filter((a) => a.active && a._id !== deactivating._id)}
+          companyQuery={companyQuery}
+          onClose={() => setDeactivating(null)}
+          onDone={() => {
+            setDeactivating(null);
+            load();
+          }}
+        />
+      )}
 
       <div className="panel mt-6">
         <div className="panel-header">
@@ -292,20 +460,28 @@ export default function AgentsPanel({ role }) {
                         </span>
                       </td>
                       <td>
-                        {isSuperAdminView ? (
-                          <button
-                            className="btn-sm"
-                            style={deleteArmedId === a._id ? { background: "#fef2f2", borderColor: "#fca5a5", color: "#b91c1c" } : undefined}
-                            onClick={() => handleDelete(a)}
-                            disabled={deletingId === a._id}
-                          >
-                            {deletingId === a._id ? "Deleting..." : deleteArmedId === a._id ? "Confirm Delete?" : "Delete"}
-                          </button>
-                        ) : (
-                          <button className="btn-sm" onClick={() => toggleActive(a)}>
+                        {/* Deactivate is temporary (reactivate any time); Delete
+                            is permanent and super-admin only. */}
+                        <div className="flex justify-end gap-2">
+                          {!a.active && a.leadCount > 0 && (
+                            <button className="btn-sm" onClick={() => setDeactivating(a)}>
+                              Move leads
+                            </button>
+                          )}
+                          <button className="btn-sm" onClick={() => toggleActive(a)} disabled={isSuperAdminView && !viewCompanyId}>
                             {a.active ? "Deactivate" : "Reactivate"}
                           </button>
-                        )}
+                          {isSuperAdminView && (
+                            <button
+                              className="btn-sm"
+                              style={deleteArmedId === a._id ? { background: "#fef2f2", borderColor: "#fca5a5", color: "#b91c1c" } : undefined}
+                              onClick={() => handleDelete(a)}
+                              disabled={deletingId === a._id}
+                            >
+                              {deletingId === a._id ? "Deleting..." : deleteArmedId === a._id ? "Confirm Delete?" : "Delete"}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -324,8 +500,8 @@ export default function AgentsPanel({ role }) {
             New leads auto-assign to the least-loaded active agent whose locations include that lead's showroom. An agent
             with no locations is in the general pool. If no agent covers that location (or the lead has no location filled
             in), it falls back to the least-loaded agent from
-            the general pool ("Any"). Deactivating an agent stops new assignments but keeps their existing leads with
-            them{isSuperAdminView && " — deleting an agent outright unassigns their leads instead, rather than leaving them pointed at a removed agent"}.
+            the general pool ("Any"). Deactivating an agent stops their logins and new assignments, and asks where their
+            current leads should go{isSuperAdminView && " — deleting an agent outright unassigns their leads instead, rather than leaving them pointed at a removed agent"}.
           </div>
         </div>
 
