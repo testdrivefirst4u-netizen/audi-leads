@@ -131,11 +131,34 @@ function FollowUpBadge({ lead }) {
   return <span className={`pill followup-${info.status}`}>{label}</span>;
 }
 
+// One stroke glyph per pipeline stage; a company's own custom statuses (see
+// effectiveStatuses) fall back to a plain dot.
+const STATUS_ICON_PATHS = {
+  new: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6",
+  contacted: "M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2",
+  callback: "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 8v4l3 2",
+  qualified: "m5 12 4.5 4.5L19 7",
+  testdrive: "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM12 4v6M5.5 16l4.8-2.8M18.5 16l-4.8-2.8",
+  booking: "M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 8h6M9 12h6M9 16h3",
+  won: "M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8",
+  lost: "M7 7l10 10M17 7 7 17",
+  dot: "M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z",
+};
+
+// Split tag: a solid block in the status colour carrying the stage icon,
+// joined to a tinted label — the column reps scan most, so it reads first.
 function StatusBadge({ status }) {
-  const { bg, text } = statusColor(status);
+  const { bg, text, icon } = statusColor(status);
   return (
-    <span className="pill" style={{ background: bg, color: text }}>
-      {status || "New"}
+    <span className="inline-flex items-stretch overflow-hidden whitespace-nowrap rounded-lg text-[12.5px] font-semibold" style={{ border: `1px solid ${bg}` }}>
+      <span className="inline-flex items-center px-[7px]" style={{ background: text, color: "#fff" }} aria-hidden="true">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d={STATUS_ICON_PATHS[icon] || STATUS_ICON_PATHS.dot} />
+        </svg>
+      </span>
+      <span className="px-2.5 py-1" style={{ background: bg, color: text }}>
+        {status || "New"}
+      </span>
     </span>
   );
 }
@@ -750,12 +773,12 @@ export default function LeadsTable({
                       <SortIcon direction={sortBy === "name" ? sortDir : null} />
                     </span>
                   </th>
-                  <th>Type</th>
+                  <SortableHeader label="Status" field="status" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
                   <th>Source</th>
                   <th>Agent</th>
                   <th>Phone</th>
                   <th>Email</th>
-                  <SortableHeader label="Status" field="status" sortBy={sortBy} sortDir={sortDir} onSort={onSortChange} />
+                  <th>Type</th>
                   <th>Bucket</th>
                   <th>Calls</th>
                   {compiledFieldColumns.map((col) => (
@@ -790,7 +813,7 @@ export default function LeadsTable({
                         <NameCell lead={lead} />
                       </td>
                       <td>
-                        <LeadTypeBadge lead={lead} />
+                        <StatusBadge status={lead.status} />
                       </td>
                       <td className="text-muted">
                         <SourceCell lead={lead} />
@@ -803,7 +826,7 @@ export default function LeadsTable({
                       </td>
                       <td className="text-muted">{lead.email || "-"}</td>
                       <td>
-                        <StatusBadge status={lead.status} />
+                        <LeadTypeBadge lead={lead} />
                       </td>
                       <td>
                         <BucketBadge lead={lead} />
