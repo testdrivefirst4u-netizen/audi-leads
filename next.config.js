@@ -17,7 +17,9 @@ const IS_DEV = process.env.NODE_ENV !== "production";
 // accent color override in components/Layout.js) injects inline <style>
 // tags that a stricter policy would block. img-src allows ik.imagekit.io
 // specifically — company logos (Companies panel, super admin) are uploaded
-// there and rendered as plain <img> tags.
+// there and rendered as plain <img> tags. connect-src allows ImageKit's
+// upload endpoint: car-catalog brochures are uploaded straight from the
+// browser (see pages/api/catalog/upload-auth.js).
 const SECURITY_HEADERS = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -31,7 +33,7 @@ const SECURITY_HEADERS = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https://ik.imagekit.io",
       "font-src 'self' data:",
-      `connect-src 'self'${IS_DEV ? " ws:" : ""}`,
+      `connect-src 'self' https://upload.imagekit.io${IS_DEV ? " ws:" : ""}`,
       "worker-src 'self'",
       "object-src 'none'",
       "base-uri 'self'",
