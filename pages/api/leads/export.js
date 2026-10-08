@@ -3,7 +3,8 @@ const connectDB = require("../../../lib/db");
 const Lead = require("../../../models/Lead");
 const Settings = require("../../../models/Settings");
 const { requireCompanyMemberOrSuperAdminView } = require("../../../lib/auth");
-const { pickField, prettify, bucketFilterValue } = require("../../../lib/leadFields");
+const { pickField, prettify } = require("../../../lib/leadFields");
+const { baseLeadFilter, followUpBuckets, hotCandidateFilter, isHotLead } = require("../../../lib/leadQuery");
 
 // Lead fields (name, remarks, anything from the public API's freeform
 // payload) aren't fully trusted — they can originate from a public lead
@@ -22,31 +23,28 @@ async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   await connectDB();
-  const { from, to, model = "", status = "", agent = "", location = "", source = "", channel = "", campaign = "", bucket = "" } = req.query;
+  const { hot = "", followUpFilter = "" } = req.query;
 
-  const filter = { companyId: req.session.companyId };
-  if (model) filter.canonicalModel = model;
-  if (status) filter.status = status;
-  if (location) filter.location = location === "unfilled" ? { $in: [null, ""] } : location;
-  if (source) filter.source = source;
-  if (channel) filter.channel = channel;
-  if (campaign) filter.campaign = campaign;
-  if (bucket) filter.bucket = bucketFilterValue(bucket);
-  if (from || to) {
-    filter.sheetCreatedAt = {};
-    if (from) filter.sheetCreatedAt.$gte = new Date(`${from}T00:00:00Z`);
-    if (to) filter.sheetCreatedAt.$lte = new Date(`${to}T23:59:59Z`);
-  }
-  if (req.session.role === "agent") {
-    filter.assignedTo = req.session.agentId;
-  } else if (agent) {
-    filter.assignedTo = agent === "unassigned" ? null : agent;
+  // Exactly the leads the Leads table shows for the same filters — search,
+  // follow-up tab, Hot leads and the Meta platform/form/ad filters included
+  // (lib/leadQuery.js is shared with pages/api/leads.js).
+  const filter = baseLeadFilter(req.query, req.session);
+  let leadQuery;
+  if (hot === "true") {
+    leadQuery = Lead.find(hotCandidateFilter(filter));
+  } else {
+    if (followUpFilter) {
+      const { bucketIds } = await followUpBuckets(filter);
+      if (bucketIds[followUpFilter]) filter._id = { $in: bucketIds[followUpFilter] };
+    }
+    leadQuery = Lead.find(filter);
   }
 
-  const [leads, settings] = await Promise.all([
-    Lead.find(filter).sort({ sheetCreatedAt: -1 }).populate("assignedTo", "name").lean(),
+  const [found, settings] = await Promise.all([
+    leadQuery.sort({ sheetCreatedAt: -1 }).populate("assignedTo", "name").lean(),
     Settings.findOne({ companyId: req.session.companyId }).select("leadFieldColumns").lean(),
   ]);
+  const leads = hot === "true" ? found.filter(isHotLead) : found;
   const fieldColumns = (settings?.leadFieldColumns || []).map((c) => ({
     ...c,
     patterns: (c.matchers || []).map((m) => new RegExp(m, "i")),
