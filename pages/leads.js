@@ -396,17 +396,27 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
     setExporting(true);
     try {
       const { from, to } = resolveExportRange(exportPreset, customRange);
+      // Every filter the table is using, so the file matches what's on screen.
       const params = new URLSearchParams();
-      if (model) params.set("model", model);
-      if (status) params.set("status", status);
-      if (agentFilter) params.set("agent", agentFilter);
-      if (locationFilter) params.set("location", locationFilter);
-      if (sourceFilter) params.set("source", sourceFilter);
-      if (channelFilter) params.set("channel", channelFilter);
-      if (campaignFilter) params.set("campaign", campaignFilter);
-      if (bucketFilter) params.set("bucket", bucketFilter);
-      if (from) params.set("from", from);
-      if (to) params.set("to", to);
+      const current = {
+        search,
+        model,
+        status,
+        agent: agentFilter,
+        location: locationFilter,
+        source: sourceFilter,
+        channel: channelFilter,
+        campaign: campaignFilter,
+        platform: platformFilter,
+        form: formFilter,
+        ad: adFilter,
+        bucket: bucketFilter,
+        followUpFilter,
+        hot: hotOnly ? "true" : "",
+        from,
+        to,
+      };
+      for (const [key, value] of Object.entries(current)) if (value) params.set(key, value);
       if (isSuperAdminView) params.set("companyId", viewCompanyId);
 
       const res = await apiFetch(`/api/leads/export?${params.toString()}`);

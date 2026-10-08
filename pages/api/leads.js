@@ -3,7 +3,8 @@ const Lead = require("../../models/Lead");
 const Agent = require("../../models/Agent");
 const Settings = require("../../models/Settings");
 const { requireCompanyMemberOrSuperAdminView } = require("../../lib/auth");
-const { pickField, FIELD_MATCHERS, isUrgentTimeline, nextFollowUp, bucketFilterValue, escapeRegExp, effectiveStatuses } = require("../../lib/leadFields");
+const { effectiveStatuses } = require("../../lib/leadFields");
+const { baseLeadFilter, followUpBuckets, hotCandidateFilter, isHotLead } = require("../../lib/leadQuery");
 const { withCache } = require("../../lib/serverCache");
 
 const SORTABLE_FIELDS = new Set(["name", "canonicalModel", "status", "sheetCreatedAt", "lastEnquiryAt"]);
@@ -171,68 +172,8 @@ async function handler(req, res) {
   } = req.query;
   const IDS_ONLY_CAP = 5000;
 
-  const filter = { companyId: req.session.companyId };
-  if (search) {
-    // Escaped so a search term containing regex syntax is matched literally
-    // instead of either erroring or, worse, hanging the query on a crafted
-    // catastrophic-backtracking pattern.
-    const safeSearch = escapeRegExp(search);
-    filter.$or = [
-      { name: { $regex: safeSearch, $options: "i" } },
-      { phone: { $regex: safeSearch, $options: "i" } },
-      { email: { $regex: safeSearch, $options: "i" } },
-      { leadId: { $regex: safeSearch, $options: "i" } },
-      { model: { $regex: safeSearch, $options: "i" } },
-      { canonicalModel: { $regex: safeSearch, $options: "i" } },
-    ];
-  }
-  if (model) {
-    filter.canonicalModel = model;
-  }
-  if (status) {
-    filter.status = status;
-  }
-  if (location) {
-    filter.location = location === "unfilled" ? { $in: [null, ""] } : location;
-  }
-  if (source) {
-    filter.source = source;
-  }
-  if (channel) {
-    filter.channel = channel;
-  }
-  if (campaign) {
-    filter.campaign = campaign;
-  }
-  if (platform === "other") {
-    filter.platform = { $in: ["", null] };
-  } else if (platform) {
-    filter.platform = platform;
-  }
-  if (form) {
-    filter.metaFormName = form;
-  }
-  if (ad) {
-    filter.ad = ad;
-  }
-  if (bucket) {
-    filter.bucket = bucketFilterValue(bucket);
-  }
-  // Filters on sheetCreatedAt — the date the lead actually came in on the
-  // sheet (its own create_time column), not when we happened to sync it.
-  if (from || to) {
-    filter.sheetCreatedAt = {};
-    if (from) filter.sheetCreatedAt.$gte = new Date(`${from}T00:00:00.000Z`);
-    if (to) filter.sheetCreatedAt.$lte = new Date(`${to}T23:59:59.999Z`);
-  }
-
-  // Agents only ever see their own queue. Sessions issued before agent
-  // accounts existed have no role claim — treated as admin (see lib/auth.js).
-  if (req.session.role === "agent") {
-    filter.assignedTo = req.session.agentId;
-  } else if (agent) {
-    filter.assignedTo = agent === "unassigned" ? null : agent;
-  }
+  // Shared with Export to Excel (lib/leadQuery.js), so both always match.
+  const filter = baseLeadFilter(req.query, req.session);
 
   const pageNum = Math.max(1, Number(page) || 1);
   const pageSizeNum = Math.min(Math.max(1, Number(pageSize) || 20), 200);
@@ -246,25 +187,7 @@ async function handler(req, res) {
   // follow-ups at all (indexed-ish via the array-exists check) then finish
   // the classification in JS — same low-hundreds-of-leads scale as "hot".
   const followUpSig = filterSignature(req, { search, model, status, location, source, bucket, from, to, agent, platform, form, ad });
-  const { followUpTabs, bucketIds } = await withCache(`followup-tabs:${followUpSig}`, FOLLOWUP_TABS_CACHE_MS, async () => {
-    const followUpCandidates = await Lead.find({ ...filter, "followUps.0": { $exists: true } })
-      .select("followUps")
-      .lean();
-    const tabs = { overdue: 0, today: 0, upcoming: 0, completed: 0 };
-    const ids = { overdue: [], today: [], upcoming: [], completed: [] };
-    for (const l of followUpCandidates) {
-      const info = nextFollowUp(l);
-      if (info && tabs[info.status] !== undefined) {
-        tabs[info.status]++;
-        ids[info.status].push(l._id);
-      }
-      if ((l.followUps || []).some((f) => f.completed)) {
-        tabs.completed++;
-        ids.completed.push(l._id);
-      }
-    }
-    return { followUpTabs: tabs, bucketIds: ids };
-  });
+  const { followUpTabs, bucketIds } = await withCache(`followup-tabs:${followUpSig}`, FOLLOWUP_TABS_CACHE_MS, () => followUpBuckets(filter));
   if (followUpFilter && bucketIds[followUpFilter]) {
     filter._id = { $in: bucketIds[followUpFilter] };
   }
@@ -285,23 +208,10 @@ async function handler(req, res) {
     // search term within the cache window can reuse one fetch instead of
     // triggering its own.
     const hotSig = filterSignature(req, { model, location, source, channel, campaign, from, to, agent, platform, form, ad });
+    // eslint-disable-next-line no-unused-vars
+    const { $or: searchClause, ...withoutSearch } = filter;
     const candidates = await withCache(`hot-candidates:${hotSig}`, HOT_CANDIDATES_CACHE_MS, () =>
-      Lead.find({
-        companyId: req.session.companyId,
-        status: "New",
-        "remarks.0": { $exists: false },
-        "calls.0": { $exists: false },
-        ...(model ? { canonicalModel: model } : {}),
-        ...(filter.sheetCreatedAt ? { sheetCreatedAt: filter.sheetCreatedAt } : {}),
-        ...(filter.assignedTo !== undefined ? { assignedTo: filter.assignedTo } : {}),
-        ...(filter.location ? { location: filter.location } : {}),
-        ...(filter.source ? { source: filter.source } : {}),
-        ...(filter.channel ? { channel: filter.channel } : {}),
-        ...(filter.campaign ? { campaign: filter.campaign } : {}),
-        ...(filter.platform !== undefined ? { platform: filter.platform } : {}),
-        ...(filter.metaFormName ? { metaFormName: filter.metaFormName } : {}),
-        ...(filter.ad ? { ad: filter.ad } : {}),
-      })
+      Lead.find(hotCandidateFilter(withoutSearch))
         .sort({ sheetCreatedAt: -1 })
         .populate("assignedTo", "name")
         .lean()
@@ -309,7 +219,7 @@ async function handler(req, res) {
 
     const searchLower = search.toLowerCase();
     const hotLeads = candidates.filter((lead) => {
-      if (!isUrgentTimeline(pickField(lead.data, FIELD_MATCHERS.purchaseTimeline))) return false;
+      if (!isHotLead(lead)) return false;
       if (!searchLower) return true;
       return [lead.name, lead.phone, lead.email, lead.leadId, lead.model, lead.canonicalModel]
         .filter(Boolean)
