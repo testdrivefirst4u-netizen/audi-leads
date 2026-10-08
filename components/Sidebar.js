@@ -19,11 +19,15 @@ import {
   ActivityIcon,
   MegaphoneIcon,
   ChatIcon,
+  CarIcon,
 } from "./icons";
+
+const ModelsIcon = (props) => <CarIcon width={18} height={18} {...props} />;
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", Icon: DashboardIcon, superAdminVisible: true, group: "monitor" },
   { href: "/leads", label: "Leads", Icon: UsersIcon, superAdminVisible: true, group: "monitor" },
+  { href: "/catalog", label: "Models", Icon: ModelsIcon, superAdminVisible: true, group: "monitor" },
   { href: "/followups", label: "Follow-ups", Icon: BellIcon },
   { href: "/chats", label: "Chats", Icon: ChatIcon, superAdminVisible: true, group: "monitor" },
   { href: "/reports", label: "Reports", Icon: ReportIcon, superAdminVisible: true, group: "monitor" },
@@ -215,7 +219,7 @@ export default function Sidebar({ role, companyName, companyLogoUrl, followUpBad
                     )}
                     <div className="flex flex-col gap-1">
                       {items.map((item) => {
-                        const active = router.pathname === item.href;
+                        const active = router.pathname === item.href || (item.href !== "/" && router.pathname.startsWith(`${item.href}/`));
                         return (
                           <NavItemLight key={item.href} {...item} active={active} collapsed={collapsed} onClick={onClose} />
                         );
@@ -225,7 +229,7 @@ export default function Sidebar({ role, companyName, companyLogoUrl, followUpBad
                 );
               })
             : flatNavItems.map((item) => {
-                const active = router.pathname === item.href;
+                const active = router.pathname === item.href || (item.href !== "/" && router.pathname.startsWith(`${item.href}/`));
                 // Due/overdue follow-ups need to be seen the moment an
                 // agent opens the app, not just after they happen to click
                 // into the Follow-ups page — matches the count already

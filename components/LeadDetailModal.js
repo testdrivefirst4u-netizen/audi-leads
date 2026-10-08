@@ -6,6 +6,7 @@ import { WhatsAppIcon, PhoneIcon, NoteIcon, CalendarIcon } from "./icons";
 import { enquiryTimeline } from "../lib/leadFields";
 import SourceBadge from "./SourceBadge";
 import LeadMarketingSection from "./LeadMarketingSection";
+import LeadCarInfo from "./catalog/LeadCarInfo";
 
 function formatDate(d) {
   if (!d) return "-";
@@ -639,6 +640,8 @@ export default function LeadDetailModal({
                   <Field label="Pending Follow-ups" value={pendingFollowUps > 0 ? pendingFollowUps : "None"} />
                 </div>
               </Section>
+
+              <LeadCarInfo lead={lead} companyId={manageCompanyId} readOnly={readOnly} />
 
               {lead.metaLeadId && (
                 <Section title={`${lead.platform === "instagram" ? "Instagram" : "Facebook"} Lead Ad`}>
