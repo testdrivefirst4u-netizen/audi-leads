@@ -83,13 +83,13 @@ export default function CatalogPage({ username, role, companyName, companyLogoUr
           <p className="hint m-0">Every car we sell — variants, prices, colours and brochures.</p>
         </div>
         {canEdit && (
-          <Link href="/catalog/new" className="btn no-underline">
+          <Link href={`/catalog/new${companyQuery}`} className="btn no-underline">
             + Add model
           </Link>
         )}
       </div>
 
-      {isSuperAdminView && <CompanySwitcher companyId={viewCompanyId} onChange={setViewCompanyId} />}
+      {isSuperAdminView && <CompanySwitcher companyId={viewCompanyId} onChange={setViewCompanyId} editable />}
 
       {(loading || models.length > 0) && (
         <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -123,10 +123,10 @@ export default function CatalogPage({ username, role, companyName, companyLogoUr
           <p className="hint m-0 max-w-[420px]">
             {canEdit
               ? "Add each car you sell with its variants, prices and brochure, so every agent — new ones especially — can look them up."
-              : "Your company admin hasn't added any models yet."}
+              : "Your admin hasn't added any models yet."}
           </p>
           {canEdit && (
-            <Link href="/catalog/new" className="btn mt-1 no-underline">
+            <Link href={`/catalog/new${companyQuery}`} className="btn mt-1 no-underline">
               + Add your first model
             </Link>
           )}

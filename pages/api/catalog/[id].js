@@ -12,7 +12,7 @@ async function handler(req, res) {
   const canEdit = canEditCatalog(req.session);
 
   const existing = await CarModel.findOne({ _id: id, companyId }).lean();
-  if (!existing || (!existing.onSale && !canEdit && req.session.role !== "super_admin")) {
+  if (!existing || (!existing.onSale && !canEdit)) {
     return res.status(404).json({ error: "Model not found" });
   }
 
@@ -20,7 +20,7 @@ async function handler(req, res) {
     return res.status(200).json({ model: existing, canEdit });
   }
 
-  if (!canEdit) return res.status(403).json({ error: "Only the company admin can edit the catalog" });
+  if (!canEdit) return res.status(403).json({ error: "Only an admin can edit the catalog" });
 
   if (req.method === "PUT") {
     const { value, errors } = cleanModelInput(req.body, companyId);

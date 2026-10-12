@@ -45,7 +45,9 @@ function loadEsm(file) {
   check("company admin can edit", canEditCatalog({ role: "admin", companyId: cid }));
   check("legacy session with no role counts as admin", canEditCatalog({ companyId: cid }));
   check("agent cannot edit", !canEditCatalog({ role: "agent", companyId: cid }));
-  check("super admin cannot edit (company admin only)", !canEditCatalog({ role: "super_admin" }));
+  check("super admin can edit the company they picked", canEditCatalog({ role: "super_admin", companyId: cid }));
+  check("super admin with no company picked cannot edit", !canEditCatalog({ role: "super_admin" }));
+  check("no session cannot edit", !canEditCatalog(null));
 
   console.log("\nSave validation");
   const ok = cleanModelInput(

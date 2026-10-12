@@ -11,13 +11,13 @@ async function handler(req, res) {
   if (req.method === "GET") {
     // Agents only see cars on sale; whoever manages the catalog sees all.
     const filter = { companyId };
-    if (!canEdit && req.session.role !== "super_admin") filter.onSale = true;
+    if (!canEdit) filter.onSale = true;
     const models = await CarModel.find(filter).sort({ sortOrder: 1, name: 1 }).lean();
     return res.status(200).json({ models, canEdit });
   }
 
   if (req.method === "POST") {
-    if (!canEdit) return res.status(403).json({ error: "Only the company admin can edit the catalog" });
+    if (!canEdit) return res.status(403).json({ error: "Only an admin can edit the catalog" });
     const { value, errors } = cleanModelInput(req.body, companyId);
     if (errors.length) return res.status(400).json({ error: errors[0], errors });
     try {

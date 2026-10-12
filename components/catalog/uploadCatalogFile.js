@@ -5,7 +5,9 @@ import { DOCUMENT_TYPES, IMAGE_TYPES, MAX_DOCUMENT_BYTES, MAX_IMAGE_BYTES, forma
 // (see pages/api/catalog/upload-auth.js for why it doesn't go through our
 // server). Resolves to { url, fileId, size, mimeType, name }; rejects with a
 // readable message.
-export async function uploadCatalogFile(file, { kind = "document" } = {}) {
+// companyQuery ("?companyId=…") is set for the super admin, who uploads into
+// the company picked in the switcher.
+export async function uploadCatalogFile(file, { kind = "document", companyQuery = "" } = {}) {
   const types = kind === "image" ? IMAGE_TYPES : DOCUMENT_TYPES;
   const max = kind === "image" ? MAX_IMAGE_BYTES : MAX_DOCUMENT_BYTES;
   if (!types.includes(file.type)) {
@@ -13,7 +15,7 @@ export async function uploadCatalogFile(file, { kind = "document" } = {}) {
   }
   if (file.size > max) throw new Error(`${file.name} is ${formatBytes(file.size)} — the limit is ${formatBytes(max)}`);
 
-  const authRes = await apiFetch("/api/catalog/upload-auth");
+  const authRes = await apiFetch(`/api/catalog/upload-auth${companyQuery}`);
   const auth = await authRes.json().catch(() => ({}));
   if (!authRes.ok) throw new Error(auth.error || "Couldn't start the upload");
 

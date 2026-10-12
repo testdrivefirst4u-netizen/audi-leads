@@ -55,7 +55,7 @@ function SectionCard({ title, description, action, children }) {
 }
 
 // A file picker that uploads immediately and reports the result.
-function UploadButton({ label, kind, onUploaded, disabled }) {
+function UploadButton({ label, kind, onUploaded, disabled, companyQuery }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   async function onPick(e) {
@@ -64,7 +64,7 @@ function UploadButton({ label, kind, onUploaded, disabled }) {
     if (!file) return;
     setBusy(true);
     try {
-      onUploaded(await uploadCatalogFile(file, { kind }));
+      onUploaded(await uploadCatalogFile(file, { kind, companyQuery }));
     } catch (err) {
       toast(err.message, { type: "err" });
     } finally {
@@ -79,7 +79,9 @@ function UploadButton({ label, kind, onUploaded, disabled }) {
   );
 }
 
-export default function CatalogEditor({ model }) {
+// companyQuery ("?companyId=…") is set when the super admin edits a company's
+// catalog; every API call and link keeps it.
+export default function CatalogEditor({ model, companyQuery = "" }) {
   const router = useRouter();
   const toast = useToast();
   const isNew = !model?._id;
@@ -104,7 +106,7 @@ export default function CatalogEditor({ model }) {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await apiFetch(isNew ? "/api/catalog" : `/api/catalog/${model._id}`, {
+      const res = await apiFetch(isNew ? `/api/catalog${companyQuery}` : `/api/catalog/${model._id}${companyQuery}`, {
         method: isNew ? "POST" : "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -112,7 +114,7 @@ export default function CatalogEditor({ model }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Couldn't save the model");
       toast(isNew ? `${data.model.name} added` : `${data.model.name} saved`);
-      router.push(`/catalog/${data.model._id}`);
+      router.push(`/catalog/${data.model._id}${companyQuery}`);
     } catch (err) {
       toast(err.message, { type: "err" });
       setSaving(false);
@@ -125,10 +127,10 @@ export default function CatalogEditor({ model }) {
       return;
     }
     setSaving(true);
-    const res = await apiFetch(`/api/catalog/${model._id}`, { method: "DELETE" });
+    const res = await apiFetch(`/api/catalog/${model._id}${companyQuery}`, { method: "DELETE" });
     if (res.ok) {
       toast(`${model.name} deleted`);
-      router.push("/catalog");
+      router.push(`/catalog${companyQuery}`);
     } else {
       toast("Couldn't delete the model", { type: "err" });
       setSaving(false);
@@ -166,7 +168,7 @@ export default function CatalogEditor({ model }) {
               )}
             </div>
             <div className="flex gap-2">
-              <UploadButton label={form.imageUrl ? "Replace photo" : "Upload photo"} kind="image" onUploaded={(f) => setForm((x) => ({ ...x, imageUrl: f.url, imageFileId: f.fileId }))} />
+              <UploadButton companyQuery={companyQuery} label={form.imageUrl ? "Replace photo" : "Upload photo"} kind="image" onUploaded={(f) => setForm((x) => ({ ...x, imageUrl: f.url, imageFileId: f.fileId }))} />
               {form.imageUrl && (
                 <button type="button" className="btn-sm" onClick={() => setForm((x) => ({ ...x, imageUrl: "", imageFileId: "" }))}>
                   Remove
@@ -313,7 +315,7 @@ export default function CatalogEditor({ model }) {
                 <img src={c.imageUrl} alt="" className="h-10 w-14 shrink-0 rounded-md object-cover" />
               )}
               <input value={c.name} onChange={(e) => setItem("colours", i, { name: e.target.value })} placeholder="Navarra Blue" required aria-label="Colour name" className="min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 py-2 text-sm text-ink" />
-              <UploadButton label={c.imageUrl ? "Photo ✓" : "Photo"} kind="image" onUploaded={(f) => setItem("colours", i, { imageUrl: f.url, imageFileId: f.fileId })} />
+              <UploadButton companyQuery={companyQuery} label={c.imageUrl ? "Photo ✓" : "Photo"} kind="image" onUploaded={(f) => setItem("colours", i, { imageUrl: f.url, imageFileId: f.fileId })} />
               <button type="button" className="btn-sm text-danger" onClick={() => removeItem("colours", i)} aria-label={`Remove ${c.name || "colour"}`}>
                 ×
               </button>
@@ -327,6 +329,7 @@ export default function CatalogEditor({ model }) {
         description="PDF up to 25 MB, or an image. Agents can open, download and share these."
         action={
           <UploadButton
+            companyQuery={companyQuery}
             label="+ Upload file"
             kind="document"
             onUploaded={(f) =>
@@ -372,7 +375,7 @@ export default function CatalogEditor({ model }) {
         <button className="btn" type="submit" disabled={saving}>
           {saving ? "Saving..." : isNew ? "Add model" : "Save changes"}
         </button>
-        <button type="button" className="btn-sm" onClick={() => router.push(isNew ? "/catalog" : `/catalog/${model._id}`)} disabled={saving}>
+        <button type="button" className="btn-sm" onClick={() => router.push(isNew ? `/catalog${companyQuery}` : `/catalog/${model._id}${companyQuery}`)} disabled={saving}>
           Cancel
         </button>
         {!isNew && (
