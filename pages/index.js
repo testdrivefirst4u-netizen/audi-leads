@@ -13,6 +13,7 @@ import Panel from "../components/dashboard/Panel";
 import KpiCard from "../components/dashboard/KpiCard";
 import DashToolbar from "../components/dashboard/DashToolbar";
 import TodayTasks from "../components/dashboard/TodayTasks";
+import StageFunnel, { canDrawFunnel } from "../components/dashboard/StageFunnel";
 import { Conversion, AgentLeaderboard } from "../components/dashboard/Insights";
 import { UsersIcon, FireIcon, BellIcon, CalendarIcon, CarIcon, ReportIcon } from "../components/icons";
 import { getSessionFromCookieHeader } from "../lib/auth";
@@ -134,8 +135,9 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
           <TodayTasks followUps={pendingFollowUps} loading={loading} />
         </Panel>
 
-        <Panel title="Pipeline" note={period} href="/leads" span={6}>
-          {chart(<PipelineStats pipeline={stats?.pipeline} />)}
+        <Panel title="Pipeline" note={`${period} · how far leads get`} href="/leads" span={6}>
+          {/* the funnel needs the standard stages; a company with its own statuses keeps the bar chart */}
+          {chart(canDrawFunnel(stats?.pipeline) ? <StageFunnel pipeline={stats?.pipeline} /> : <PipelineStats pipeline={stats?.pipeline} />, 300)}
         </Panel>
         {/* Conversion and calls stacked beside the (taller) pipeline chart */}
         <div className="dash2-stack dash2-span-6">
