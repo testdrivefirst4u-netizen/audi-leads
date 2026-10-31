@@ -110,7 +110,7 @@ export default function CatalogModelPage({ username, role, companyName, companyL
                 {model.tagline && <p className="m-0 text-[15px] text-muted">{model.tagline}</p>}
               </div>
               {canEdit && (
-                <Link href={`/catalog/${model._id}/edit`} className="btn-sm no-underline">
+                <Link href={`/catalog/${model._id}/edit${companyQuery}`} className="btn-sm no-underline">
                   Edit
                 </Link>
               )}
