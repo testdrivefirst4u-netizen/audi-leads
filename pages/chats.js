@@ -320,7 +320,7 @@ export default function ChatsPage({ username, role, companyName, companyLogoUrl,
                     </Link>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto px-4 py-4" style={{ background: "#efeae2" }}>
+                  <div className="chat-wallpaper flex-1 overflow-y-auto px-4 py-4">
                     {grouped.map((m) =>
                       m.divider ? (
                         <div key={m.key} className="flex justify-center my-3">

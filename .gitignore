@@ -7,3 +7,7 @@ npm-debug.log*
 
 .vercel
 .env*
+
+# local session cookie dumps (contain login tokens)
+cookies.txt
+scookies.txt

@@ -26,7 +26,7 @@ export async function getServerSideProps(context) {
   // driven view of this same page (see CompanySwitcher) and can work the
   // chosen company's leads exactly as its admin would.
   if (session.role === "super_admin") {
-    return { props: { username: session.username, role: "super_admin", initialHot: false, initialSearch: context.query.q || "" } };
+    return { props: { username: session.username, role: "super_admin", initialHot: false, initialSearch: context.query.q || "", initialOpenLeadId: context.query.open || null } };
   }
   const branding = await getCompanyBranding(session.companyId);
   return {
@@ -35,6 +35,8 @@ export async function getServerSideProps(context) {
       role: session.role || "admin",
       initialHot: context.query.hot === "true",
       initialSearch: context.query.q || "",
+      // set by the top bar search: open this lead's details once it's in the list
+      initialOpenLeadId: context.query.open || null,
       ...branding,
     },
   };
@@ -64,7 +66,7 @@ function resolveExportRange(preset, custom) {
   return { from: toISODate(from), to: toISODate(to) };
 }
 
-export default function LeadsPage({ username, role, initialHot, initialSearch, companyName, companyLogoUrl, companyBrandColor }) {
+export default function LeadsPage({ username, role, initialHot, initialSearch, initialOpenLeadId, companyName, companyLogoUrl, companyBrandColor }) {
   const toast = useToast();
   const isSuperAdminView = role === "super_admin";
   const [viewCompanyId, setViewCompanyId] = useState("");
@@ -214,6 +216,13 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
     setSearch(value);
     setPage(1);
   }
+
+  // A new search from the top bar while already on this page arrives as new
+  // props (same page, no remount), so follow it here.
+  useEffect(() => {
+    setSearch(initialSearch || "");
+    setPage(1);
+  }, [initialSearch, initialOpenLeadId]);
 
   function handleModelChange(value) {
     setModel(value);
@@ -446,6 +455,7 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, c
         loading={loading}
         search={search}
         onSearchChange={handleSearchChange}
+        autoOpenLeadId={initialOpenLeadId}
         model={model}
         onModelChange={handleModelChange}
         status={status}

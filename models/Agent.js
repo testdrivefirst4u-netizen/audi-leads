@@ -18,6 +18,9 @@ const AgentSchema = new mongoose.Schema(
     lastSeenAt: { type: Date },
     // Shown to customers as {{agent_phone}} in campaign messages (optional).
     phone: { type: String, default: "" },
+    // Colour theme picked in the CRM (lib/theme.js), so it follows the agent
+    // across devices. Unset = the platform default.
+    theme: { type: String, enum: ["showroom", "light", "midnight"] },
   },
   { timestamps: true }
 );

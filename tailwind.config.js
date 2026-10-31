@@ -4,11 +4,14 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        bg: "#f3f5f9",
-        card: "#ffffff",
-        border: "#e5e8f0",
-        ink: "#1c2130",
-        muted: "#6b7280",
+        // Themeable surfaces/text: values come from CSS custom properties
+        // (:root defaults in globals.css, overridden per theme inside
+        // .app-shell — see "Themes" there and lib/theme.js).
+        bg: "rgb(var(--bg-rgb) / <alpha-value>)",
+        card: "rgb(var(--card-rgb) / <alpha-value>)",
+        border: "rgb(var(--border-rgb) / <alpha-value>)",
+        ink: "rgb(var(--ink-rgb) / <alpha-value>)",
+        muted: "rgb(var(--muted-rgb) / <alpha-value>)",
         // Values come from CSS custom properties (see :root in
         // globals.css), overridden per-request by Layout.js when a company
         // has its own brandColor set — the rgb(... / <alpha-value>) form is

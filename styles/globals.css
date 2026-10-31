@@ -8,6 +8,15 @@
   --accent-rgb: 61 90 254;
   --accent-hover-rgb: 48 78 222;
   --accent-soft-rgb: 238 242 255;
+  /* the soft tint for dark surfaces (Midnight theme); Layout.js overrides it per company too */
+  --accent-soft-dark-rgb: 30 38 82;
+
+  /* Surfaces and text (light). The Midnight theme swaps these inside .app-shell. */
+  --bg-rgb: 243 245 249;
+  --card-rgb: 255 255 255;
+  --border-rgb: 229 232 240;
+  --ink-rgb: 28 33 48;
+  --muted-rgb: 107 114 128;
 }
 
 @layer base {
@@ -156,6 +165,14 @@
 
   .badge.offline .dot {
     @apply bg-danger;
+  }
+
+  .badge.overdue .dot {
+    @apply bg-warning;
+  }
+
+  .badge.idle .dot {
+    @apply bg-muted/50;
   }
 
   /* ---------- Panels / tables ---------- */
@@ -718,4 +735,373 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* ---------- Login car (pages/login.js) ----------
+   The brand-panel car waits off-screen until the page loader has cleared,
+   drives in, then cruises (wheels turning, lane dashes rolling past). After
+   a correct sign-in it rolls back a touch, then drives off to the right. */
+
+.login-car {
+  transform: translateX(-120%);
+}
+
+.login-scene.is-driving .login-car {
+  animation: login-drive-in 1.3s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+.login-scene.is-leaving .login-car {
+  animation: login-drive-out 1.1s cubic-bezier(0.55, 0, 0.75, 0.2) forwards;
+}
+
+.login-wheel {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: login-spin 0.7s linear infinite;
+}
+
+.login-scene.is-waiting .login-wheel,
+.login-scene.is-waiting .login-lane,
+.login-scene.is-waiting .login-streaks path {
+  animation-play-state: paused;
+}
+
+.login-scene.is-leaving .login-wheel {
+  animation-duration: 0.18s;
+}
+
+.login-body {
+  animation: login-bob 0.45s ease-in-out infinite alternate;
+}
+
+.login-lane {
+  animation: login-road 0.55s linear infinite;
+}
+
+.login-scene.is-leaving .login-lane {
+  animation-duration: 0.15s;
+}
+
+.login-streaks path {
+  animation: login-streak 0.9s ease-out infinite;
+}
+
+.login-scene.is-waiting .login-streaks,
+.login-scene.is-leaving .login-streaks {
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.login-beam {
+  animation: login-beam 2.4s ease-in-out infinite;
+}
+
+.login-btn-car {
+  left: -40px;
+  animation: login-btn-car 1.1s cubic-bezier(0.45, 0, 0.6, 1) forwards;
+}
+
+.login-shake {
+  animation: login-shake 0.4s ease-in-out;
+}
+
+@keyframes login-drive-in {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes login-drive-out {
+  0% { transform: translateX(0); }
+  18% { transform: translateX(-4%); }
+  100% { transform: translateX(150%); }
+}
+
+@keyframes login-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes login-bob {
+  from { transform: translateY(0); }
+  to { transform: translateY(-1.5px); }
+}
+
+@keyframes login-road {
+  to { stroke-dashoffset: 40; }
+}
+
+@keyframes login-streak {
+  0% { opacity: 0; transform: translateX(14px); }
+  30% { opacity: 0.8; }
+  100% { opacity: 0; transform: translateX(-36px); }
+}
+
+@keyframes login-beam {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes login-btn-car {
+  from { left: -40px; transform: translateY(-50%); }
+  to { left: calc(100% + 40px); transform: translateY(-50%); }
+}
+
+@keyframes login-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-car,
+  .login-scene .login-car {
+    animation: none;
+    transform: none;
+  }
+  .login-wheel,
+  .login-body,
+  .login-lane,
+  .login-streaks path,
+  .login-beam,
+  .login-btn-car,
+  .login-shake {
+    animation: none;
+  }
+  .login-btn-car {
+    display: none;
+  }
+}
+
+/* ---------- Themes (lib/theme.js) ----------
+   <html data-crm-theme="showroom|light|midnight">, scoped to .app-shell so
+   the login page keeps its own look. Showroom is the default: the dark
+   navy sidebar of the login showroom with light pages. Midnight also turns
+   the pages dark. */
+
+.app-shell {
+  /* sidebar — Showroom/Midnight (dark) */
+  --sb-bg: radial-gradient(120% 60% at 0% 0%, #26315f 0%, transparent 60%), linear-gradient(180deg, #161c2d 0%, #0e1220 100%);
+  --sb-border: rgba(255, 255, 255, 0.06);
+  --sb-divider: rgba(255, 255, 255, 0.07);
+  --sb-text: #aab4d4;
+  --sb-text-strong: #ffffff;
+  --sb-muted: #6f7a9c;
+  --sb-icon: #7884a8;
+  --sb-hover: rgba(255, 255, 255, 0.06);
+  --sb-badge: rgba(255, 255, 255, 0.16);
+  --sb-shadow: 0 20px 50px rgba(8, 12, 30, 0.35);
+  --sb-blur: none;
+  --sb-dev-logo: brightness(0) invert(1);
+}
+
+html[data-crm-theme="light"] .app-shell {
+  --sb-bg: rgba(255, 255, 255, 0.72);
+  --sb-border: rgba(255, 255, 255, 0.7);
+  --sb-divider: rgba(28, 33, 48, 0.07);
+  --sb-text: rgba(28, 33, 48, 0.68);
+  --sb-text-strong: #1c2130;
+  --sb-muted: #6b7280;
+  --sb-icon: rgba(28, 33, 48, 0.4);
+  --sb-hover: rgba(255, 255, 255, 0.65);
+  --sb-badge: rgba(28, 33, 48, 0.25);
+  --sb-shadow: 0 20px 50px rgba(30, 35, 70, 0.1);
+  --sb-blur: blur(24px) saturate(1.6);
+  --sb-dev-logo: none;
+}
+
+html[data-crm-theme="midnight"] .app-shell {
+  color-scheme: dark;
+  --bg-rgb: 11 14 26;
+  --card-rgb: 20 25 43;
+  --border-rgb: 38 45 70;
+  --ink-rgb: 231 234 243;
+  --muted-rgb: 143 153 181;
+  --accent-soft-rgb: var(--accent-soft-dark-rgb);
+  --sb-bg: radial-gradient(120% 60% at 0% 0%, #1f2850 0%, transparent 60%), linear-gradient(180deg, #10152a 0%, #090c18 100%);
+}
+
+html[data-crm-theme="midnight"] body {
+  background-color: rgb(11 14 26);
+}
+
+/* Sidebar */
+.sb {
+  background: var(--sb-bg);
+  border-right: 1px solid var(--sb-border);
+  box-shadow: var(--sb-shadow);
+  backdrop-filter: var(--sb-blur);
+  -webkit-backdrop-filter: var(--sb-blur);
+  color: var(--sb-text);
+}
+
+.sb-divider {
+  border-color: var(--sb-divider);
+}
+
+.sb-label {
+  @apply px-3 pb-1.5 text-[10.5px] font-bold uppercase tracking-[0.14em];
+  color: var(--sb-muted);
+}
+
+.sb-title {
+  color: var(--sb-text-strong);
+}
+
+.sb-muted {
+  color: var(--sb-muted);
+}
+
+.sb-item {
+  @apply relative flex items-center rounded-xl text-[13.5px] font-medium no-underline border border-transparent transition-[background-color,color,box-shadow] duration-200;
+  color: var(--sb-text);
+}
+
+.sb-item svg {
+  color: var(--sb-icon);
+  transition: color 0.2s;
+}
+
+.sb-item:hover {
+  background: var(--sb-hover);
+  color: var(--sb-text-strong);
+}
+
+.sb-item:hover svg {
+  color: rgb(var(--accent-rgb));
+}
+
+.sb-item.is-active {
+  @apply font-semibold;
+  color: #fff;
+  background: linear-gradient(135deg, rgb(var(--accent-rgb)) 0%, rgb(var(--accent-hover-rgb)) 100%);
+  box-shadow: 0 10px 22px -8px rgb(var(--accent-rgb) / 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.sb-item.is-active svg {
+  color: #fff;
+}
+
+.sb-badge {
+  @apply min-w-[18px] h-[18px] px-1 rounded-full text-white text-[10px] font-bold flex items-center justify-center leading-none;
+  background: var(--sb-badge);
+}
+
+.sb-item.is-active .sb-badge {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.sb-tip {
+  @apply pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity duration-200 z-50;
+  background: #0f1424;
+}
+
+/* the menu list's own scrollbar: thin, and only visible while hovering the menu */
+.sb-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.sb-scroll:hover {
+  scrollbar-color: var(--sb-muted) transparent;
+}
+
+.sb-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sb-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.sb-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--sb-muted);
+}
+
+.sb-plate {
+  @apply flex items-center justify-center rounded-2xl bg-white px-3 py-2.5;
+  box-shadow: 0 6px 18px rgba(8, 12, 30, 0.18);
+}
+
+.sb-dev-logo {
+  filter: var(--sb-dev-logo);
+}
+
+.sb-toggle {
+  @apply absolute hidden md:flex items-center justify-center w-6 h-6 rounded-full -right-3 top-7 cursor-pointer transition-colors duration-200;
+  background: #fff;
+  border: 1px solid rgba(28, 33, 48, 0.1);
+  color: #6b7280;
+  box-shadow: 0 4px 10px rgba(8, 12, 30, 0.18);
+}
+
+.sb-toggle:hover {
+  color: rgb(var(--accent-rgb));
+}
+
+.sb-logout {
+  @apply relative flex items-center w-full rounded-xl border border-transparent bg-transparent text-[13.5px] font-medium cursor-pointer transition-colors duration-200;
+  color: var(--sb-text);
+}
+
+.sb-logout:hover {
+  color: #ff6b70;
+  background: rgba(229, 72, 77, 0.12);
+}
+
+/* Midnight: the light tints used for status pills and banners, recoloured for dark cards */
+html[data-crm-theme="midnight"] .app-shell {
+  --tint-red-bg: rgba(229, 72, 77, 0.16);
+  --tint-red-fg: #ff8a8f;
+  --tint-amber-bg: rgba(245, 158, 11, 0.15);
+  --tint-amber-fg: #fbbf24;
+  --tint-orange-fg: #fb923c;
+  --tint-blue-bg: rgba(91, 116, 255, 0.18);
+  --tint-blue-fg: #a5b4ff;
+  --tint-green-bg: rgba(18, 183, 106, 0.16);
+  --tint-green-fg: #4ade80;
+  --tint-violet-bg: rgba(139, 92, 246, 0.18);
+  --tint-violet-fg: #c4b5fd;
+  --tint-slate-bg: rgba(148, 163, 184, 0.14);
+  --tint-slate-fg: #cbd5e1;
+}
+
+html[data-crm-theme="midnight"] .app-shell :is(.bg-\[\#fef2f2\], .pill.followup-overdue, .hot-leads-banner) { background-color: var(--tint-red-bg); }
+html[data-crm-theme="midnight"] .app-shell :is(.text-\[\#b91c1c\], .text-\[\#991b1b\], .pill.followup-overdue, .hot-leads-banner) { color: var(--tint-red-fg); }
+html[data-crm-theme="midnight"] .app-shell :is(.border-\[\#fecaca\], .hot-leads-banner) { border-color: rgba(229, 72, 77, 0.3); }
+html[data-crm-theme="midnight"] .app-shell :is(.bg-\[\#fffbeb\], .bg-\[\#fff7ed\], .pill.followup-today, .timeline-type-call, .due-banner, .btn-hot.active) { background-color: var(--tint-amber-bg); }
+html[data-crm-theme="midnight"] .app-shell :is(.text-\[\#b45309\], .text-\[\#854d0e\], .pill.followup-today, .timeline-type-call) { color: var(--tint-amber-fg); }
+html[data-crm-theme="midnight"] .app-shell :is(.text-\[\#c2410c\], .text-\[\#9a3412\], .text-\[\#ea580c\], .due-banner, .btn-hot.active) { color: var(--tint-orange-fg); }
+html[data-crm-theme="midnight"] .app-shell :is(.border-\[\#fed7aa\], .border-\[\#fdba74\], .due-banner, .btn-hot.active) { border-color: rgba(245, 158, 11, 0.3); }
+html[data-crm-theme="midnight"] .app-shell :is(.bg-\[\#eff6ff\], .bg-\[\#eef3ff\], .bg-\[\#e0f2fe\], .pill.followup-upcoming) { background-color: var(--tint-blue-bg); }
+html[data-crm-theme="midnight"] .app-shell :is(.text-\[\#1d4ed8\], .text-\[\#0369a1\], .text-\[\#4338ca\], .pill.followup-upcoming, .timeline-type-followup) { color: var(--tint-blue-fg); }
+html[data-crm-theme="midnight"] .app-shell :is(.bg-\[\#ecfdf5\], .bg-\[\#e7f9ee\]) { background-color: var(--tint-green-bg); }
+html[data-crm-theme="midnight"] .app-shell .text-\[\#047857\] { color: var(--tint-green-fg); }
+html[data-crm-theme="midnight"] .app-shell :is(.bg-\[\#ede9fe\], .bg-\[\#f5f3ff\]) { background-color: var(--tint-violet-bg); }
+html[data-crm-theme="midnight"] .app-shell .text-\[\#6d28d9\] { color: var(--tint-violet-fg); }
+html[data-crm-theme="midnight"] .app-shell :is(.bg-\[\#f1f5f9\], .timeline-type-remark) { background-color: var(--tint-slate-bg); }
+html[data-crm-theme="midnight"] .app-shell :is(.text-\[\#475569\], .timeline-type-remark) { color: var(--tint-slate-fg); }
+
+/* Midnight: light surfaces written as fixed colours */
+html[data-crm-theme="midnight"] .app-shell :is(.bg-white, .btn-sm) { background-color: rgb(var(--card-rgb)); }
+html[data-crm-theme="midnight"] .app-shell :is(thead th, .bg-\[\#fafbfd\], .bg-\[\#fbfcfe\], .table-toolbar, .modal-status-bar) { background-color: rgb(24 30 51); }
+html[data-crm-theme="midnight"] .app-shell tbody tr:hover { background-color: rgb(28 35 60); }
+html[data-crm-theme="midnight"] .app-shell :is(.dash-panel, .dash-card) {
+  background-color: rgb(var(--card-rgb) / 0.82);
+  border-color: rgb(var(--border-rgb));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+html[data-crm-theme="midnight"] .app-shell .btn-sm:hover { border-color: rgb(70 80 115); }
+html[data-crm-theme="midnight"] .app-shell .banner-dismiss { background-color: rgba(255, 255, 255, 0.08); }
+
+/* WhatsApp-style chat backdrop (Chats, campaign message preview) */
+.chat-wallpaper {
+  background-color: #efeae2;
+}
+
+html[data-crm-theme="midnight"] .app-shell .chat-wallpaper {
+  background-color: #0b141a;
+}
+
+html[data-crm-theme="midnight"] .app-shell .bg-\[\#d9fdd3\] {
+  background-color: #005c4b;
 }

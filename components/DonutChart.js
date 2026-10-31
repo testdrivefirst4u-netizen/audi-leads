@@ -102,7 +102,7 @@ export default function DonutChart({ data, keyField = "label", centerLabel, cent
               cy={CENTER}
               r={LABEL_RADIUS}
               fill="none"
-              stroke="#e5e8f0"
+              stroke="rgb(var(--border-rgb))"
               strokeWidth={OUTER_RADIUS - INNER_RADIUS}
             />
           ) : (
@@ -111,7 +111,7 @@ export default function DonutChart({ data, keyField = "label", centerLabel, cent
                 key={s[keyField]}
                 d={donutSlicePath(s.startAngle, s.endAngle)}
                 fill={s.color}
-                stroke="#fff"
+                stroke="rgb(var(--card-rgb))"
                 strokeWidth="2"
                 opacity={hoverKey && hoverKey !== s[keyField] ? 0.55 : 1}
                 onMouseEnter={() => setHoverKey(s[keyField])}
@@ -123,11 +123,11 @@ export default function DonutChart({ data, keyField = "label", centerLabel, cent
           {/* Center total — the reason this is a donut and not a pie. */}
           {centerLabel !== undefined && (
             <>
-              <text x={CENTER} y={centerSubLabel ? CENTER - 4 : CENTER + 6} textAnchor="middle" fontSize="24" fontWeight="800" fill="#1a1d29">
+              <text x={CENTER} y={centerSubLabel ? CENTER - 4 : CENTER + 6} textAnchor="middle" fontSize="24" fontWeight="800" fill="rgb(var(--ink-rgb))">
                 {centerLabel}
               </text>
               {centerSubLabel && (
-                <text x={CENTER} y={CENTER + 16} textAnchor="middle" fontSize="10.5" fontWeight="600" fill="#6b7280">
+                <text x={CENTER} y={CENTER + 16} textAnchor="middle" fontSize="10.5" fontWeight="600" fill="rgb(var(--muted-rgb))">
                   {centerSubLabel}
                 </text>
               )}

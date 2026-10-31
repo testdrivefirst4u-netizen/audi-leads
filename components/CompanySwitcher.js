@@ -1,54 +1,74 @@
-import { useEffect, useState } from "react";
-import { apiFetch } from "../lib/apiFetch";
+import { useEffect, useRef, useState } from "react";
+import { FiBriefcase, FiArrowUp } from "react-icons/fi";
+import { loadCompanies, resolveViewCompany, VIEW_COMPANY_EVENT } from "../lib/viewCompany";
 
-// Super-admin-only control shown at the top of Leads/Dashboard/Reports/Agents
-// — picks which company's data to work with (no super-admin session belongs
-// to a company, so every page it appears on must know which one is currently
-// selected before it can fetch anything). Pages that let the super admin
-// change things (Leads, Agents) pass editable so the badge doesn't claim
-// they're read-only; Dashboard/Reports leave it off.
+// Super-admin-only, at the top of every "Company View" page (Leads, Dashboard,
+// Reports, Agents…). No super-admin session belongs to a company, so each of
+// these pages needs to know which one to fetch. The company is picked once in
+// the top bar (components/CompanyPicker.js, lib/viewCompany.js); this keeps
+// the page's own companyId in step with it — on arrival and whenever the top
+// bar changes — through the page's onChange, so a page's own switch handling
+// (e.g. Leads clearing company-specific filters) still runs.
+//
+// What's left on screen is a slim reminder of which company you're acting on
+// and with what access. Pages that let the super admin change things (Leads,
+// Agents…) pass editable; Dashboard/Reports leave it off (read-only).
 export default function CompanySwitcher({ companyId, onChange, editable = false }) {
-  const [companies, setCompanies] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [company, setCompany] = useState(null);
+  const [empty, setEmpty] = useState(false);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const companyIdRef = useRef(companyId);
+  companyIdRef.current = companyId;
+
+  // lastSent: the first pick can arrive twice (resolved list + its own event)
+  // before the page's state has caught up — only pass each change on once.
+  const lastSent = useRef(null);
+  const follow = (id) => {
+    if (!id) return;
+    const next = String(id);
+    if (next === String(companyIdRef.current || "") || next === lastSent.current) return;
+    lastSent.current = next;
+    onChangeRef.current(id);
+  };
 
   useEffect(() => {
-    apiFetch("/api/companies")
-      .then((res) => res.json())
-      .then((data) => {
-        const list = data.companies || [];
-        setCompanies(list);
-        if (!companyId && list.length > 0) onChange(list[0]._id);
-      })
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    loadCompanies().then((list) => {
+      if (cancelled) return;
+      const pick = resolveViewCompany(list);
+      setEmpty(!pick);
+      if (pick) {
+        setCompany({ id: String(pick._id), name: pick.name });
+        follow(pick._id);
+      }
+    });
+    const onPick = (e) => {
+      setCompany(e.detail);
+      follow(e.detail.id);
+    };
+    window.addEventListener(VIEW_COMPANY_EVENT, onPick);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(VIEW_COMPANY_EVENT, onPick);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  if (empty) {
+    return <div className="mb-5 rounded-xl border border-border bg-card px-4 py-3 text-[13px] text-muted">No companies yet — add one on the Companies page.</div>;
+  }
+
   return (
-    <div className="panel mb-5" style={{ padding: 20 }}>
-      <span className="pill mb-3 inline-block bg-accent-soft text-accent">
-        {editable ? "Super Admin — Full Access" : "Super Admin View — Read Only"}
+    <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-border bg-card px-4 py-2.5 text-[13px] shadow-card">
+      <FiBriefcase size={15} className="shrink-0 text-accent" />
+      <span className="text-muted">
+        Viewing <strong className="text-ink">{company?.name || "…"}</strong>
       </span>
-      <div className="field mb-0" style={{ maxWidth: 280 }}>
-        <label>Company</label>
-        <select
-          value={companyId || ""}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={loading}
-          className="disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          {companies.length === 0 && <option value="">No companies yet</option>}
-          {companies.map((c) => (
-            <option key={c._id} value={c._id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <p className="hint m-0 mt-3">
-        {editable
-          ? "Acting on this company's data with the same access as its admin — edits, reassignments, and remarks are saved to this company."
-          : "Viewing this company's data as read-only."}
-      </p>
+      <span className={`pill ${editable ? "bg-accent-soft text-accent" : "bg-bg text-muted"}`}>{editable ? "Full access" : "Read only"}</span>
+      <span className="ml-auto hidden sm:flex items-center gap-1 text-[12px] text-muted">
+        <FiArrowUp size={12} /> Switch company from the top bar
+      </span>
     </div>
   );
 }

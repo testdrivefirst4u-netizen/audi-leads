@@ -320,7 +320,7 @@ export default function CampaignWizard({ companyId = "", onClose, onDone }) {
                     <div className="text-[12px] font-bold uppercase tracking-wide text-muted mb-1.5">Preview (sample customer)</div>
                     {template ? (
                       channel === "whatsapp" ? (
-                        <div className="rounded-2xl p-4" style={{ background: "#e5ddd5" }}>
+                        <div className="chat-wallpaper rounded-2xl p-4">
                           <div className="rounded-xl bg-white px-3.5 py-2.5 text-[13.5px] text-ink whitespace-pre-wrap shadow-sm max-w-[360px]" style={{ lineHeight: 1.45 }}>
                             {template.preview}
                           </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Skeleton from "react-loading-skeleton";
 import LeadDetailModal from "./LeadDetailModal";
 import { FaWhatsapp } from "react-icons/fa6";
@@ -276,8 +276,21 @@ export default function LeadsTable({
   manageCompanyId,
   onBulkAssign,
   onSelectAllMatching,
+  autoOpenLeadId,
 }) {
   const [selected, setSelected] = useState(null);
+
+  // Opened from the top bar search (/leads?q=…&open=<id>): show that lead's
+  // details as soon as it appears in the list — once per id.
+  const autoOpenedRef = useRef(null);
+  useEffect(() => {
+    if (!autoOpenLeadId || autoOpenedRef.current === autoOpenLeadId) return;
+    const match = leads.find((l) => String(l._id) === String(autoOpenLeadId));
+    if (match) {
+      autoOpenedRef.current = autoOpenLeadId;
+      setSelected(match);
+    }
+  }, [autoOpenLeadId, leads]);
 
   // Bulk assignment — checkbox selection lives here (ids only), the write
   // itself is the page's onBulkAssign. Selection is per current page; the

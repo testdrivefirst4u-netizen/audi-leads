@@ -10,6 +10,9 @@ const AdminSchema = new mongoose.Schema(
     // Personal avatar (super admin's self-service Account page) — distinct
     // from a company's own logoUrl on the Company model.
     avatarUrl: { type: String, default: "" },
+    // Colour theme picked in the CRM (lib/theme.js), so it follows the person
+    // across devices. Unset = the platform default.
+    theme: { type: String, enum: ["showroom", "light", "midnight"] },
     // Touched (throttled) on every authenticated request — see
     // lib/loginActivity.js; powers "online now" on Login Activity.
     lastSeenAt: { type: Date },
