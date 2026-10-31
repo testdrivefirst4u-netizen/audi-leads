@@ -3,6 +3,7 @@ import Link from "next/link";
 import Skeleton from "react-loading-skeleton";
 import Layout from "../../components/Layout";
 import CompanySwitcher from "../../components/CompanySwitcher";
+import CopyFromDealer from "../../components/catalog/CopyFromDealer";
 import { CarIcon } from "../../components/icons";
 import { apiFetch } from "../../lib/apiFetch";
 import { catalogViewProps } from "../../lib/catalogPageProps";
@@ -51,6 +52,7 @@ export default function CatalogPage({ username, role, companyName, companyLogoUr
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [bodyType, setBodyType] = useState("");
+  const [reloadKey, setReloadKey] = useState(0); // bumped after a copy from another dealer
   const companyQuery = isSuperAdminView && viewCompanyId ? `?companyId=${viewCompanyId}` : "";
 
   useEffect(() => {
@@ -63,7 +65,7 @@ export default function CatalogPage({ username, role, companyName, companyLogoUr
         setCanEdit(Boolean(data.canEdit));
       })
       .finally(() => setLoading(false));
-  }, [isSuperAdminView, viewCompanyId, companyQuery]);
+  }, [isSuperAdminView, viewCompanyId, companyQuery, reloadKey]);
 
   const bodyTypes = useMemo(() => [...new Set(models.map((m) => m.bodyType).filter(Boolean))].sort(), [models]);
   const shown = useMemo(() => {
@@ -83,13 +85,23 @@ export default function CatalogPage({ username, role, companyName, companyLogoUr
           <p className="hint m-0">Every car we sell — variants, prices, colours and brochures.</p>
         </div>
         {canEdit && (
-          <Link href={`/catalog/new${companyQuery}`} className="btn no-underline">
-            + Add model
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href={`/catalog/import${companyQuery}`} className="btn-sm no-underline">
+              Import from spreadsheet
+            </Link>
+            <Link href={`/catalog/new${companyQuery}`} className="btn no-underline">
+              + Add model
+            </Link>
+          </div>
         )}
       </div>
 
       {isSuperAdminView && <CompanySwitcher companyId={viewCompanyId} onChange={setViewCompanyId} editable />}
+      {isSuperAdminView && viewCompanyId && (
+        <div className="mb-5 flex">
+          <CopyFromDealer toCompanyId={viewCompanyId} onCopied={() => setReloadKey((n) => n + 1)} />
+        </div>
+      )}
 
       {(loading || models.length > 0) && (
         <div className="mb-5 flex flex-wrap items-center gap-2">

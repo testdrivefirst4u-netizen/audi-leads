@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "build:loader": "node scripts/brand-loader/build.js",
-    "test:unit": "node scripts/test-phone.js"
+    "test:unit": "node scripts/test-phone.js && node scripts/test-catalog-import.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

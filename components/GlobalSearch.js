@@ -3,6 +3,8 @@ import { useRouter } from "next/router";
 import { FiSearch, FiArrowRight, FiCornerDownLeft } from "react-icons/fi";
 import { apiFetch } from "../lib/apiFetch";
 import { navItemsFor } from "./Sidebar";
+import { CarIcon } from "./icons";
+import { loadCatalogForSearch, searchCars } from "../lib/carSearch";
 
 const MIN_CHARS = 2;
 const MAX_LEADS = 6;
@@ -95,6 +97,13 @@ export default function GlobalSearch({ role }) {
     };
   }, [term, canSearchLeads]);
 
+  // Cars from the Models catalog ("q7 boot space" → the spec), loaded once when the search opens.
+  const [catalog, setCatalog] = useState([]);
+  useEffect(() => {
+    if (open && canSearchLeads) loadCatalogForSearch().then(setCatalog);
+  }, [open, canSearchLeads]);
+  const cars = useMemo(() => (term.length >= MIN_CHARS ? searchCars(catalog, term) : []), [catalog, term]);
+
   const pages = useMemo(() => {
     const items = navItemsFor(role);
     if (!term) return items.slice(0, 6);
@@ -102,13 +111,14 @@ export default function GlobalSearch({ role }) {
     return items.filter((i) => i.label.toLowerCase().includes(q)).slice(0, 4);
   }, [role, term]);
 
-  // One flat list for keyboard navigation: leads, "all results", pages.
+  // One flat list for keyboard navigation: leads, "all results", cars, pages.
   const options = useMemo(() => {
     const list = leads.map((lead) => ({ kind: "lead", lead, href: `/leads?q=${encodeURIComponent(term)}&open=${lead._id}` }));
     if (term.length >= MIN_CHARS) list.push({ kind: "all", href: `/leads?q=${encodeURIComponent(term)}` });
+    cars.forEach((c) => list.push({ kind: "car", car: c, href: `/catalog/${c.modelId}` }));
     pages.forEach((p) => list.push({ kind: "page", page: p, href: p.href }));
     return list;
-  }, [leads, pages, term]);
+  }, [leads, cars, pages, term]);
 
   useEffect(() => setCursor(0), [term]);
 
@@ -220,6 +230,27 @@ export default function GlobalSearch({ role }) {
                 </button>
               );
             })()}
+
+          {cars.length > 0 && (
+            <>
+              <div className="px-3 pt-3 pb-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted">Cars</div>
+              {cars.map((c) => {
+                index += 1;
+                const i = index;
+                return (
+                  <button key={`${c.modelId}-${c.title}`} type="button" role="option" aria-selected={i === cursor} className={optionCls(i)} onMouseEnter={() => setCursor(i)} onClick={() => go(options[i])}>
+                    <span className="w-8 h-8 rounded-lg bg-bg flex items-center justify-center shrink-0 text-muted">
+                      <CarIcon width={16} height={16} />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-semibold truncate">{c.title}</span>
+                      <span className="block text-[12px] text-muted truncate">{c.detail}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </>
+          )}
 
           {pages.length > 0 && (
             <>

@@ -8,6 +8,7 @@ import { useToast } from "../../../components/ToastProvider";
 import { apiFetch } from "../../../lib/apiFetch";
 import { catalogViewProps } from "../../../lib/catalogPageProps";
 import { fileKindLabel, formatBytes, formatPrice, formatPriceShort, startingPrice } from "../../../lib/catalog";
+import CarExtras from "../../../components/catalog/CarExtras";
 
 export const getServerSideProps = catalogViewProps;
 
@@ -138,6 +139,11 @@ export default function CatalogModelPage({ username, role, companyName, companyL
             {model.aliases?.length > 0 && <p className="hint m-0">Leads may call it: {model.aliases.join(", ")}</p>}
           </div>
         </div>
+      </section>
+
+      {/* price date, offer, photos, highlights, specs, quick answers */}
+      <section className="panel mb-5 p-5">
+        <CarExtras model={model} />
       </section>
 
       <section className="panel mb-5">

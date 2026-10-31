@@ -46,6 +46,37 @@ const FileSchema = new mongoose.Schema(
   { _id: true }
 );
 
+// Extra photos of a model: what a customer asks to see beyond the main shot.
+const GalleryImageSchema = new mongoose.Schema(
+  {
+    url: { type: String, required: true },
+    fileId: { type: String, default: "" },
+    kind: { type: String, enum: ["exterior", "interior", "detail"], default: "exterior" },
+    caption: { type: String, default: "", trim: true },
+  },
+  { _id: true }
+);
+
+// A spec that applies to the model as a whole (dimensions, boot space,
+// safety kit…), grouped for display. Per-variant numbers stay on variants.
+const SpecSchema = new mongoose.Schema(
+  {
+    group: { type: String, default: "General", trim: true }, // Dimensions, Safety, Comfort, Tech…
+    name: { type: String, required: true, trim: true }, // "Boot space"
+    value: { type: String, required: true, trim: true }, // "520 litres"
+  },
+  { _id: true }
+);
+
+// A ready answer to a question customers often ask on the phone.
+const FaqSchema = new mongoose.Schema(
+  {
+    q: { type: String, required: true, trim: true },
+    a: { type: String, required: true, trim: true },
+  },
+  { _id: true }
+);
+
 const CarModelSchema = new mongoose.Schema(
   {
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true, index: true },
@@ -64,6 +95,27 @@ const CarModelSchema = new mongoose.Schema(
     variants: { type: [VariantSchema], default: [] },
     colours: { type: [ColourSchema], default: [] },
     files: { type: [FileSchema], default: [] },
+    // What telecallers need on a call (the lead window's Car panel).
+    gallery: { type: [GalleryImageSchema], default: [] },
+    highlights: { type: [String], default: [] }, // 5–6 short selling points
+    specs: { type: [SpecSchema], default: [] },
+    faqs: { type: [FaqSchema], default: [] },
+    // Prices are only as good as their date: shown beside every price, and
+    // older than 30 days → "check with sales" (lib/catalog.js isPriceStale).
+    priceAsOf: { type: Date, default: null },
+    priceCity: { type: String, default: "", trim: true }, // on-road prices differ by city
+    offers: { type: String, default: "", trim: true }, // this dealer's current offer, free text
+    sourceNote: { type: String, default: "", trim: true }, // where the data came from
+    // Copied from another dealer's catalog (pages/api/catalog/copy.js) — the
+    // source model, so a later copy updates it instead of adding a second one.
+    copiedFrom: {
+      companyId: { type: mongoose.Schema.Types.ObjectId, default: null },
+      modelId: { type: mongoose.Schema.Types.ObjectId, default: null },
+      at: { type: Date, default: null },
+      // source file id → this company's copy, so copying again reuses photos
+      // and brochures that haven't changed instead of uploading them twice
+      assets: { type: [{ source: String, url: String, fileId: String, _id: false }], default: [] },
+    },
     updatedBy: { type: String, default: "" },
   },
   { timestamps: true }

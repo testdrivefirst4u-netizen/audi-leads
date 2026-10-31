@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useRouter } from "next/router";
 import { apiFetch } from "../../lib/apiFetch";
 import { useToast } from "../ToastProvider";
-import { BODY_TYPES, FUEL_TYPES, TRANSMISSIONS, FILE_KINDS, formatBytes, formatPriceShort } from "../../lib/catalog";
+import { BODY_TYPES, FUEL_TYPES, TRANSMISSIONS, FILE_KINDS, GALLERY_KINDS, SPEC_GROUPS, formatBytes, formatPriceShort } from "../../lib/catalog";
 import { uploadCatalogFile } from "./uploadCatalogFile";
 
 const EMPTY_VARIANT = { name: "", exShowroomPrice: "", onRoadPrice: "", fuel: "", transmission: "", engine: "", power: "", torque: "", mileage: "", seats: "", features: "" };
@@ -24,8 +24,18 @@ function toForm(model) {
     variants: (model?.variants || []).map((v) => ({ ...EMPTY_VARIANT, ...v, exShowroomPrice: v.exShowroomPrice ?? "", onRoadPrice: v.onRoadPrice ?? "", features: (v.features || []).join("\n") })),
     colours: (model?.colours || []).map((c) => ({ ...c })),
     files: (model?.files || []).map((f) => ({ ...f })),
+    gallery: (model?.gallery || []).map((g) => ({ ...g })),
+    highlights: (model?.highlights || []).join("\n"),
+    specs: (model?.specs || []).map((sp) => ({ ...sp })),
+    faqs: (model?.faqs || []).map((f) => ({ ...f })),
+    priceAsOf: model?.priceAsOf ? new Date(model.priceAsOf).toISOString().slice(0, 10) : "",
+    priceCity: model?.priceCity || "",
+    offers: model?.offers || "",
+    sourceNote: model?.sourceNote || "",
   };
 }
+
+const inputCls = "w-full min-w-0 rounded-lg border border-border bg-bg px-3 py-2 text-sm text-ink";
 
 function Field({ label, hint, children }) {
   return (
@@ -292,6 +302,120 @@ export default function CatalogEditor({ model, companyQuery = "" }) {
                   </Field>
                 </div>
               </div>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Prices & offers" description="Every price is shown with this date and city. Prices older than 30 days are flagged to telecallers as 'check with sales'.">
+        <div className="grid gap-4 md:grid-cols-[180px_200px_1fr]">
+          <Field label="Prices as of">
+            <input type="date" value={form.priceAsOf} onChange={(e) => set("priceAsOf", e.target.value)} className={inputCls} />
+          </Field>
+          <Field label="City" hint="(on-road)">
+            <input value={form.priceCity} onChange={(e) => set("priceCity", e.target.value)} placeholder="Hyderabad" className={inputCls} />
+          </Field>
+          <Field label="Data source" hint="(optional)">
+            <input value={form.sourceNote} onChange={(e) => set("sourceNote", e.target.value)} placeholder="Audi India price list, Nov 2026" className={inputCls} />
+          </Field>
+        </div>
+        <div className="mt-4">
+          <Field label="Current offer" hint="(shown to telecallers, optional)">
+            <textarea value={form.offers} onChange={(e) => set("offers", e.target.value)} rows={2} placeholder="Rs 1 lakh exchange bonus till 30 Nov" className={inputCls} />
+          </Field>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title={`Photo gallery (${form.gallery.length})`}
+        description="Exterior, interior and detail shots: what customers ask to see. JPG, PNG or WebP up to 5 MB."
+        action={<UploadButton companyQuery={companyQuery} label="+ Add photo" kind="image" onUploaded={(f) => addItem("gallery", { url: f.url, fileId: f.fileId, kind: "exterior", caption: "" })} />}
+      >
+        {form.gallery.length === 0 && <p className="hint m-0">No extra photos yet. The main photo above is shown first.</p>}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {form.gallery.map((g, i) => (
+            <div key={g._id || g.fileId || i} className="flex flex-col gap-2 rounded-xl border border-border p-2.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={g.url} alt="" className="aspect-[4/3] w-full rounded-lg object-cover" />
+              <div className="flex gap-2">
+                <select value={g.kind} onChange={(e) => setItem("gallery", i, { kind: e.target.value })} aria-label="Photo type" className="rounded-lg border border-border bg-bg px-2 py-1.5 text-[13px] text-ink">
+                  {GALLERY_KINDS.map((k) => (
+                    <option key={k.value} value={k.value}>
+                      {k.label}
+                    </option>
+                  ))}
+                </select>
+                <input value={g.caption} onChange={(e) => setItem("gallery", i, { caption: e.target.value })} placeholder="Caption" aria-label="Caption" className={`${inputCls} !py-1.5`} />
+              </div>
+              <div className="flex gap-1.5">
+                <button type="button" className="btn-sm" onClick={() => moveItem("gallery", i, -1)} aria-label="Move earlier" disabled={i === 0}>
+                  ←
+                </button>
+                <button type="button" className="btn-sm" onClick={() => moveItem("gallery", i, 1)} aria-label="Move later" disabled={i === form.gallery.length - 1}>
+                  →
+                </button>
+                <button type="button" className="btn-sm ml-auto text-danger" onClick={() => removeItem("gallery", i)}>
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Highlights" description="5 or 6 short selling points, one per line: what a telecaller says in the first 30 seconds.">
+        <textarea value={form.highlights} onChange={(e) => set("highlights", e.target.value)} rows={5} placeholder={"quattro all-wheel drive\nVirtual cockpit plus\n5-star safety"} className={inputCls} />
+      </SectionCard>
+
+      <datalist id="spec-groups">
+        {SPEC_GROUPS.map((g) => (
+          <option key={g} value={g} />
+        ))}
+      </datalist>
+      <SectionCard
+        title={`Specifications (${form.specs.length})`}
+        description="Specs for the whole model (dimensions, boot space, safety kit). Per-variant engine and price stay under Variants."
+        action={
+          <button type="button" className="btn-sm" onClick={() => addItem("specs", { group: form.specs.at(-1)?.group || "Dimensions", name: "", value: "" })}>
+            + Add spec
+          </button>
+        }
+      >
+        {form.specs.length === 0 && <p className="hint m-0">No specs yet. Start with boot space, length and the number of airbags: the questions customers ask most.</p>}
+        <div className="flex flex-col gap-2">
+          {form.specs.map((sp, i) => (
+            <div key={sp._id || i} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
+              <input value={sp.group} onChange={(e) => setItem("specs", i, { group: e.target.value })} list="spec-groups" placeholder="Group" aria-label="Spec group" className={inputCls} />
+              <input value={sp.name} onChange={(e) => setItem("specs", i, { name: e.target.value })} placeholder="Boot space" aria-label="Spec name" className={inputCls} />
+              <input value={sp.value} onChange={(e) => setItem("specs", i, { value: e.target.value })} placeholder="520 litres" aria-label="Spec value" className={inputCls} />
+              <button type="button" className="btn-sm text-danger" onClick={() => removeItem("specs", i)} aria-label={`Remove ${sp.name || "spec"}`}>
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title={`Quick answers (${form.faqs.length})`}
+        description="Ready answers to what customers ask on the phone: warranty, service cost, waiting period."
+        action={
+          <button type="button" className="btn-sm" onClick={() => addItem("faqs", { q: "", a: "" })}>
+            + Add answer
+          </button>
+        }
+      >
+        {form.faqs.length === 0 && <p className="hint m-0">No quick answers yet.</p>}
+        <div className="flex flex-col gap-3">
+          {form.faqs.map((f, i) => (
+            <div key={f._id || i} className="flex flex-col gap-2 rounded-xl border border-border p-3">
+              <div className="flex gap-2">
+                <input value={f.q} onChange={(e) => setItem("faqs", i, { q: e.target.value })} placeholder="What is the warranty?" aria-label="Question" className={`${inputCls} font-semibold`} />
+                <button type="button" className="btn-sm text-danger" onClick={() => removeItem("faqs", i)} aria-label="Remove answer">
+                  ×
+                </button>
+              </div>
+              <textarea value={f.a} onChange={(e) => setItem("faqs", i, { a: e.target.value })} rows={2} placeholder="2 years, unlimited km; extendable to 5 years." aria-label="Answer" className={inputCls} />
             </div>
           ))}
         </div>

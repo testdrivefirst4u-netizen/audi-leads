@@ -3,10 +3,13 @@ import Link from "next/link";
 import { apiFetch } from "../../lib/apiFetch";
 import {
   fileKindLabel,
+  formatPrice,
   formatPriceShort,
+  isPriceStale,
   matchCatalogModel,
   startingPrice,
 } from "../../lib/catalog";
+import CarExtras from "./CarExtras";
 import { WhatsAppIcon } from "../icons";
 import { waHref } from "../../lib/phone";
 
@@ -39,9 +42,81 @@ function firstName(name) {
   );
 }
 
-// "About this car" in the lead modal: the catalog entry for the lead's model,
-// with prices and one-tap brochure sharing to the customer's WhatsApp.
-// Renders nothing (not even its heading) until a matching model is found.
+// Rows of the two-variant comparison; a row shows only when either variant fills it.
+const COMPARE_ROWS = [
+  ["Ex-showroom", (v) => (v.exShowroomPrice != null ? formatPrice(v.exShowroomPrice) : "")],
+  ["On-road", (v) => (v.onRoadPrice != null ? formatPrice(v.onRoadPrice) : "")],
+  ["Fuel", (v, m) => v.fuel || m.fuel],
+  ["Transmission", (v) => v.transmission],
+  ["Engine", (v) => v.engine],
+  ["Power", (v) => v.power],
+  ["Torque", (v) => v.torque],
+  ["Mileage", (v) => v.mileage],
+  ["Seats", (v) => v.seats],
+];
+
+// "What's the difference between Premium Plus and Technology?" — two
+// variants side by side, plus the features only one of them has.
+function CompareVariants({ model }) {
+  const variants = model.variants || [];
+  const [a, setA] = useState(0);
+  const [b, setB] = useState(Math.min(1, variants.length - 1));
+  if (variants.length < 2) return null;
+  const va = variants[a] || variants[0];
+  const vb = variants[b] || variants[1];
+  const rows = COMPARE_ROWS.map(([label, get]) => [label, get(va, model) || "", get(vb, model) || ""]).filter(([, x, y]) => x || y);
+  const fa = new Set(va.features || []);
+  const fb = new Set(vb.features || []);
+  const onlyA = [...fa].filter((f) => !fb.has(f));
+  const onlyB = [...fb].filter((f) => !fa.has(f));
+  const pick = (value, set, label) => (
+    <select value={value} onChange={(e) => set(Number(e.target.value))} aria-label={label} className="w-full min-w-0 rounded-lg border border-border bg-bg px-2 py-1.5 text-[12.5px] font-semibold text-ink">
+      {variants.map((v, i) => (
+        <option key={v._id || i} value={i}>
+          {v.name}
+        </option>
+      ))}
+    </select>
+  );
+  return (
+    <section>
+      <h3 className="m-0 mb-2 text-[11px] font-bold uppercase tracking-[0.1em] text-muted">Compare variants</h3>
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="!text-[12.5px] min-w-[360px]">
+          <thead>
+            <tr>
+              <th className="!static !px-3 !py-2 w-[28%]"></th>
+              <th className="!static !px-2 !py-2 normal-case">{pick(a, setA, "First variant")}</th>
+              <th className="!static !px-2 !py-2 normal-case">{pick(b, setB, "Second variant")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([label, x, y]) => (
+              <tr key={label}>
+                <td className="!px-3 !py-1.5 text-muted">{label}</td>
+                <td className={`!px-3 !py-1.5 whitespace-normal ${x !== y ? "font-semibold" : ""}`}>{x || "—"}</td>
+                <td className={`!px-3 !py-1.5 whitespace-normal ${x !== y ? "font-semibold" : ""}`}>{y || "—"}</td>
+              </tr>
+            ))}
+            {(onlyA.length > 0 || onlyB.length > 0) && (
+              <tr>
+                <td className="!px-3 !py-1.5 text-muted align-top">Only in this one</td>
+                <td className="!px-3 !py-1.5 whitespace-normal align-top">{onlyA.join(", ") || "—"}</td>
+                <td className="!px-3 !py-1.5 whitespace-normal align-top">{onlyB.join(", ") || "—"}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+// The Car panel in a lead's window: the catalog entry for the lead's model —
+// prices per variant (each one tap to send on WhatsApp, with its date), a
+// two-variant comparison, brochures to share, then photos, highlights, specs
+// and quick answers (CarExtras). Renders nothing (not even its heading) until
+// a matching model is found.
 export default function LeadCarInfo({ lead, companyId, readOnly }) {
   const [model, setModel] = useState(undefined);
 
@@ -69,7 +144,7 @@ export default function LeadCarInfo({ lead, companyId, readOnly }) {
   return (
     <section className="mb-4 last:mb-0">
       <div className="mb-2.5 rounded-md bg-accent-soft px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-accent">
-        About this car
+        Car · {model.name}
       </div>
       <div className="rounded-lg border border-border p-3.5">
         <div className="flex items-center gap-3">
@@ -113,6 +188,36 @@ export default function LeadCarInfo({ lead, companyId, readOnly }) {
           </div>
         </div>
 
+        {model.variants?.length > 0 && (
+          <div className="mt-3 overflow-hidden rounded-lg border border-border">
+            {model.variants.map((v) => (
+              <div key={v._id || v.name} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-3 py-2 text-[13px] last:border-b-0">
+                <span className="min-w-0 flex-1 font-semibold text-ink">{v.name}</span>
+                <span className="text-muted">Ex {formatPriceShort(v.exShowroomPrice)}</span>
+                <span className="font-semibold text-ink">On-road {formatPriceShort(v.onRoadPrice)}</span>
+                {!readOnly && phone && (v.onRoadPrice || v.exShowroomPrice) && (
+                  <a
+                    href={waHref(
+                      phone,
+                      `Hi ${firstName(lead.name)}, the ${model.name} ${v.name} is ${v.onRoadPrice ? `${formatPrice(v.onRoadPrice)} on-road` : `${formatPrice(v.exShowroomPrice)} ex-showroom`}${model.priceCity ? ` in ${model.priceCity}` : ""}. Happy to arrange a test drive.`
+                    )}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-sm inline-flex items-center gap-1 no-underline"
+                    title={isPriceStale(model) ? "This price may be out of date: check with sales first" : "Opens WhatsApp with this price"}
+                  >
+                    <WhatsAppIcon width={13} height={13} className="text-[#25d366]" /> Send price
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-4">
+          <CompareVariants model={model} />
+        </div>
+
         {model.files?.length > 0 && (
           <div className="mt-3 flex flex-col gap-2">
             {model.files.map((f) => (
@@ -152,6 +257,10 @@ export default function LeadCarInfo({ lead, companyId, readOnly }) {
             ))}
           </div>
         )}
+
+        <div className="mt-4">
+          <CarExtras model={model} compact />
+        </div>
       </div>
     </section>
   );
