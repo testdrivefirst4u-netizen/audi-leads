@@ -128,10 +128,7 @@ export default function CompanyPicker() {
                   <CompanyMark company={c} size="md" />
                   <span className="flex-1 min-w-0">
                     <span className="block text-[13px] font-semibold text-ink truncate">{c.name}</span>
-                    <span className="block text-[11.5px] text-muted">
-                      {c.leadCount ?? 0} leads · {c.agentCount ?? 0} agents
-                      {c.active === false ? " · Inactive" : ""}
-                    </span>
+                    {c.active === false && <span className="block text-[11.5px] text-muted">Inactive</span>}
                   </span>
                   {selected && <FiCheck size={16} className="text-accent shrink-0" />}
                 </button>

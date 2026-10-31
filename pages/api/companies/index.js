@@ -19,6 +19,14 @@ async function handler(req, res) {
   await connectDB();
 
   if (req.method === "GET") {
+    // ?fields=basic: just enough for the top bar company picker
+    // (components/CompanyPicker.js) — skips the per-company lead/agent/key
+    // counts and settings below, which get slow as companies and leads grow.
+    if (req.query.fields === "basic") {
+      const basic = await Company.find({}).select("name slug logoUrl active").sort({ createdAt: 1 }).lean();
+      return res.status(200).json({ companies: basic });
+    }
+
     const companies = await Company.find({}).sort({ createdAt: 1 }).lean();
     const leadCounts = await Lead.aggregate([{ $group: { _id: "$companyId", count: { $sum: 1 } } }]);
     const agentCounts = await Agent.aggregate([{ $group: { _id: "$companyId", count: { $sum: 1 } } }]);

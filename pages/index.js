@@ -3,7 +3,7 @@ import Skeleton from "react-loading-skeleton";
 import Layout from "../components/Layout";
 import CompanySwitcher from "../components/CompanySwitcher";
 import FollowUpsCard from "../components/FollowUpsCard";
-import DueTodayBanner from "../components/DueTodayBanner";
+import DashboardHero from "../components/DashboardHero";
 import HotLeadsCard from "../components/HotLeadsCard";
 import PipelineStats from "../components/PipelineStats";
 import LeadsTrendChart from "../components/LeadsTrendChart";
@@ -94,6 +94,7 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
 
   useEffect(() => {
     const interval = setInterval(() => {
+      if (document.hidden) return; // nobody's looking at a background tab
       fetchStats(month);
       fetchFollowUps();
     }, POLL_INTERVAL_MS);
@@ -102,16 +103,10 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
 
   return (
     <Layout username={username} role={role} companyName={companyName} companyLogoUrl={companyLogoUrl} companyBrandColor={companyBrandColor}>
-      <h1 className="page-title mb-1">Dashboard</h1>
-      <p className="hint mb-5">Live overview of your pipeline, leads, and follow-ups.</p>
-
       {isSuperAdminView && <CompanySwitcher companyId={viewCompanyId} onChange={setViewCompanyId} />}
 
-      {loading ? (
-        <Skeleton height={44} className="mb-5" />
-      ) : (
-        <DueTodayBanner followUps={pendingFollowUps} />
-      )}
+      {/* greeting, today's numbers and today's follow-ups (replaces the old "due today" banner) */}
+      <DashboardHero username={username} stats={stats} followUps={pendingFollowUps} loading={loading} />
       {loading ? <Skeleton height={44} className="mb-5" /> : <HotLeadsCard count={stats?.hotCount} />}
 
       <h2 className="section-title">Lead Pipeline Dashboard</h2>

@@ -1,0 +1,28 @@
+# Builds the app on every push and pull request, so a change that breaks the
+# production build is caught here — before Vercel deploys main.
+# Needs no secrets: `next build` doesn't connect to the database.
+name: Build check
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx next build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"

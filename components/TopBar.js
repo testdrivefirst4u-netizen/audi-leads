@@ -4,6 +4,7 @@ import AutoSyncBadge from "./AutoSyncBadge";
 import ProfileMenu from "./ProfileMenu";
 import GlobalSearch from "./GlobalSearch";
 import CompanyPicker from "./CompanyPicker";
+import QuickAddLead from "./QuickAddLead";
 
 export default function TopBar({ role, username, companyName, companyLogoUrl, onLogout }) {
   // Neither is meaningful without a company context — super admin has none
@@ -37,6 +38,7 @@ export default function TopBar({ role, username, companyName, companyLogoUrl, on
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        <QuickAddLead role={role} />
         {showCompanyWidgets && (
           <>
             <div className="hidden lg:block">

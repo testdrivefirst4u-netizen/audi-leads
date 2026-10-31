@@ -207,7 +207,8 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, i
   }, [search, model, status, agentFilter, locationFilter, sourceFilter, channelFilter, campaignFilter, platformFilter, formFilter, adFilter, bucketFilter, followUpFilter, hotOnly, sortBy, sortDir, page, pageSize, exportPreset, customRange, viewCompanyId, fetchLeads]);
 
   useEffect(() => {
-    const interval = setInterval(() => fetchLeads(filters), POLL_INTERVAL_MS);
+    // skipped while the tab is in the background — nobody's looking at it
+    const interval = setInterval(() => !document.hidden && fetchLeads(filters), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, model, status, agentFilter, locationFilter, sourceFilter, channelFilter, campaignFilter, platformFilter, formFilter, adFilter, bucketFilter, followUpFilter, hotOnly, sortBy, sortDir, page, pageSize, exportPreset, customRange, viewCompanyId, fetchLeads]);

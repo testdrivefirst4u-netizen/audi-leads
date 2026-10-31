@@ -4,6 +4,8 @@ import { BellIcon } from "./icons";
 import Toast from "./Toast";
 import { apiFetch } from "../lib/apiFetch";
 import { playNotificationSound } from "../lib/notificationSound";
+import { usePolling } from "../lib/usePolling";
+import Portal from "./Portal";
 
 // Kept shorter than the other pollers (20s) since this drives an audible
 // new-lead alert, which is more time-sensitive than a dashboard number —
@@ -39,10 +41,9 @@ export default function NotificationBell() {
     setLastSeenAt(stored ? new Date(stored) : new Date());
   }, []);
 
-  useEffect(() => {
-    if (!lastSeenAt) return;
-
+  usePolling(
     async function poll() {
+      if (!lastSeenAt) return;
       const res = await apiFetch("/api/leads/recent");
       if (!res.ok) return;
       const data = await res.json();
@@ -64,12 +65,10 @@ export default function NotificationBell() {
         }
       }
       seenFreshIdsRef.current = new Set(freshLeads.map((l) => l._id));
-    }
-
-    poll();
-    const interval = setInterval(poll, POLL_MS);
-    return () => clearInterval(interval);
-  }, [lastSeenAt]);
+    },
+    POLL_MS,
+    [lastSeenAt]
+  );
 
   // Close the dropdown on outside click.
   useEffect(() => {
@@ -87,7 +86,8 @@ export default function NotificationBell() {
     if (!open) {
       // Snapshot what's new right now so the dropdown still shows them after
       // the badge clears, then mark everything as seen.
-      setDisplayedLeads(recentLeads.filter((l) => new Date(l.activityAt) > lastSeenAt));
+      // New ones first and marked, then the rest of the recent list as "Earlier".
+      setDisplayedLeads(recentLeads.slice(0, 15).map((l) => ({ ...l, isNew: new Date(l.activityAt) > lastSeenAt })));
       const now = new Date();
       setLastSeenAt(now);
       localStorage.setItem(LAST_SEEN_KEY, now.toISOString());
@@ -96,10 +96,14 @@ export default function NotificationBell() {
     setOpen((o) => !o);
   }
 
-  function goToLead() {
+  // Straight to the lead itself (Leads page, filtered to it, details open).
+  function goToLead(lead) {
     setOpen(false);
-    router.push("/");
+    router.push(`/leads?q=${encodeURIComponent(lead.phone || lead.name || "")}&open=${lead._id}`);
   }
+
+  const newOnes = displayedLeads.filter((l) => l.isNew);
+  const earlier = displayedLeads.filter((l) => !l.isNew);
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -119,36 +123,55 @@ export default function NotificationBell() {
       {open && (
         <div className="absolute top-[calc(100%+8px)] right-0 w-80 bg-card border border-border rounded-xl shadow-dropdown z-50 overflow-hidden">
           <div className="px-4 py-3 text-[13px] font-bold text-ink border-b border-border">
-            New Leads &amp; Repeat Enquiries
+            New leads &amp; repeat enquiries
           </div>
           {displayedLeads.length === 0 ? (
-            <div className="text-center text-muted text-sm px-4 py-5">Nothing new since your last visit.</div>
+            <div className="text-center text-muted text-sm px-4 py-5">No recent leads yet.</div>
           ) : (
-            <ul className="list-none m-0 p-0 max-h-80 overflow-y-auto">
-              {displayedLeads.map((lead) => (
-                <li
-                  key={lead._id}
-                  onClick={goToLead}
-                  className="flex flex-col gap-0.5 px-4 py-2.5 border-b border-border last:border-b-0 cursor-pointer hover:bg-bg"
-                >
-                  <span className="flex items-center gap-1.5 text-[13px] font-semibold text-ink">
-                    {lead.name || "Unknown"}
-                    {lead.isRepeat && (
-                      <span className="pill bg-[#fffbeb] text-[#b45309] text-[10px] px-1.5 py-0">🟡 Repeat</span>
-                    )}
-                  </span>
-                  <span className="text-xs text-muted">
-                    {lead.model} · {lead.phone || "no phone"}
-                  </span>
-                  <span className="text-[11px] text-muted">{timeAgo(lead.activityAt)}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="max-h-96 overflow-y-auto">
+              {[
+                ["New since your last visit", newOnes],
+                ["Earlier", earlier],
+              ].map(
+                ([title, items]) =>
+                  items.length > 0 && (
+                    <div key={title}>
+                      <div className="px-4 pt-2.5 pb-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted">{title}</div>
+                      <ul className="list-none m-0 p-0">
+                        {items.map((lead) => (
+                          <li key={lead._id}>
+                            <button
+                              type="button"
+                              onClick={() => goToLead(lead)}
+                              className={`w-full flex items-start gap-3 px-4 py-2.5 border-none text-left cursor-pointer hover:bg-bg ${lead.isNew ? "bg-accent/5" : "bg-transparent"}`}
+                            >
+                              <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${lead.isNew ? "bg-accent" : "bg-border"}`} />
+                              <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-ink">
+                                  <span className="truncate">{lead.name || "Unknown"}</span>
+                                  {lead.isRepeat && <span className="pill bg-[#fffbeb] text-[#b45309] text-[10px] px-1.5 py-0">Repeat</span>}
+                                </span>
+                                <span className="text-xs text-muted truncate">
+                                  {lead.model} · {lead.phone || "no phone"}
+                                </span>
+                              </span>
+                              <span className="shrink-0 text-[11px] text-muted">{timeAgo(lead.activityAt)}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+              )}
+            </div>
           )}
         </div>
       )}
 
-      <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
+      {/* rendered outside the TopBar, whose blur would otherwise trap this fixed-position toast */}
+      <Portal>
+        <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
+      </Portal>
     </div>
   );
 }

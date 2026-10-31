@@ -3,6 +3,8 @@ import { useRouter } from "next/router";
 import { ChevronDownIcon, LogoutIcon, UserIcon } from "./icons";
 import { apiFetch } from "../lib/apiFetch";
 import ThemePicker from "./ThemePicker";
+import Portal from "./Portal";
+import BcMark from "./BcMark";
 
 function roleLabelFor(role) {
   if (role === "super_admin") return "Super Admin";
@@ -19,8 +21,17 @@ const AVATAR_SIZE = {
 // The company's own logo when there is one (this is what makes the avatar
 // recognizable at a glance across companies) — falls back to the classic
 // initial-letter circle otherwise, same as before.
-function Avatar({ logoUrl, initial, size = "sm" }) {
+function Avatar({ logoUrl, initial, size = "sm", brandMark = false }) {
   const { box, text, pad } = AVATAR_SIZE[size];
+  // Super admin without a photo of their own: the bc mark on a dark tile
+  // (the full platform logo is unreadable at avatar size).
+  if (brandMark) {
+    return (
+      <span className={`${box} rounded-full bg-gradient-to-br from-[#232b48] to-[#0f1424] text-white flex items-center justify-center shrink-0`}>
+        <BcMark className="w-[62%] h-auto" />
+      </span>
+    );
+  }
   if (logoUrl) {
     return (
       <span className={`${box} ${pad} rounded-full bg-white border border-border flex items-center justify-center shrink-0 overflow-hidden`}>
@@ -78,7 +89,8 @@ export default function ProfileMenu({ username, role, companyName, companyLogoUr
 
   const roleLabel = roleLabelFor(role);
   const initial = username.charAt(0).toUpperCase();
-  const avatarLogoUrl = isSuperAdmin ? ownAvatarUrl || companyLogoUrl : companyLogoUrl;
+  const avatarLogoUrl = isSuperAdmin ? ownAvatarUrl : companyLogoUrl;
+  const brandMark = isSuperAdmin && !ownAvatarUrl;
 
   return (
     <>
@@ -89,7 +101,7 @@ export default function ProfileMenu({ username, role, companyName, companyLogoUr
           aria-label="Account menu"
           aria-expanded={open}
         >
-          <Avatar logoUrl={avatarLogoUrl} initial={initial} size="sm" />
+          <Avatar logoUrl={avatarLogoUrl} initial={initial} size="sm" brandMark={brandMark} />
           <span className="hidden sm:block text-[13px] font-semibold text-ink truncate max-w-[130px]">{username}</span>
           <ChevronDownIcon className={`shrink-0 text-muted transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
         </button>
@@ -97,7 +109,7 @@ export default function ProfileMenu({ username, role, companyName, companyLogoUr
         {open && (
           <div className="absolute top-[calc(100%+8px)] right-0 w-64 bg-card border border-border rounded-xl shadow-dropdown z-50 overflow-hidden">
             <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
-              <Avatar logoUrl={avatarLogoUrl} initial={initial} size="md" />
+              <Avatar logoUrl={avatarLogoUrl} initial={initial} size="md" brandMark={brandMark} />
               <div className="min-w-0 leading-tight">
                 <div className="text-[13.5px] font-bold text-ink truncate">{username}</div>
                 <div className="text-[11.5px] text-muted truncate">
@@ -141,6 +153,7 @@ export default function ProfileMenu({ username, role, companyName, companyLogoUr
       </div>
 
       {accountOpen && (
+        <Portal>
         <div className="modal-backdrop" onClick={() => setAccountOpen(false)}>
           <div className="modal max-w-[420px]" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -194,6 +207,7 @@ export default function ProfileMenu({ username, role, companyName, companyLogoUr
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </>
   );

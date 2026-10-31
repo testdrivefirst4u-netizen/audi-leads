@@ -3,9 +3,11 @@ import { useRouter } from "next/router";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import MobileTabBar from "./MobileTabBar";
+import OfflineBanner from "./OfflineBanner";
 import { brandColorTriplets } from "../lib/color";
 import { apiFetch } from "../lib/apiFetch";
 import { loadAccountTheme } from "../lib/theme";
+import { usePolling } from "../lib/usePolling";
 
 // Same cadence as the other background pollers (Leads page, notification
 // bell) — the sidebar badge doesn't need to be faster than that.
@@ -27,26 +29,19 @@ export default function Layout({ children, username, role, companyName, companyL
   // The theme saved on this person's account (lib/theme.js) — once per page load.
   useEffect(() => loadAccountTheme(), []);
 
-  useEffect(() => {
-    // Super admin has no Follow-ups nav item (it's a company working queue,
-    // not a platform-monitoring view) and no single companyId to scope the
-    // count to, so there's nothing to poll for.
-    if (role === "super_admin") return;
-
-    let cancelled = false;
-    async function poll() {
+  // Super admin has no Follow-ups nav item (it's a company working queue,
+  // not a platform-monitoring view) and no single companyId to scope the
+  // count to, so there's nothing to poll for. Paused in background tabs.
+  usePolling(
+    async () => {
+      if (role === "super_admin") return;
       const [res, chatRes] = await Promise.all([apiFetch("/api/followups/count"), apiFetch("/api/chats/unread")]);
-      if (cancelled) return;
       if (res.ok) setFollowUpBadge(await res.json());
       if (chatRes.ok) setChatBadge(await chatRes.json());
-    }
-    poll();
-    const interval = setInterval(poll, FOLLOWUP_BADGE_POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [role]);
+    },
+    FOLLOWUP_BADGE_POLL_MS,
+    [role]
+  );
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -106,6 +101,7 @@ export default function Layout({ children, username, role, companyName, companyL
           {children}
         </div>
       </main>
+      <OfflineBanner />
       <MobileTabBar role={role} followUpBadge={followUpBadge} chatBadge={chatBadge} onMore={() => setMobileNavOpen(true)} />
     </div>
   );

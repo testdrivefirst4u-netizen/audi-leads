@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { apiFetch } from "../lib/apiFetch";
+import { usePolling } from "../lib/usePolling";
 
 // Renders on every page (via TopBar) for every logged-in user — sync itself
 // only runs once a day on Vercel, so this can't go stale in any way that
@@ -25,27 +26,15 @@ export default function AutoSyncBadge() {
   const [status, setStatus] = useState(null);
   const [, forceTick] = useState(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function poll() {
-      const res = await apiFetch("/api/auto-sync-status");
-      if (!res.ok || cancelled) return;
-      setStatus(await res.json());
-    }
-    poll();
-    const interval = setInterval(poll, POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
+  // Paused while the tab is in the background (lib/usePolling.js).
+  usePolling(async () => {
+    const res = await apiFetch("/api/auto-sync-status");
+    if (res.ok) setStatus(await res.json());
+  }, POLL_MS);
 
-  // Re-render every second purely to keep "Last Synced: Xs ago" ticking up
-  // between polls, without needing to re-fetch that often.
-  useEffect(() => {
-    const tick = setInterval(() => forceTick((n) => n + 1), 1000);
-    return () => clearInterval(tick);
-  }, []);
+  // Re-render now and then to keep "· 5m ago" current between polls — every
+  // 15s is plenty for a label that mostly reads in minutes.
+  usePolling(() => forceTick((n) => n + 1), 15000);
 
   if (!status) return null;
 

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/apiFetch";
 import { useToast } from "./ToastProvider";
 import { LEAD_STATUSES, CANONICAL_MODELS, statusColor, pickField, prettify, prettyBucket, bucketColor, BUCKET_ACTIONS } from "../lib/leadFields";
@@ -119,6 +119,21 @@ function EditableField({ label, children }) {
 }
 
 const editInputClass = "w-full bg-bg border border-border rounded-md px-2 py-1 text-sm text-ink focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/15";
+
+// Esc closes the lead panel — unless the key is being used inside a field
+// (e.g. dismissing a date picker), which shouldn't throw away the panel.
+function EscToClose({ onClose }) {
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
+      onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return null;
+}
 
 export default function LeadDetailModal({
   lead,
@@ -404,15 +419,37 @@ export default function LeadDetailModal({
   const { bg: statusBg, text: statusText } = statusColor(lead.status);
   const data = lead.data || {};
   const pendingFollowUps = (lead.followUps || []).filter((f) => !f.completed).length;
+  const canMarkTestDrive = !readOnly && statusOptions.includes("Test Drive") && lead.status !== "Test Drive";
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal max-w-[920px]" onClick={(e) => e.stopPropagation()}>
+    // A side panel rather than a centred pop-up: the Leads list stays in view
+    // beside it, and the next lead is one click away.
+    <div className="modal-backdrop drawer-backdrop" onClick={onClose}>
+      <EscToClose onClose={onClose} />
+      <div className="modal drawer" role="dialog" aria-modal="true" aria-label={lead.name || "Lead"} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <div>
+          <div className="min-w-0">
             <h2>
               {lead.name || "Lead"} <span className="hint">({lead.model})</span>
             </h2>
+            {/* one-tap actions for the floor: call, WhatsApp, move to Test Drive */}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {lead.phone && (
+                <a href={`tel:+${lead.phone}`} className="lead-action">
+                  <PhoneIcon /> Call
+                </a>
+              )}
+              {lead.phone && (
+                <a href={`https://wa.me/${lead.phone}`} target="_blank" rel="noopener noreferrer" className="lead-action lead-action--wa">
+                  <WhatsAppIcon /> WhatsApp
+                </a>
+              )}
+              {canMarkTestDrive && (
+                <button type="button" className="lead-action lead-action--accent" onClick={() => changeStatus("Test Drive")} disabled={savingStatus}>
+                  <CalendarIcon /> Mark test drive
+                </button>
+              )}
+            </div>
             {timeline.length > 1 && (
               <div className="hint mt-0.5">
                 <span className="pill bg-[#fffbeb] text-[#b45309]">🟡 Enquired {timeline.length}× for this model</span>{" "}
@@ -444,7 +481,7 @@ export default function LeadDetailModal({
                 )}
               </>
             )}
-            <button className="btn-icon" onClick={onClose}>
+            <button className="btn-icon" onClick={onClose} aria-label="Close">
               &times;
             </button>
           </div>

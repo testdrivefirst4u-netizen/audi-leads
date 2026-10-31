@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Skeleton from "react-loading-skeleton";
 import LeadDetailModal from "./LeadDetailModal";
+import LeadsBoard from "./LeadsBoard";
 import { FaWhatsapp } from "react-icons/fa6";
 import {
   pickField,
@@ -280,6 +281,20 @@ export default function LeadsTable({
 }) {
   const [selected, setSelected] = useState(null);
 
+  // Table or Board (components/LeadsBoard.js) — remembered per browser.
+  const [view, setView] = useState("table");
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("broaddcast:leads-view") === "board") setView("board");
+    } catch {}
+  }, []);
+  function chooseView(next) {
+    setView(next);
+    try {
+      localStorage.setItem("broaddcast:leads-view", next);
+    } catch {}
+  }
+
   // Opened from the top bar search (/leads?q=…&open=<id>): show that lead's
   // details as soon as it appears in the list — once per id.
   const autoOpenedRef = useRef(null);
@@ -404,6 +419,16 @@ export default function LeadsTable({
     <div className="panel">
       <div className="panel-header">
         <h2>Leads ({total})</h2>
+        <div className="chart-view-toggle ml-auto mr-3" role="tablist" aria-label="Leads view">
+          {[
+            ["table", "Table"],
+            ["board", "Board"],
+          ].map(([key, label]) => (
+            <button key={key} type="button" role="tab" aria-selected={view === key} className={view === key ? "is-active" : ""} onClick={() => chooseView(key)}>
+              {label}
+            </button>
+          ))}
+        </div>
         <input
           className="search-input"
           placeholder="Search name, phone, email..."
@@ -711,7 +736,18 @@ export default function LeadsTable({
           {/* Mobile card list — the 17-column table below is unusable on a
               phone even with the sticky action column, so small screens get
               a stacked card per lead instead (tap anywhere to open). */}
-          <div className="sm:hidden flex flex-col gap-2.5 px-4 pb-3">
+          {view === "board" && (
+            <LeadsBoard
+              leads={leads}
+              statuses={statuses}
+              readOnly={readOnly}
+              manageCompanyId={manageCompanyId}
+              onOpen={setSelected}
+              onMoved={(lead) => onLeadUpdated?.(lead)}
+            />
+          )}
+
+          <div className={`sm:hidden flex flex-col gap-2.5 px-4 pb-3 ${view === "board" ? "!hidden" : ""}`}>
             {leads.map((lead) => {
               const remark = latestRemarkText(lead);
               return (
@@ -760,7 +796,7 @@ export default function LeadsTable({
             })}
           </div>
 
-          <div className="hidden table-scroll sm:block">
+          <div className={`hidden table-scroll ${view === "board" ? "" : "sm:block"}`}>
             <table>
               <thead>
                 <tr>
