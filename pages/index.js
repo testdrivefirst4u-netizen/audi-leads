@@ -120,8 +120,9 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
       {/* KPI components — always live */}
       <div className="dash2-kpis">
         <KpiCard label="Total leads" icon={UsersIcon} value={stats?.duplicateDetection?.totalEnquiries} caption={`${stats?.duplicateDetection?.uniqueLeads ?? 0} unique customers`} spark={trend} href="/leads" loading={loading} />
+        {/* repeat enquiries from customers already in the CRM (same as the old "Duplicate Leads" card); today / yesterday in the caption */}
+        <KpiCard label="Duplicates" icon={ReportIcon} value={stats?.duplicateDetection?.duplicateEnquiries} caption={`+${stats?.duplicatesToday ?? 0} today · ${stats?.duplicatesYesterday ?? 0} yesterday`} loading={loading} />
         <KpiCard label="New today" icon={CalendarIcon} value={stats?.newLeadsToday} delta={stats ? (stats.newLeadsToday ?? 0) - (stats.newLeadsYesterday ?? 0) : null} deltaLabel="vs yesterday" loading={loading} />
-        <KpiCard label="Repeats today" icon={ReportIcon} value={stats?.duplicatesToday} caption={`repeat enquiries · ${stats?.duplicatesYesterday ?? 0} yesterday`} loading={loading} />
         <KpiCard label="Hot leads" icon={FireIcon} value={stats?.hotCount} caption="not contacted yet" href="/leads?hot=true" tone="alert" loading={loading} />
         <KpiCard label="Follow-ups" icon={BellIcon} value={overdue.length + today.length} caption={overdue.length ? `due today · ${overdue.length} overdue` : "due today · none overdue"} href="/followups" tone={overdue.length ? "alert" : undefined} loading={loading} />
         <KpiCard label="Booked" icon={CarIcon} value={booked} caption={`booking or sold · ${period.toLowerCase()}`} loading={loading} />
