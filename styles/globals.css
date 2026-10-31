@@ -1190,3 +1190,50 @@ html[data-crm-theme="midnight"] .app-shell .bg-\[\#d9fdd3\] {
 .sb :is(a, button):focus-visible {
   outline-color: #8ea2ff;
 }
+
+/* Floating, draggable, minimizable window (components/FloatingWindow.js) —
+   no backdrop, so the page behind stays usable. Above the lead side panel
+   (z-100) so details can be copied across; below the offline notice. */
+.float-window {
+  @apply fixed z-[105] flex flex-col overflow-hidden rounded-2xl border border-border bg-card;
+  max-height: calc(100vh - 32px);
+  box-shadow: 0 24px 60px -12px rgba(8, 12, 30, 0.45), 0 2px 8px rgba(8, 12, 30, 0.12);
+  animation: float-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.float-window[hidden] {
+  display: none;
+}
+
+.float-window.is-sheet {
+  @apply inset-x-0 bottom-0 rounded-b-none;
+  top: auto;
+  max-height: 88vh;
+}
+
+.float-window-bar {
+  @apply flex items-center gap-3 px-4 py-2.5 shrink-0 touch-none;
+  background: linear-gradient(135deg, #1b2240 0%, #0e1220 100%);
+}
+
+.float-window-body {
+  @apply overflow-y-auto;
+}
+
+.float-dock {
+  @apply fixed z-[105] right-4 bottom-20 md:bottom-5 flex items-center gap-1 w-[280px] max-w-[calc(100vw-32px)] rounded-xl pl-3 pr-1.5 py-1.5;
+  background: linear-gradient(135deg, #1b2240 0%, #0e1220 100%);
+  box-shadow: 0 14px 30px -10px rgba(8, 12, 30, 0.55);
+  animation: float-in 0.2s ease;
+}
+
+@keyframes float-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .float-window,
+  .float-dock {
+    animation: none;
+  }
+}
