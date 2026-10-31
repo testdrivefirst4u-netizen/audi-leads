@@ -26,12 +26,33 @@ function ago(date) {
  */
 export default function DashToolbar({ username, month, onMonthChange, updatedAt, onRefresh, refreshing }) {
   const [, tick] = useState(0);
+  // Everything here that depends on the clock, timezone or locale (greeting,
+  // date, month names) is worked out in the browser only: the page is first
+  // rendered on the server, whose time zone and date format differ from the
+  // viewer's, and React rejects a page whose text changes on load
+  // ("Text content does not match server-rendered HTML"). Until then
+  // `now` is null and those spots show a neutral placeholder.
+  const [now, setNow] = useState(null);
   useEffect(() => {
-    const t = setInterval(() => tick((n) => n + 1), 15000);
+    setNow(new Date());
+    const t = setInterval(() => {
+      setNow(new Date());
+      tick((n) => n + 1);
+    }, 15000);
     return () => clearInterval(t);
   }, []);
 
-  const now = new Date();
+  if (!now) {
+    return (
+      <div className="dash2-toolbar">
+        <div className="min-w-0">
+          <h1 className="m-0 text-[22px] sm:text-[24px] font-bold text-ink leading-tight tracking-[-0.01em]">Welcome, {username}</h1>
+          <p className="m-0 mt-0.5 text-[13px] text-muted">&nbsp;</p>
+        </div>
+      </div>
+    );
+  }
+
   const thisMonth = monthKey(now);
   const lastMonth = monthKey(new Date(now.getFullYear(), now.getMonth() - 1, 1));
   const options = [
@@ -50,7 +71,7 @@ export default function DashToolbar({ username, month, onMonthChange, updatedAt,
     <div className="dash2-toolbar">
       <div className="min-w-0">
         <h1 className="m-0 text-[22px] sm:text-[24px] font-bold text-ink leading-tight tracking-[-0.01em]">
-          {greeting()}, {username}
+          {greeting(now)}, {username}
         </h1>
         <p className="m-0 mt-0.5 text-[13px] text-muted">{now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
       </div>
