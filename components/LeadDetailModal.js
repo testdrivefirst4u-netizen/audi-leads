@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "../lib/apiFetch";
 import { useToast } from "./ToastProvider";
 import { LEAD_STATUSES, CANONICAL_MODELS, statusColor, pickField, prettify, prettyBucket, bucketColor, BUCKET_ACTIONS } from "../lib/leadFields";
@@ -7,6 +7,7 @@ import { enquiryTimeline } from "../lib/leadFields";
 import SourceBadge from "./SourceBadge";
 import LeadMarketingSection from "./LeadMarketingSection";
 import LeadCarInfo from "./catalog/LeadCarInfo";
+import FloatingWindow from "./FloatingWindow";
 
 function formatDate(d) {
   if (!d) return "-";
@@ -120,21 +121,6 @@ function EditableField({ label, children }) {
 
 const editInputClass = "w-full bg-bg border border-border rounded-md px-2 py-1 text-sm text-ink focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/15";
 
-// Esc closes the lead panel — unless the key is being used inside a field
-// (e.g. dismissing a date picker), which shouldn't throw away the panel.
-function EscToClose({ onClose }) {
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
-      if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
-      onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return null;
-}
-
 export default function LeadDetailModal({
   lead,
   onClose,
@@ -150,6 +136,10 @@ export default function LeadDetailModal({
   statuses,
 }) {
   const statusOptions = statuses && statuses.length > 0 ? statuses : LEAD_STATUSES;
+  // Minimized to a bar (FloatingWindow); opening another lead brings it back.
+  const [minimized, setMinimized] = useState(false);
+  const minimize = useCallback(() => setMinimized(true), []);
+  useEffect(() => setMinimized(false), [lead._id]);
   const toast = useToast();
   // A toast alone is easy to miss since it appears outside the modal the
   // agent is actually looking at — this mirrors the same info inline, right
@@ -422,18 +412,27 @@ export default function LeadDetailModal({
   const canMarkTestDrive = !readOnly && statusOptions.includes("Test Drive") && lead.status !== "Test Drive";
 
   return (
-    // A side panel rather than a centred pop-up: the Leads list stays in view
-    // beside it, and the next lead is one click away.
-    <div className="modal-backdrop drawer-backdrop" onClick={onClose}>
-      <EscToClose onClose={onClose} />
-      <div className="modal drawer" role="dialog" aria-modal="true" aria-label={lead.name || "Lead"} onClick={(e) => e.stopPropagation()}>
+    // A floating window (components/FloatingWindow.js) rather than a pop-up:
+    // the Leads list behind it stays usable, it can be dragged aside or
+    // minimized to a bar, and clicking another lead switches it to that one.
+    <FloatingWindow
+      title={lead.name || "Lead"}
+      subtitle={lead.model}
+      minimizedLabel={`Lead · ${lead.name || lead.phone || "Unnamed"}`}
+      minimized={minimized}
+      onMinimize={minimize}
+      onRestore={() => setMinimized(false)}
+      onClose={onClose}
+      storageKey="broaddcast:lead-window-pos"
+      width={920}
+      placement="right"
+      tall
+    >
+      <div className="flex flex-col">
         <div className="modal-header">
           <div className="min-w-0">
-            <h2>
-              {lead.name || "Lead"} <span className="hint">({lead.model})</span>
-            </h2>
-            {/* one-tap actions for the floor: call, WhatsApp, move to Test Drive */}
-            <div className="mt-2 flex flex-wrap gap-2">
+            {/* the name is in the window's title bar; one-tap actions for the floor: call, WhatsApp, move to Test Drive */}
+            <div className="flex flex-wrap gap-2">
               {lead.phone && (
                 <a href={`tel:+${lead.phone}`} className="lead-action">
                   <PhoneIcon /> Call
@@ -481,9 +480,6 @@ export default function LeadDetailModal({
                 )}
               </>
             )}
-            <button className="btn-icon" onClick={onClose} aria-label="Close">
-              &times;
-            </button>
           </div>
         </div>
 
@@ -971,6 +967,6 @@ export default function LeadDetailModal({
           </div>
         </div>
       </div>
-    </div>
+    </FloatingWindow>
   );
 }
