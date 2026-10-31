@@ -1,4 +1,5 @@
 const connectDB = require("../../../../lib/db");
+const { recordLeadEvent } = require("../../../../lib/leadEvents");
 const Lead = require("../../../../models/Lead");
 const Agent = require("../../../../models/Agent");
 const { requireAdminOrSuperAdmin } = require("../../../../lib/auth");
@@ -19,12 +20,16 @@ async function handler(req, res) {
     if (!agentBelongsToCompany) return res.status(400).json({ error: "Invalid agent" });
   }
 
+  const before = await Lead.findOne({ _id: id, companyId }).select("assignedTo").populate("assignedTo", "name").lean();
   const lead = await Lead.findOneAndUpdate(
     { _id: id, companyId },
     { assignedTo: agentId || null },
     { new: true }
   ).populate("assignedTo", "name");
   if (!lead) return res.status(404).json({ error: "Lead not found" });
+  const fromName = before?.assignedTo?.name || "Unassigned";
+  const toName = lead.assignedTo?.name || "Unassigned";
+  if (fromName !== toName) await recordLeadEvent(req, { lead, type: "assigned", from: fromName, to: toName });
   // The WhatsApp conversation (Chats page) follows the lead's agent.
   await require("../../../../models/WaConversation").updateOne({ companyId, leadId: lead._id }, { $set: { assignedTo: agentId || null } });
 

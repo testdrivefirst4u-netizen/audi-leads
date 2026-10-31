@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const connectDB = require("../../lib/db");
 const Lead = require("../../models/Lead");
 const Settings = require("../../models/Settings");
+const Agent = require("../../models/Agent");
 const { requireCompanyMemberOrSuperAdminView } = require("../../lib/auth");
 const { pickField, FIELD_MATCHERS, isUrgentTimeline, normalizeShowroom, effectiveStatuses } = require("../../lib/leadFields");
 const { withCache } = require("../../lib/serverCache");
@@ -106,7 +107,7 @@ async function computeStats(req) {
   const duplicatesYesterday = Math.max(0, enquiriesYesterday - newLeadsYesterday);
 
   const leads = await Lead.find(filter)
-    .select("model canonicalModel data status bucket sheetCreatedAt calls remarks leadType duplicateCount enquiryHistory source campaign")
+    .select("model canonicalModel data status bucket sheetCreatedAt calls remarks leadType duplicateCount enquiryHistory source campaign assignedTo")
     .lean();
 
   const exchangeCounts = { Yes: 0, No: 0, "Not Filled": 0 };
@@ -189,7 +190,37 @@ async function computeStats(req) {
 
   const trend = Object.entries(trendMap).map(([date, count]) => ({ date, count }));
 
+  // Agent leaderboard (admins only — an agent's stats are already just
+  // their own): per agent, how many of the leads in view they hold, have
+  // contacted (moved past New), got to a test drive, and booked/sold.
+  let agentBoard = [];
+  if (req.session.role !== "agent") {
+    const TEST_DRIVE_OR_LATER = new Set(["Test Drive", "Booking", "Retail (Converted)"]);
+    const BOOKED = new Set(["Booking", "Retail (Converted)"]);
+    const byAgent = {};
+    for (const lead of leads) {
+      if (!lead.assignedTo) continue;
+      const id = String(lead.assignedTo);
+      const a = (byAgent[id] ||= { leads: 0, contacted: 0, testDrives: 0, bookings: 0 });
+      const st = lead.status || "New";
+      a.leads += 1;
+      if (st !== "New") a.contacted += 1;
+      if (TEST_DRIVE_OR_LATER.has(st)) a.testDrives += 1;
+      if (BOOKED.has(st)) a.bookings += 1;
+    }
+    const ids = Object.keys(byAgent);
+    if (ids.length) {
+      const agents = await Agent.find({ _id: { $in: ids } }).select("name").lean();
+      const names = Object.fromEntries(agents.map((a) => [String(a._id), a.name]));
+      agentBoard = ids
+        .map((id) => ({ name: names[id] || "Former agent", ...byAgent[id] }))
+        .sort((x, y) => y.bookings - x.bookings || y.testDrives - x.testDrives || y.contacted - x.contacted)
+        .slice(0, 8);
+    }
+  }
+
   return {
+    agentBoard,
     month: month || null,
     total: leads.length,
     totalRecords,

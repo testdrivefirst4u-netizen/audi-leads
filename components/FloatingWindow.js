@@ -28,14 +28,18 @@ function useDockTray() {
   return tray;
 }
 
-// Where a snapped / full-screen window goes on the current screen.
+// Where a snapped / full-screen window goes on the current screen: the area
+// beside the sidebar (so the menu stays usable), split in half for left/right.
 function snapFrame(mode) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const half = Math.floor((vw - 3 * GAP) / 2);
-  if (mode === "left") return { x: GAP, y: GAP, w: half, h: vh - 2 * GAP };
+  const sidebar = document.querySelector("aside.sb")?.getBoundingClientRect();
+  const left = sidebar && sidebar.right > 0 && sidebar.right < vw / 2 ? Math.round(sidebar.right) + GAP : GAP;
+  const width = vw - left - GAP;
+  const half = Math.floor((width - GAP) / 2);
+  if (mode === "left") return { x: left, y: GAP, w: half, h: vh - 2 * GAP };
   if (mode === "right") return { x: vw - GAP - half, y: GAP, w: half, h: vh - 2 * GAP };
-  return { x: GAP, y: GAP, w: vw - 2 * GAP, h: vh - 2 * GAP }; // "max"
+  return { x: left, y: GAP, w: width, h: vh - 2 * GAP }; // "max"
 }
 
 // Keeps a free window's rect usable on the current screen.
@@ -74,8 +78,9 @@ const RESIZE_HANDLES = ["e", "w", "s", "se", "sw"];
  *  - drag the title bar to move it;
  *  - drag an edge or bottom corner to make it bigger or smaller;
  *  - snap it to the left or right half, or full screen — with the title-bar
- *    buttons, a double-click on the title bar (full screen), or by dragging
- *    it to the screen's left / right / top edge (a preview shows where);
+ *    buttons, a double-click on the title bar (full screen), Alt+arrow keys,
+ *    or by dragging it to the screen's left / right / top edge (a preview
+ *    shows where). Snapping fills the area beside the sidebar;
  *  - minimize it to a bar in the bottom-right corner; restore brings it back
  *    exactly as it was (content stays mounted, so typed text survives).
  * Size, position and snap are remembered for the tab (sessionStorage, under
@@ -121,10 +126,14 @@ export default function FloatingWindow({
     } catch {}
     const vh = window.innerHeight;
     const w = Math.min(width, window.innerWidth - 2 * MARGIN);
-    const h = tall ? vh - 2 * MARGIN : null;
+    // Opens below the sticky top bar, so "+ New lead", the bell and the
+    // profile menu stay reachable while a window is open.
+    const topBar = document.querySelector(".app-shell header.sticky")?.getBoundingClientRect();
+    const top = topBar && topBar.bottom > 0 && topBar.bottom < vh / 3 ? Math.round(topBar.bottom) + GAP : MARGIN;
+    const h = tall ? vh - top - MARGIN : null;
     const fallback =
       placement === "right"
-        ? { x: window.innerWidth - w - MARGIN, y: MARGIN, w, h }
+        ? { x: window.innerWidth - w - MARGIN, y: top, w, h }
         : { x: window.innerWidth - w - 24, y: Math.max(MARGIN, vh - Math.min(620, vh - 2 * MARGIN) - 24), w, h };
     if (saved?.rect && Number.isFinite(saved.rect.x)) {
       setRect(fitRect(saved.rect));
@@ -154,18 +163,32 @@ export default function FloatingWindow({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Esc minimizes (only while it's open and focus is inside it).
+  // Keyboard, while focus is inside the window: Esc minimizes; Alt+← / Alt+→
+  // snap to the left / right half, Alt+↑ full screen, Alt+↓ back to its own
+  // size (or minimizes when it already is).
   useEffect(() => {
     if (minimized) return;
     const onKey = (e) => {
-      if (e.key === "Escape" && !e.defaultPrevented && winRef.current?.contains(document.activeElement)) {
+      if (e.defaultPrevented || !winRef.current?.contains(document.activeElement)) return;
+      if (e.key === "Escape") {
         e.preventDefault();
         onMinimize();
+        return;
+      }
+      if (!e.altKey || narrow) return;
+      const target = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "max" }[e.key];
+      if (target) {
+        e.preventDefault();
+        setMode(target);
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (mode === "free") onMinimize();
+        else setMode("free");
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [minimized, onMinimize]);
+  }, [minimized, onMinimize, narrow, mode]);
 
   if (!rect) return null;
 
@@ -296,10 +319,10 @@ export default function FloatingWindow({
             <div className="ml-auto flex items-center gap-0.5 shrink-0">
               {!narrow && (
                 <>
-                  <button type="button" className={`${headerBtn} ${mode === "left" ? activeBtn : ""}`} onClick={() => snapTo("left")} aria-label={`Snap ${title} to the left half`} title="Left half">
+                  <button type="button" className={`${headerBtn} ${mode === "left" ? activeBtn : ""}`} onClick={() => snapTo("left")} aria-label={`Snap ${title} to the left half`} title="Left half (Alt+←)">
                     <HalfIcon side="left" />
                   </button>
-                  <button type="button" className={`${headerBtn} ${mode === "right" ? activeBtn : ""}`} onClick={() => snapTo("right")} aria-label={`Snap ${title} to the right half`} title="Right half">
+                  <button type="button" className={`${headerBtn} ${mode === "right" ? activeBtn : ""}`} onClick={() => snapTo("right")} aria-label={`Snap ${title} to the right half`} title="Right half (Alt+→)">
                     <HalfIcon side="right" />
                   </button>
                   <button
@@ -307,7 +330,7 @@ export default function FloatingWindow({
                     className={headerBtn}
                     onClick={toggleMax}
                     aria-label={mode === "max" ? `Restore ${title} to its size` : `Full screen ${title}`}
-                    title={mode === "max" ? "Restore size" : "Full screen"}
+                    title={mode === "max" ? "Restore size (Alt+↓)" : "Full screen (Alt+↑)"}
                   >
                     <MaxIcon restore={mode === "max"} />
                   </button>

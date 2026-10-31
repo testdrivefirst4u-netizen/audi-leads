@@ -1251,3 +1251,12 @@ html[data-crm-theme="midnight"] .app-shell .bg-\[\#d9fdd3\] {
     animation: none;
   }
 }
+
+/* Under a lead's quick actions: "How did the call go?" and quick WhatsApp messages */
+.call-outcome {
+  @apply mx-5 mt-3 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3;
+}
+
+.lead-quick-messages {
+  @apply px-5 py-2.5 border-b border-border;
+}

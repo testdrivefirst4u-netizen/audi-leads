@@ -8,6 +8,7 @@ import {
   startingPrice,
 } from "../../lib/catalog";
 import { WhatsAppIcon } from "../icons";
+import { waHref } from "../../lib/phone";
 
 // One fetch of the catalog per company per page load — the lead modal opens
 // and closes often, the catalog rarely changes.
@@ -133,7 +134,7 @@ export default function LeadCarInfo({ lead, companyId, readOnly }) {
                 </a>
                 {!readOnly && phone && (
                   <a
-                    href={`https://wa.me/${phone}?text=${encodeURIComponent(`Hi ${firstName(lead.name)}, here is the ${model.name} ${fileKindLabel(f.kind).toLowerCase()}: ${f.url}`)}`}
+                    href={waHref(phone, `Hi ${firstName(lead.name)}, here is the ${model.name} ${fileKindLabel(f.kind).toLowerCase()}: ${f.url}`)}
                     target="_blank"
                     rel="noreferrer"
                     className="btn-sm inline-flex items-center gap-1.5 no-underline"

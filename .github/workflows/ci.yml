@@ -23,6 +23,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Unit checks (no database needed)
+        run: node scripts/test-phone.js
       - run: npx next build
         env:
           NEXT_TELEMETRY_DISABLED: "1"

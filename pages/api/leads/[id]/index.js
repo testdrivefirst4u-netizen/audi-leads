@@ -3,6 +3,7 @@ const Lead = require("../../../../models/Lead");
 const { requireSuperAdminForCompany } = require("../../../../lib/auth");
 const { normalizePhoneDigits } = require("../../../../lib/syncService");
 const { CANONICAL_MODELS } = require("../../../../lib/leadFields");
+const { recordLeadEvent } = require("../../../../lib/leadEvents");
 
 // Editing core fields and deleting a lead outright are structural changes —
 // unlike status/remarks/reassignment (which any company admin/agent can do),
@@ -33,12 +34,15 @@ async function handler(req, res) {
       .populate("assignedTo", "name")
       .lean();
     if (!lead) return res.status(404).json({ error: "Lead not found" });
+    await recordLeadEvent(req, { lead, type: "edited", to: Object.keys(update).join(", ") });
     return res.status(200).json({ lead });
   }
 
   if (req.method === "DELETE") {
+    const doomed = await Lead.findOne({ _id: id, companyId: req.session.companyId }).select("name companyId").lean();
     const result = await Lead.deleteOne({ _id: id, companyId: req.session.companyId });
     if (result.deletedCount === 0) return res.status(404).json({ error: "Lead not found" });
+    await recordLeadEvent(req, { lead: doomed, type: "deleted" });
     return res.status(200).json({ success: true });
   }
 

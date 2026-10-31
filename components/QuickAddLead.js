@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { FiPlus, FiCheckCircle } from "react-icons/fi";
 import { apiFetch } from "../lib/apiFetch";
@@ -31,7 +31,41 @@ export default function QuickAddLead({ role }) {
   const [error, setError] = useState(null);
   const [saved, setSaved] = useState(null); // { name, leadId, phone, duplicate }
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [matches, setMatches] = useState([]);
   const firstField = useRef(null);
+
+  // "Already in your CRM?" — checked while the phone / email is typed, so a
+  // repeat customer is caught before a second lead is created.
+  useEffect(() => {
+    const phone = form.phone.replace(/D/g, "");
+    const email = form.email.trim();
+    if (!open || saved || (phone.length < 10 && !email.includes("@"))) {
+      setMatches([]);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const params = new URLSearchParams({ phone, email });
+      const company = role === "super_admin" ? getViewCompany() : null;
+      if (role === "super_admin") {
+        if (!company) return;
+        params.set("companyId", company.id);
+      }
+      const res = await apiFetch(`/api/leads/lookup?${params}`);
+      const data = res.ok ? await res.json() : { matches: [] };
+      if (!cancelled) setMatches(data.matches || []);
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [form.phone, form.email, open, saved, role]);
+
+  function openExisting(m) {
+    setOpen(false);
+    reset();
+    router.push(`/leads?q=${encodeURIComponent(m.phone || m.name)}&open=${m._id}`);
+  }
 
   const focusFirst = () => setTimeout(() => firstField.current?.focus(), 0);
 
@@ -47,6 +81,7 @@ export default function QuickAddLead({ role }) {
   }, []);
 
   function reset() {
+    setMatches([]);
     setForm(EMPTY);
     setError(null);
     setSaved(null);
@@ -163,6 +198,27 @@ export default function QuickAddLead({ role }) {
                 Email
                 <input className={fieldCls} type="email" value={form.email} onChange={set("email")} placeholder="Optional" autoComplete="off" />
               </label>
+              {matches.length > 0 && (
+                <div role="status" className="sm:col-span-2 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2.5">
+                  <div className="text-[12.5px] font-bold text-ink">Already in your CRM</div>
+                  <ul className="list-none m-0 mt-1.5 p-0 flex flex-col gap-1.5">
+                    {matches.map((m) => (
+                      <li key={m._id} className="flex items-center gap-2 text-[12.5px] text-ink">
+                        <span className="flex-1 min-w-0 truncate">
+                          <strong>{m.name || "Unnamed"}</strong>
+                          <span className="text-muted"> · {[m.model, m.status, m.agent && `with ${m.agent}`].filter(Boolean).join(" · ")}</span>
+                        </span>
+                        {m.canOpen && (
+                          <button type="button" className="btn-sm shrink-0" onClick={() => openExisting(m)}>
+                            Open lead
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-1.5 text-[11.5px] text-muted">Saving anyway adds this as a repeat enquiry if the model is the same.</div>
+                </div>
+              )}
               <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-ink">
                 Model
                 <input className={fieldCls} value={form.model} onChange={set("model")} placeholder="e.g. Q5" list="quick-add-models" autoComplete="off" />

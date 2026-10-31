@@ -8,6 +8,10 @@ import SourceBadge from "./SourceBadge";
 import LeadMarketingSection from "./LeadMarketingSection";
 import LeadCarInfo from "./catalog/LeadCarInfo";
 import FloatingWindow from "./FloatingWindow";
+import { telHref, waHref } from "../lib/phone";
+import CallOutcome from "./CallOutcome";
+import LeadQuickMessages from "./LeadQuickMessages";
+import LeadChangeLog from "./LeadChangeLog";
 
 function formatDate(d) {
   if (!d) return "-";
@@ -159,6 +163,44 @@ export default function LeadDetailModal({
   const [followDate, setFollowDate] = useState("");
   const [followNote, setFollowNote] = useState("");
   const [saving, setSaving] = useState(false);
+  // "How did the call go?" — opened by tapping Call (components/CallOutcome.js)
+  const [callPrompt, setCallPrompt] = useState(false);
+  const [savingCall, setSavingCall] = useState(false);
+  useEffect(() => setCallPrompt(false), [lead._id]);
+
+  async function saveCallOutcome(outcome, note, followDate) {
+    setSavingCall(true);
+    try {
+      let latestLead = lead;
+      let followUpsCleared = 0;
+      const res = await apiFetch(leadUrl("/calls"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: note ? `${outcome} — ${note}` : outcome }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed to log call");
+      const data = await res.json();
+      latestLead = data.lead;
+      followUpsCleared += data.followUpsCleared || 0;
+      if (followDate) {
+        const fres = await apiFetch(leadUrl("/followups"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date: followDate, note: `After call: ${outcome}` }),
+        });
+        if (!fres.ok) throw new Error((await fres.json()).error || "Failed to schedule follow-up");
+        latestLead = (await fres.json()).lead;
+      }
+      setCallPrompt(false);
+      onUpdated(latestLead);
+      toast(`Call logged: ${outcome}${followDate ? " · follow-up set" : ""}${clearedSuffix(followUpsCleared)}`);
+      announceFollowUpsCleared(followUpsCleared);
+    } catch (err) {
+      toast(err.message, { type: "err" });
+    } finally {
+      setSavingCall(false);
+    }
+  }
   const [savingStatus, setSavingStatus] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState(null);
@@ -434,12 +476,12 @@ export default function LeadDetailModal({
             {/* the name is in the window's title bar; one-tap actions for the floor: call, WhatsApp, move to Test Drive */}
             <div className="flex flex-wrap gap-2">
               {lead.phone && (
-                <a href={`tel:+${lead.phone}`} className="lead-action">
+                <a href={telHref(lead.phone)} className="lead-action" onClick={() => !readOnly && setCallPrompt(true)}>
                   <PhoneIcon /> Call
                 </a>
               )}
               {lead.phone && (
-                <a href={`https://wa.me/${lead.phone}`} target="_blank" rel="noopener noreferrer" className="lead-action lead-action--wa">
+                <a href={waHref(lead.phone)} target="_blank" rel="noopener noreferrer" className="lead-action lead-action--wa">
                   <WhatsAppIcon /> WhatsApp
                 </a>
               )}
@@ -482,6 +524,9 @@ export default function LeadDetailModal({
             )}
           </div>
         </div>
+
+        {callPrompt && <CallOutcome leadName={lead.name} saving={savingCall} onSave={saveCallOutcome} onSkip={() => setCallPrompt(false)} />}
+        {!readOnly && lead.phone && <LeadQuickMessages lead={lead} />}
 
         <div className="modal-status-bar">
           <span className="toolbar-label">Status</span>
@@ -529,11 +574,11 @@ export default function LeadDetailModal({
           )}
           {lead.phone && (
             <span className="phone-cell" style={{ marginLeft: "auto" }}>
-              <a href={`tel:+${lead.phone}`} title="Call">
+              <a href={telHref(lead.phone)} title="Call" onClick={() => !readOnly && setCallPrompt(true)}>
                 <PhoneIcon /> {lead.phone}
               </a>
               <a
-                href={`https://wa.me/${lead.phone}`}
+                href={waHref(lead.phone)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="whatsapp-link"
@@ -802,6 +847,10 @@ export default function LeadDetailModal({
                     </li>
                   ))}
                 </ul>
+              </Section>
+
+              <Section title="Change log" meta="status · owner · edits" collapsible defaultOpen={false}>
+                <LeadChangeLog leadId={lead._id} companyId={manageCompanyId} />
               </Section>
 
               <Section title="Marketing" meta="campaign messages · opt-out" collapsible defaultOpen={false}>

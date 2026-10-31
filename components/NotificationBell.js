@@ -6,6 +6,7 @@ import { apiFetch } from "../lib/apiFetch";
 import { playNotificationSound } from "../lib/notificationSound";
 import { usePolling } from "../lib/usePolling";
 import Portal from "./Portal";
+import { remindersSupported, turnOnReminders } from "../lib/followUpReminders";
 
 // Kept shorter than the other pollers (20s) since this drives an audible
 // new-lead alert, which is more time-sensitive than a dashboard number —
@@ -102,6 +103,12 @@ export default function NotificationBell() {
     router.push(`/leads?q=${encodeURIComponent(lead.phone || lead.name || "")}&open=${lead._id}`);
   }
 
+  // Daily follow-up reminder (lib/followUpReminders.js): "default" until asked.
+  const [reminderPermission, setReminderPermission] = useState(null);
+  useEffect(() => {
+    if (remindersSupported()) setReminderPermission(Notification.permission);
+  }, []);
+
   const newOnes = displayedLeads.filter((l) => l.isNew);
   const earlier = displayedLeads.filter((l) => !l.isNew);
 
@@ -125,6 +132,22 @@ export default function NotificationBell() {
           <div className="px-4 py-3 text-[13px] font-bold text-ink border-b border-border">
             New leads &amp; repeat enquiries
           </div>
+          {reminderPermission && (
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-bg text-[12px] text-muted">
+              <span className="flex-1">Daily follow-up reminder on this computer</span>
+              {reminderPermission === "granted" ? (
+                <span className="font-semibold text-success">On</span>
+              ) : reminderPermission === "denied" ? (
+                <span className="font-semibold" title="Allow notifications for this site in the browser's settings to turn it on">
+                  Blocked
+                </span>
+              ) : (
+                <button type="button" className="btn-sm" onClick={async () => setReminderPermission(await turnOnReminders())}>
+                  Turn on
+                </button>
+              )}
+            </div>
+          )}
           {displayedLeads.length === 0 ? (
             <div className="text-center text-muted text-sm px-4 py-5">No recent leads yet.</div>
           ) : (

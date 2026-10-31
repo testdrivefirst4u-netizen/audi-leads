@@ -7,6 +7,7 @@ const { completeDueFollowUps } = require("../../../../lib/followUps");
 const { invalidate } = require("../../../../lib/serverCache");
 const { effectiveStatuses } = require("../../../../lib/leadFields");
 const { sendStatusCallback } = require("../../../../lib/statusCallback");
+const { recordLeadEvent } = require("../../../../lib/leadEvents");
 
 async function handler(req, res) {
   if (req.method !== "PATCH") return res.status(405).json({ error: "Method not allowed" });
@@ -44,6 +45,8 @@ async function handler(req, res) {
   // CALLBACK_TIMEOUT_MS inside sendStatusCallback (4s) and never throws — a
   // dead/slow partner endpoint shows up in that key's delivery logs, not as
   // a failure of the status change itself, which has already been saved.
+  if ((previousLead?.status || "New") !== status) await recordLeadEvent(req, { lead, type: "status", from: previousLead?.status || "New", to: status });
+
   try {
     await sendStatusCallback(lead, status, previousLead?.status);
   } catch (err) {

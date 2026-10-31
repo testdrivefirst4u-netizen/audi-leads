@@ -8,6 +8,7 @@ import { brandColorTriplets } from "../lib/color";
 import { apiFetch } from "../lib/apiFetch";
 import { loadAccountTheme } from "../lib/theme";
 import { usePolling } from "../lib/usePolling";
+import { startFollowUpReminders } from "../lib/followUpReminders";
 
 // Same cadence as the other background pollers (Leads page, notification
 // bell) — the sidebar badge doesn't need to be faster than that.
@@ -28,6 +29,11 @@ export default function Layout({ children, username, role, companyName, companyL
 
   // The theme saved on this person's account (lib/theme.js) — once per page load.
   useEffect(() => loadAccountTheme(), []);
+
+  // Daily desktop reminder of today's follow-ups, if turned on in the bell menu.
+  useEffect(() => {
+    if (role !== "super_admin") startFollowUpReminders();
+  }, [role]);
 
   // Super admin has no Follow-ups nav item (it's a company working queue,
   // not a platform-monitoring view) and no single companyId to scope the

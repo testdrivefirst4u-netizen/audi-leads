@@ -125,9 +125,10 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, i
   const [exporting, setExporting] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const fetchLeads = useCallback(
+  // The Leads API query for a set of filters — shared by the table's fetch
+  // and the Board view's per-column fetch (loadBoardColumn below).
+  const leadsParams = useCallback(
     (filters) => {
-      if (isSuperAdminView && !filters.viewCompanyId) return Promise.resolve();
       const { from, to } = resolveExportRange(filters.datePreset, filters.customRange);
       const params = new URLSearchParams({
         search: filters.search || "",
@@ -152,6 +153,15 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, i
         pageSize: String(filters.pageSize || DEFAULT_PAGE_SIZE),
       });
       if (isSuperAdminView) params.set("companyId", filters.viewCompanyId);
+      return params;
+    },
+    [isSuperAdminView]
+  );
+
+  const fetchLeads = useCallback(
+    (filters) => {
+      if (isSuperAdminView && !filters.viewCompanyId) return Promise.resolve();
+      const params = leadsParams(filters);
       return apiFetch(`/api/leads?${params.toString()}`)
         .then((res) => res.json())
         .then((data) => {
@@ -173,7 +183,7 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, i
         })
         .finally(() => setLoading(false));
     },
-    [isSuperAdminView]
+    [isSuperAdminView, leadsParams]
   );
 
   const filters = {
@@ -212,6 +222,21 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, i
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, model, status, agentFilter, locationFilter, sourceFilter, channelFilter, campaignFilter, platformFilter, formFilter, adFilter, bucketFilter, followUpFilter, hotOnly, sortBy, sortDir, page, pageSize, exportPreset, customRange, viewCompanyId, fetchLeads]);
+
+  // Board view: one status column's leads across the whole result set (the
+  // table's filters, any page), so columns show real totals, not just the
+  // rows on the current page.
+  const boardFilterKey = JSON.stringify({ ...filters, page: 1, status: "", pageSize: 0 });
+  const loadBoardColumn = useCallback(
+    async (columnStatus, limit) => {
+      if (isSuperAdminView && !viewCompanyId) return { leads: [], total: 0 };
+      const params = leadsParams({ ...JSON.parse(boardFilterKey), status: columnStatus, page: 1, pageSize: limit });
+      const res = await apiFetch(`/api/leads?${params.toString()}`);
+      const data = res.ok ? await res.json() : {};
+      return { leads: data.leads || [], total: data.total || 0 };
+    },
+    [boardFilterKey, leadsParams, isSuperAdminView, viewCompanyId]
+  );
 
   function handleSearchChange(value) {
     setSearch(value);
@@ -457,6 +482,8 @@ export default function LeadsPage({ username, role, initialHot, initialSearch, i
         search={search}
         onSearchChange={handleSearchChange}
         autoOpenLeadId={initialOpenLeadId}
+        loadBoardColumn={loadBoardColumn}
+        boardFilterKey={boardFilterKey}
         model={model}
         onModelChange={handleModelChange}
         status={status}

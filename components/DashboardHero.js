@@ -16,9 +16,13 @@ const pipelineCount = (stats, label) => stats?.pipeline?.find((p) => p.label ===
 // Opens the lead on the Leads page with its details showing (same link the top bar search uses).
 const leadHref = (f) => `/leads?q=${encodeURIComponent(f.phone || f.name || "")}&open=${f.leadId}`;
 
+// Follow-ups are picked as a day (stored at 12:00 UTC — see
+// pages/api/leads/[id]/followups) or, from older data, at local midnight;
+// neither carries a real time, so only show one when it's something else.
 function timeLabel(date) {
   const d = new Date(date);
-  return d.getHours() === 0 && d.getMinutes() === 0 ? null : d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const dateOnly = (d.getUTCHours() === 12 && d.getUTCMinutes() === 0) || (d.getHours() === 0 && d.getMinutes() === 0);
+  return dateOnly ? null : d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
 /**

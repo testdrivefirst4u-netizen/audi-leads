@@ -31,15 +31,14 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={showToast}>
       {children}
-      <div className="fixed top-4 right-4 z-[200] flex flex-col gap-2 items-end pointer-events-none">
+      {/* just below the sticky TopBar, so a toast never sits on top of it */}
+      <div className="fixed top-[84px] right-4 z-[200] flex flex-col gap-2 items-end pointer-events-none">
         {toasts.map((t) => (
           <div
             key={t.id}
             onClick={() => dismiss(t.id)}
-            className={`pointer-events-auto animate-toast-in cursor-pointer max-w-sm rounded-xl border px-4 py-3 text-sm font-medium shadow-toast ${
-              t.type === "err"
-                ? "bg-danger/10 border-danger/30 text-danger"
-                : "bg-success/10 border-success/30 text-success"
+            className={`pointer-events-auto animate-toast-in cursor-pointer max-w-sm rounded-xl border border-l-4 bg-white px-4 py-3 text-sm font-medium text-[#1c2130] shadow-toast ${
+              t.type === "err" ? "border-danger/30 !border-l-danger" : "border-success/30 !border-l-success"
             }`}
           >
             {t.message}

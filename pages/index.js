@@ -4,6 +4,7 @@ import Layout from "../components/Layout";
 import CompanySwitcher from "../components/CompanySwitcher";
 import FollowUpsCard from "../components/FollowUpsCard";
 import DashboardHero from "../components/DashboardHero";
+import DashboardInsights from "../components/DashboardInsights";
 import HotLeadsCard from "../components/HotLeadsCard";
 import PipelineStats from "../components/PipelineStats";
 import LeadsTrendChart from "../components/LeadsTrendChart";
@@ -107,6 +108,7 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
 
       {/* greeting, today's numbers and today's follow-ups (replaces the old "due today" banner) */}
       <DashboardHero username={username} stats={stats} followUps={pendingFollowUps} loading={loading} />
+      <DashboardInsights stats={stats} loading={loading} showAgents={role !== "agent"} />
       {loading ? <Skeleton height={44} className="mb-5" /> : <HotLeadsCard count={stats?.hotCount} />}
 
       <h2 className="section-title">Lead Pipeline Dashboard</h2>

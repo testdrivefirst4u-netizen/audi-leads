@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Skeleton from "react-loading-skeleton";
 import LeadDetailModal from "./LeadDetailModal";
 import LeadsBoard from "./LeadsBoard";
+import { telHref, waHref } from "../lib/phone";
 import { FaWhatsapp } from "react-icons/fa6";
 import {
   pickField,
@@ -108,11 +109,11 @@ function PhoneCell({ phone }) {
   if (!phone) return <span>-</span>;
   return (
     <span className="phone-cell">
-      <a href={`tel:+${phone}`} onClick={(e) => e.stopPropagation()} title="Call">
+      <a href={telHref(phone)} onClick={(e) => e.stopPropagation()} title="Call">
         {phone}
       </a>
       <a
-        href={`https://wa.me/${phone}`}
+        href={waHref(phone)}
         target="_blank"
         rel="noopener noreferrer"
         onClick={(e) => e.stopPropagation()}
@@ -278,6 +279,8 @@ export default function LeadsTable({
   onBulkAssign,
   onSelectAllMatching,
   autoOpenLeadId,
+  loadBoardColumn,
+  boardFilterKey,
 }) {
   const [selected, setSelected] = useState(null);
 
@@ -744,6 +747,8 @@ export default function LeadsTable({
               manageCompanyId={manageCompanyId}
               onOpen={setSelected}
               onMoved={(lead) => onLeadUpdated?.(lead)}
+              loadColumn={loadBoardColumn}
+              filterKey={boardFilterKey}
             />
           )}
 
