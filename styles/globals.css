@@ -1125,31 +1125,7 @@ html[data-crm-theme="midnight"] .app-shell .bg-\[\#d9fdd3\] {
 }
 
 
-/* Dashboard greeting + today's tasks (components/DashboardHero.js) */
-.dash-hero {
-  @apply grid gap-4 lg:grid-cols-[1.6fr_1fr];
-}
-
-.dash-hero-main {
-  @apply relative overflow-hidden rounded-2xl p-5 sm:p-6;
-  background: radial-gradient(120% 140% at 100% 0%, rgb(var(--accent-rgb) / 0.55) 0%, transparent 55%), linear-gradient(135deg, #1b2240 0%, #0e1220 100%);
-  box-shadow: 0 18px 40px -18px rgba(8, 12, 30, 0.55);
-}
-
-.dash-hero-kpi {
-  @apply flex flex-col gap-2 rounded-xl px-3.5 py-3 no-underline transition-colors duration-150;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.dash-hero-kpi:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.dash-hero-tasks {
-  @apply rounded-2xl border border-border bg-card p-4 shadow-card;
-}
-
+/* A follow-up row in Today's tasks (components/dashboard/TodayTasks.js) */
 .dash-task {
   @apply flex items-center gap-3 rounded-lg px-2.5 py-2 no-underline transition-colors duration-150 hover:bg-bg;
 }
@@ -1259,4 +1235,108 @@ html[data-crm-theme="midnight"] .app-shell .bg-\[\#d9fdd3\] {
 
 .lead-quick-messages {
   @apply px-5 py-2.5 border-b border-border;
+}
+
+/* ---------- Dashboard (pages/index.js, components/dashboard/) ----------
+   A CRM home dashboard: toolbar, a strip of KPI components, then a 12-column
+   grid of equal-height panels (Panel span = columns on a wide screen). */
+
+.dash2-toolbar {
+  @apply flex flex-wrap items-end justify-between gap-3 mb-5;
+}
+
+.dash2-kpis {
+  @apply grid gap-3 mb-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-6;
+}
+
+.dash2-kpi {
+  @apply relative flex flex-col rounded-2xl border border-border bg-card px-4 pt-3.5 pb-3 no-underline overflow-hidden transition-[box-shadow,border-color] duration-150;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.dash2-kpi.is-link:hover {
+  @apply border-accent/40;
+  box-shadow: 0 8px 22px -12px rgba(16, 24, 40, 0.25);
+}
+
+.dash2-kpi-label {
+  @apply text-[11px] font-semibold uppercase tracking-[0.1em] text-muted;
+}
+
+.dash2-kpi-icon {
+  @apply flex items-center justify-center w-7 h-7 rounded-lg bg-bg text-muted;
+}
+
+.dash2-kpi-icon.is-alert {
+  @apply bg-danger/10 text-danger;
+}
+
+.dash2-kpi-value {
+  @apply mt-2 text-[28px] font-bold leading-none text-ink tracking-[-0.02em];
+}
+
+.dash2-kpi-foot {
+  @apply mt-2 text-[12px] font-medium truncate;
+}
+
+.dash2-spark {
+  @apply block w-full h-[30px] mt-2 -mb-1;
+}
+
+.dash2-grid {
+  @apply grid grid-cols-12 gap-4;
+}
+
+.dash2-panel {
+  @apply col-span-12 flex flex-col min-w-0 rounded-2xl border border-border bg-card p-4;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+@media (min-width: 768px) {
+  .dash2-span-3 { grid-column: span 6 / span 6; }
+  .dash2-span-4 { grid-column: span 6 / span 6; }
+}
+
+@media (min-width: 1280px) {
+  .dash2-span-3 { grid-column: span 3 / span 3; }
+  .dash2-span-4 { grid-column: span 4 / span 4; }
+  .dash2-span-6 { grid-column: span 6 / span 6; }
+  .dash2-span-8 { grid-column: span 8 / span 8; }
+}
+
+/* two panels stacked in one grid cell (e.g. Conversion + Calls beside Pipeline) */
+.dash2-stack {
+  @apply col-span-12 grid gap-4 content-start;
+}
+
+.dash2-stack > .dash2-panel {
+  grid-column: auto;
+}
+
+.dash2-panel-head {
+  @apply flex items-start justify-between gap-3 mb-3;
+}
+
+.dash2-panel-title {
+  @apply m-0 text-[14px] font-bold text-ink;
+}
+
+.dash2-panel-note {
+  @apply m-0 mt-0.5 text-[11.5px] text-muted;
+}
+
+.dash2-panel-link {
+  @apply shrink-0 flex items-center gap-0.5 text-[12px] font-semibold text-accent no-underline hover:underline;
+}
+
+.dash2-panel-body {
+  @apply flex-1 min-h-0;
+}
+
+html[data-crm-theme="midnight"] .app-shell :is(.dash2-kpi, .dash2-panel) {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+@media (min-width: 1280px) {
+  .dash2-stack.dash2-span-6 { grid-column: span 6 / span 6; }
 }
