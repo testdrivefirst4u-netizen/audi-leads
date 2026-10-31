@@ -56,7 +56,7 @@ const VerticalBarChart = forwardRef(function VerticalBarChart({ data, colorFor }
       <svg ref={ref} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="trend-chart">
         {gridLines.map((g) => {
           const y = PAD_TOP + plotHeight - g * plotHeight;
-          return <line key={g} x1={PAD_LEFT} x2={WIDTH - PAD_RIGHT} y1={y} y2={y} stroke="#e5e8f0" strokeWidth="1" />;
+          return <line key={g} x1={PAD_LEFT} x2={WIDTH - PAD_RIGHT} y1={y} y2={y} stroke="rgb(var(--border-rgb))" strokeWidth="1" />;
         })}
 
         {bars.map((bar, i) => (
@@ -72,7 +72,7 @@ const VerticalBarChart = forwardRef(function VerticalBarChart({ data, colorFor }
         ))}
 
         {bars.map((bar) => (
-          <text key={`value-${bar.label}`} x={bar.centerX} y={bar.y - 6} fontSize="11" fontWeight="700" textAnchor="middle" fill="#374151">
+          <text key={`value-${bar.label}`} x={bar.centerX} y={bar.y - 6} fontSize="11" fontWeight="700" textAnchor="middle" fill="rgb(var(--ink-rgb))">
             {bar.count}
           </text>
         ))}
@@ -84,7 +84,7 @@ const VerticalBarChart = forwardRef(function VerticalBarChart({ data, colorFor }
             y={HEIGHT - PAD_BOTTOM + 16}
             fontSize="11"
             textAnchor="end"
-            fill="#6b7280"
+            fill="rgb(var(--muted-rgb))"
             transform={`rotate(-30 ${bar.centerX} ${HEIGHT - PAD_BOTTOM + 16})`}
           >
             {bar.label.length > 14 ? `${bar.label.slice(0, 13)}…` : bar.label}

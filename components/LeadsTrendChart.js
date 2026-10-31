@@ -82,7 +82,7 @@ export default function LeadsTrendChart({ trend }) {
               x2={WIDTH - PAD_RIGHT}
               y1={y}
               y2={y}
-              stroke="#e5e8f0"
+              stroke="rgb(var(--border-rgb))"
               strokeWidth="1"
             />
           );
@@ -104,7 +104,7 @@ export default function LeadsTrendChart({ trend }) {
         {points.map(
           (p, i) =>
             i % labelEvery === 0 && (
-              <text key={p.date} x={p.x} y={HEIGHT - 8} fontSize="10" textAnchor="middle" fill="#6b7280">
+              <text key={p.date} x={p.x} y={HEIGHT - 8} fontSize="10" textAnchor="middle" fill="rgb(var(--muted-rgb))">
                 {formatShortDate(p.date)}
               </text>
             )
@@ -121,11 +121,11 @@ export default function LeadsTrendChart({ trend }) {
           const p = points[i];
           return (
             <g key={isPeak ? "peak" : "latest"}>
-              <circle cx={p.x} cy={p.y} r="3.5" fill="rgb(var(--accent-rgb))" stroke="#fff" strokeWidth="1.5" />
-              <text x={p.x} y={p.y - 22} textAnchor="middle" fontSize="9" fill="#6b7280">
+              <circle cx={p.x} cy={p.y} r="3.5" fill="rgb(var(--accent-rgb))" stroke="rgb(var(--card-rgb))" strokeWidth="1.5" />
+              <text x={p.x} y={p.y - 22} textAnchor="middle" fontSize="9" fill="rgb(var(--muted-rgb))">
                 {isPeak ? "Peak" : "Latest"}
               </text>
-              <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="11" fontWeight="700" fill="#1a1d29">
+              <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="11" fontWeight="700" fill="rgb(var(--ink-rgb))">
                 {p.count}
               </text>
             </g>
@@ -139,11 +139,11 @@ export default function LeadsTrendChart({ trend }) {
               x2={hovered.x}
               y1={PAD_TOP}
               y2={PAD_TOP + plotHeight}
-              stroke="#6b7280"
+              stroke="rgb(var(--muted-rgb))"
               strokeWidth="1"
               strokeDasharray="3 3"
             />
-            <circle cx={hovered.x} cy={hovered.y} r="4" fill="rgb(var(--accent-rgb))" stroke="#fff" strokeWidth="2" />
+            <circle cx={hovered.x} cy={hovered.y} r="4" fill="rgb(var(--accent-rgb))" stroke="rgb(var(--card-rgb))" strokeWidth="2" />
           </>
         )}
       </svg>

@@ -66,7 +66,7 @@ const CategoryPieChart = forwardRef(function CategoryPieChart({ data, colorFor }
                   <path
                     d={slicePath(s.startAngle, s.endAngle)}
                     fill={s.color}
-                    stroke="#fff"
+                    stroke="rgb(var(--card-rgb))"
                     strokeWidth="2"
                     opacity={hoverLabel && hoverLabel !== s.label ? 0.55 : 1}
                     onMouseEnter={() => setHoverLabel(s.label)}

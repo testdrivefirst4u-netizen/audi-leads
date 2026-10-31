@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
+import MobileTabBar from "./MobileTabBar";
 import { brandColorTriplets } from "../lib/color";
 import { apiFetch } from "../lib/apiFetch";
+import { loadAccountTheme } from "../lib/theme";
 
 // Same cadence as the other background pollers (Leads page, notification
 // bell) — the sidebar badge doesn't need to be faster than that.
@@ -21,6 +23,9 @@ export default function Layout({ children, username, role, companyName, companyL
   const [followUpBadge, setFollowUpBadge] = useState(null);
   const [chatBadge, setChatBadge] = useState(null);
   const triplets = brandColorTriplets(role === "super_admin" ? SUPER_ADMIN_ACCENT : companyBrandColor);
+
+  // The theme saved on this person's account (lib/theme.js) — once per page load.
+  useEffect(() => loadAccountTheme(), []);
 
   useEffect(() => {
     // Super admin has no Follow-ups nav item (it's a company working queue,
@@ -49,7 +54,9 @@ export default function Layout({ children, username, role, companyName, companyL
   }
 
   return (
-    <div className="flex min-h-screen">
+    // .app-shell scopes the colour themes (globals.css "Themes", lib/theme.js)
+    // to the CRM itself, so the login page keeps its own look.
+    <div className="app-shell flex min-h-screen text-ink">
       {/* Overrides the platform-default accent CSS vars (see :root in
           globals.css) only when this company has its own brandColor set —
           scoped to this subtree so it never leaks across companies sharing
@@ -60,6 +67,7 @@ export default function Layout({ children, username, role, companyName, companyL
             --accent-rgb: ${triplets.accent};
             --accent-hover-rgb: ${triplets.hover};
             --accent-soft-rgb: ${triplets.soft};
+            --accent-soft-dark-rgb: ${triplets.softDark};
           }
         `}</style>
       )}
@@ -84,10 +92,11 @@ export default function Layout({ children, username, role, companyName, companyL
         open={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
       />
-      <main className="flex-1 min-w-0 p-4 sm:p-8">
+      {/* No top padding: the TopBar is sticky and sits flush at the top. */}
+      {/* bottom padding on phones clears the MobileTabBar */}
+      <main className="flex-1 min-w-0 px-4 sm:px-8 pb-24 md:pb-8">
         <div className="max-w-[1400px] mx-auto">
           <TopBar
-            onMenuClick={() => setMobileNavOpen(true)}
             role={role}
             username={username}
             companyName={companyName}
@@ -97,6 +106,7 @@ export default function Layout({ children, username, role, companyName, companyL
           {children}
         </div>
       </main>
+      <MobileTabBar role={role} followUpBadge={followUpBadge} chatBadge={chatBadge} onMore={() => setMobileNavOpen(true)} />
     </div>
   );
 }

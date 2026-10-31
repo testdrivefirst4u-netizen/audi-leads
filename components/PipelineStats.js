@@ -67,7 +67,7 @@ export default function PipelineStats({ pipeline }) {
         <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="trend-chart">
           {gridLines.map((g) => {
             const y = PAD_TOP + plotHeight - g * plotHeight;
-            return <line key={g} x1={PAD_LEFT} x2={WIDTH - PAD_RIGHT} y1={y} y2={y} stroke="#e5e8f0" strokeWidth="1" />;
+            return <line key={g} x1={PAD_LEFT} x2={WIDTH - PAD_RIGHT} y1={y} y2={y} stroke="rgb(var(--border-rgb))" strokeWidth="1" />;
           })}
 
           {bars.map((bar, i) => (
@@ -88,7 +88,7 @@ export default function PipelineStats({ pipeline }) {
               y={HEIGHT - PAD_BOTTOM + 14}
               fontSize="10"
               textAnchor="end"
-              fill="#6b7280"
+              fill="rgb(var(--muted-rgb))"
               transform={`rotate(-30 ${bar.centerX} ${HEIGHT - PAD_BOTTOM + 14})`}
             >
               {bar.label}

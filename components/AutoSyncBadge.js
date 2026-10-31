@@ -49,17 +49,23 @@ export default function AutoSyncBadge() {
 
   if (!status) return null;
 
+  // Calm by default: green "Synced" while the last success is within the
+  // expected window, amber "Sync overdue" only once it's really late (the API
+  // allows 3× the company's interval), and a neutral "Not synced yet" for a
+  // company with no successful sync at all (e.g. no sheet connected) — none
+  // of these is a connection problem, so nothing says "Reconnecting".
+  const state = !status.lastSyncTime ? "idle" : status.online ? "online" : "overdue";
+  const label = state === "online" ? "Synced" : state === "overdue" ? "Sync overdue" : "Not synced yet";
+
   return (
     <div
-      className={`badge ${status.online ? "online" : "offline"}`}
-      title={status.lastSyncTime ? `Last synced ${new Date(status.lastSyncTime).toLocaleString()}` : "No sync yet"}
+      className={`badge ${state} rounded-full border border-border bg-card px-3 h-9`}
+      title={status.lastSyncTime ? `Last successful sync: ${new Date(status.lastSyncTime).toLocaleString()}` : "No successful sync yet"}
     >
       <span className="dot" />
-      <span className="text-[13px] font-medium">
-        {status.online ? "Auto Sync Enabled" : "Reconnecting..."}
-        {status.lastSyncTime && (
-          <span className="text-muted font-normal ml-1.5">· Last Synced: {timeAgo(status.lastSyncTime)}</span>
-        )}
+      <span className="text-[12.5px] font-medium text-ink">
+        {label}
+        {status.lastSyncTime && <span className="text-muted font-normal ml-1">· {timeAgo(status.lastSyncTime)}</span>}
       </span>
     </div>
   );

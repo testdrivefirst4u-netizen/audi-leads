@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { ChevronDownIcon, LogoutIcon, UserIcon } from "./icons";
 import { apiFetch } from "../lib/apiFetch";
+import ThemePicker from "./ThemePicker";
 
 function roleLabelFor(role) {
   if (role === "super_admin") return "Super Admin";
@@ -104,6 +105,10 @@ export default function ProfileMenu({ username, role, companyName, companyLogoUr
                   {companyName ? ` · ${companyName}` : ""}
                 </div>
               </div>
+            </div>
+            <div className="px-3 pt-3 pb-2.5 border-b border-border">
+              <div className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted">Theme</div>
+              <ThemePicker />
             </div>
             <div className="p-1.5">
               <button
