@@ -1179,12 +1179,39 @@ html[data-crm-theme="midnight"] .app-shell .bg-\[\#d9fdd3\] {
   display: none;
 }
 
-.float-window.is-tall {
-  height: calc(100vh - 32px);
+/* given an explicit height (resized, snapped, full screen, or a tall panel) */
+.float-window.is-sized {
+  max-height: none;
 }
 
-.float-window.is-tall .float-window-body {
-  @apply flex-1;
+.float-window.is-sized .float-window-body {
+  @apply flex-1 min-h-0;
+}
+
+/* grab areas for resizing: left / right edges, bottom edge, bottom corners */
+.float-resize {
+  @apply absolute z-10;
+  touch-action: none;
+}
+.float-resize-e { @apply top-12 bottom-3 right-0 w-2 cursor-ew-resize; }
+.float-resize-w { @apply top-12 bottom-3 left-0 w-2 cursor-ew-resize; }
+.float-resize-s { @apply left-3 right-3 bottom-0 h-2 cursor-ns-resize; }
+.float-resize-se { @apply right-0 bottom-0 w-4 h-4 cursor-nwse-resize; }
+.float-resize-sw { @apply left-0 bottom-0 w-4 h-4 cursor-nesw-resize; }
+
+/* a small grip in the bottom-right corner, so it's clear the window resizes */
+.float-resize-se::after {
+  content: "";
+  @apply absolute right-1 bottom-1 w-2 h-2 border-r-2 border-b-2 rounded-br-sm;
+  border-color: rgb(var(--muted-rgb) / 0.6);
+}
+
+/* where a window will snap when dropped at the screen's left / right / top edge */
+.float-snap-preview {
+  @apply fixed z-[104] rounded-2xl pointer-events-none;
+  background: rgb(var(--accent-rgb) / 0.12);
+  border: 2px solid rgb(var(--accent-rgb) / 0.55);
+  transition: all 0.12s ease;
 }
 
 .float-window.is-sheet {
