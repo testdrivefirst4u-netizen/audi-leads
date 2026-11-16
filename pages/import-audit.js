@@ -60,6 +60,7 @@ export default function ImportAuditPage({ username, role, companyName, companyLo
   const [audit, setAudit] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [warning, setWarning] = useState(""); // sheets left out of the audit
   const [syncing, setSyncing] = useState(false);
   const [filter, setFilter] = useState("attention");
   const [tabFilter, setTabFilter] = useState("");
@@ -82,6 +83,7 @@ export default function ImportAuditPage({ username, role, companyName, companyLo
     const run = ++runRef.current;
     setLoading(true);
     setError("");
+    setWarning("");
     setAudit(null);
     setProgress(null);
     try {
@@ -94,6 +96,7 @@ export default function ImportAuditPage({ username, role, companyName, companyLo
         setAudit({ tabs: [], rows: [], duplicates: [], totals: emptyTotals(), lastSync: head.lastSync, error: head.error, auditedAt: new Date() });
         return;
       }
+      setWarning(head.warning || "");
       const acc = { tabs: [], rows: [], duplicates: [], totals: emptyTotals(), lastSync: head.lastSync, auditedAt: null };
       for (let i = 0; i < head.tabs.length; i++) {
         if (runRef.current !== run) return; // company changed / re-run started
@@ -245,6 +248,11 @@ export default function ImportAuditPage({ username, role, companyName, companyLo
       {error && (
         <div className="panel mb-6" style={{ padding: 16, background: "#fef2f2", borderColor: "#fca5a5" }}>
           <strong>Couldn&apos;t audit the sheet.</strong> <span className="hint">{error}</span>
+        </div>
+      )}
+      {warning && !error && (
+        <div className="panel mb-6" style={{ padding: 16, background: "#fffbeb", borderColor: "#fcd34d" }}>
+          <strong>Some sheets were left out.</strong> <span className="hint">{warning}</span>
         </div>
       )}
 

@@ -35,11 +35,12 @@ async function handler(req, res) {
     }
 
     // mode=tabs (default)
-    const { settings, tabs } = await listAuditTabs(companyId);
+    const { settings, tabs, sheetErrors } = await listAuditTabs(companyId);
     const lastSync = await SyncLog.findOne({ companyId }).sort({ createdAt: -1 }).lean();
     return res.status(200).json({
       tabs,
-      error: !settings.sheets?.length ? "No Google Sheet configured for this company." : undefined,
+      error: !settings.sheets?.length ? "No Google Sheet configured for this company." : !tabs.length && sheetErrors.length ? sheetErrors.join(" ") : undefined,
+      warning: tabs.length && sheetErrors.length ? sheetErrors.join(" ") : undefined,
       lastSync: lastSync
         ? {
             at: lastSync.finishedAt || lastSync.startedAt,
