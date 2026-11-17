@@ -15,6 +15,16 @@ const TREND_DAYS = 30;
 // only collapses multiple concurrent viewers (or overlapping requests)
 // within the same company into one computation instead of one each.
 const STATS_CACHE_MS = 3000;
+// Month-by-month history barely moves between polls; worked out once a minute.
+const HISTORY_CACHE_MS = 60 * 1000;
+const HISTORY_MONTHS = 24;
+const QSL_MONTHS = 4;
+// "QSL" (qualified sales lead): a lead that got to Qualified or any later stage.
+const QUALIFIED_OR_LATER = ["Qualified", "Test Drive", "Booking", "Retail (Converted)"];
+const BOOKED_STATUSES = ["Booking", "Retail (Converted)"];
+const NEW_THIS_WEEK_LIMIT = 200;
+// Months and weeks are counted in India time, where the dealers are.
+const IST_OFFSET_MS = 330 * 60 * 1000;
 
 function normalizeExchange(value) {
   if (!value || !value.trim()) return "Not Filled";
@@ -42,14 +52,19 @@ function dateKey(d) {
 // detail's Enquiry History shows. "Repeat enquiries in the window" is then
 // simply this minus the new leads created in the same window, since each
 // new lead's first history entry is dated by its own sheetCreatedAt.
-async function countEnquiriesBetween(baseFilter, start, end) {
-  // Unlike find()/countDocuments(), aggregate() does not cast query values
-  // through the schema — a string companyId (a super-admin session viewing
-  // a company) would silently match nothing here.
+// Unlike find()/countDocuments(), aggregate() does not cast query values
+// through the schema — a string companyId (a super-admin session viewing
+// a company) would silently match nothing.
+function aggregateMatch(filter) {
   const match = {};
-  for (const [key, value] of Object.entries(baseFilter)) {
+  for (const [key, value] of Object.entries(filter)) {
     match[key] = typeof value === "string" && mongoose.isValidObjectId(value) ? new mongoose.Types.ObjectId(value) : value;
   }
+  return match;
+}
+
+async function countEnquiriesBetween(baseFilter, start, end) {
+  const match = aggregateMatch(baseFilter);
   const rows = await Lead.aggregate([
     { $match: { ...match, lastEnquiryAt: { $gte: start } } },
     { $unwind: "$enquiryHistory" },
@@ -58,6 +73,71 @@ async function countEnquiriesBetween(baseFilter, start, end) {
     { $count: "n" },
   ]);
   return rows[0]?.n || 0;
+}
+
+// "2026-11" for the month `back` months before the current one (India time).
+function istMonth(back) {
+  const now = new Date(Date.now() + IST_OFFSET_MS);
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - back, 1));
+  return d.toISOString().slice(0, 7);
+}
+
+// Leads created per month for the last HISTORY_MONTHS months (zero months
+// included), and of those, how many are now qualified or further along.
+// Not narrowed by the dashboard's month picker: it's the long view.
+async function monthlyHistory(baseFilter) {
+  const first = istMonth(HISTORY_MONTHS - 1);
+  const start = new Date(new Date(`${first}-01T00:00:00Z`).getTime() - IST_OFFSET_MS);
+  const rows = await Lead.aggregate([
+    { $match: { ...aggregateMatch(baseFilter), sheetCreatedAt: { $gte: start } } },
+    {
+      $group: {
+        _id: { $dateToString: { format: "%Y-%m", date: "$sheetCreatedAt", timezone: "Asia/Kolkata" } },
+        count: { $sum: 1 },
+        qualified: { $sum: { $cond: [{ $in: ["$status", QUALIFIED_OR_LATER] }, 1, 0] } },
+      },
+    },
+  ]);
+  const byMonth = Object.fromEntries(rows.map((r) => [r._id, r]));
+  const months = [];
+  for (let back = HISTORY_MONTHS - 1; back >= 0; back--) {
+    const month = istMonth(back);
+    months.push({ month, count: byMonth[month]?.count || 0, qualified: byMonth[month]?.qualified || 0 });
+  }
+  return months;
+}
+
+// This week's new leads (Monday onwards, India time), newest first.
+async function newThisWeek(baseFilter) {
+  const now = new Date(Date.now() + IST_OFFSET_MS);
+  const sinceMonday = (now.getUTCDay() + 6) % 7;
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - sinceMonday) - IST_OFFSET_MS);
+  const filter = { ...baseFilter, sheetCreatedAt: { $gte: start } };
+  const [total, leads] = await Promise.all([
+    Lead.countDocuments(filter),
+    Lead.find(filter)
+      .sort({ sheetCreatedAt: -1 })
+      .limit(NEW_THIS_WEEK_LIMIT)
+      .select("name phone assignedTo sheetCreatedAt source canonicalModel model status")
+      .lean(),
+  ]);
+  const ids = [...new Set(leads.map((l) => l.assignedTo).filter(Boolean).map(String))];
+  const agents = ids.length ? await Agent.find({ _id: { $in: ids } }).select("name").lean() : [];
+  const names = Object.fromEntries(agents.map((a) => [String(a._id), a.name]));
+  return {
+    total,
+    since: start,
+    leads: leads.map((l) => ({
+      id: String(l._id),
+      name: l.name || "",
+      phone: l.phone || "",
+      owner: l.assignedTo ? names[String(l.assignedTo)] || "Former agent" : "",
+      date: l.sheetCreatedAt,
+      model: l.canonicalModel || l.model || "",
+      source: l.source || "Meta Ads",
+      status: l.status || "New",
+    })),
+  };
 }
 
 async function computeStats(req) {
@@ -115,6 +195,9 @@ async function computeStats(req) {
   const modelCounts = {};
   const sourceCounts = {};
   const campaignCounts = {};
+  const lostSourceCounts = {};
+  const bookedSourceCounts = {};
+  const bookedModelCounts = {};
   const pipelineCounts = Object.fromEntries(LEAD_STATUSES.map((s) => [s, 0]));
   const bucketCounts = Object.fromEntries(BUCKETS.map((b) => [b, 0]));
 
@@ -169,6 +252,12 @@ async function computeStats(req) {
     const status = LEAD_STATUSES.includes(lead.status) ? lead.status : "New";
     pipelineCounts[status]++;
 
+    if (status === "Lost") lostSourceCounts[sourceName] = (lostSourceCounts[sourceName] || 0) + 1;
+    if (BOOKED_STATUSES.includes(status)) {
+      bookedSourceCounts[sourceName] = (bookedSourceCounts[sourceName] || 0) + 1;
+      bookedModelCounts[modelName] = (bookedModelCounts[modelName] || 0) + 1;
+    }
+
     const bucket = BUCKETS.includes(lead.bucket) ? lead.bucket : "unassigned";
     bucketCounts[bucket]++;
 
@@ -219,8 +308,17 @@ async function computeStats(req) {
     }
   }
 
+  const historyKey = `stats-history:${req.session.companyId}:${req.session.role}:${req.session.agentId || ""}`;
+  const [monthly, weekLeads] = await Promise.all([withCache(historyKey, HISTORY_CACHE_MS, () => monthlyHistory(baseFilter)), newThisWeek(baseFilter)]);
+
   return {
     agentBoard,
+    monthly,
+    qsl: monthly.slice(-QSL_MONTHS),
+    newThisWeek: weekLeads,
+    lostBySource: toSortedArray(lostSourceCounts),
+    bookingsBySource: toSortedArray(bookedSourceCounts),
+    bookingsByModel: toSortedArray(bookedModelCounts),
     month: month || null,
     total: leads.length,
     totalRecords,

@@ -1333,6 +1333,19 @@ html[data-crm-theme="midnight"] .app-shell .bg-\[\#d9fdd3\] {
   @apply flex-1 min-h-0;
 }
 
+/* two- or three-way switch in a panel header (e.g. Bookings by Model / Source) */
+.seg-toggle {
+  @apply shrink-0 inline-flex rounded-lg border border-border p-0.5 bg-bg;
+}
+
+.seg-toggle > button {
+  @apply border-0 bg-transparent px-2.5 py-1 rounded-md text-[11.5px] font-semibold text-muted cursor-pointer;
+}
+
+.seg-toggle > button.is-active {
+  @apply bg-card text-ink shadow-sm;
+}
+
 html[data-crm-theme="midnight"] .app-shell :is(.dash2-kpi, .dash2-panel) {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
 }

@@ -6,7 +6,6 @@ import { bucketFollowUps } from "../components/FollowUpsCard";
 import PipelineStats from "../components/PipelineStats";
 import LeadsTrendChart from "../components/LeadsTrendChart";
 import ModelBarChart from "../components/ModelBarChart";
-import StatusPieChart from "../components/StatusPieChart";
 import BucketPieChart from "../components/BucketPieChart";
 import BarListChart from "../components/BarListChart";
 import Panel from "../components/dashboard/Panel";
@@ -15,6 +14,13 @@ import DashToolbar from "../components/dashboard/DashToolbar";
 import TodayTasks from "../components/dashboard/TodayTasks";
 import StageFunnel, { canDrawFunnel } from "../components/dashboard/StageFunnel";
 import { Conversion, AgentLeaderboard } from "../components/dashboard/Insights";
+import ColumnChart from "../components/dashboard/ColumnChart";
+import DonutChart from "../components/dashboard/DonutChart";
+import FunnelChart from "../components/dashboard/FunnelChart";
+import RecordTable from "../components/dashboard/RecordTable";
+import NewThisWeek from "../components/dashboard/NewThisWeek";
+import QslCompare from "../components/dashboard/QslCompare";
+import { statusChartColor } from "../lib/leadFields";
 import { UsersIcon, FireIcon, BellIcon, CalendarIcon, CarIcon, ReportIcon } from "../components/icons";
 import { getSessionFromCookieHeader } from "../lib/auth";
 import { getCompanyBranding } from "../lib/companyBranding";
@@ -44,6 +50,18 @@ function monthLabel(month) {
 
 const pipelineCount = (stats, label) => stats?.pipeline?.find((p) => p.label === label)?.count ?? 0;
 
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const shortMonth = (key) => `${SHORT_MONTHS[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`;
+
+// The sales end of the pipeline, as Zoho's "Deals by stages" funnel.
+const DEAL_STAGES = [
+  ["Qualified", "Qualified"],
+  ["Test Drive", "Test drive"],
+  ["Booking", "Bookings"],
+  ["Retail (Converted)", "Retails"],
+  ["Lost", "Lost"],
+];
+
 /**
  * The Dashboard, laid out like a CRM home dashboard (Zoho-style): a toolbar
  * with the period and refresh, a strip of KPI components, then a 12-column
@@ -63,6 +81,7 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState(null);
+  const [bookingsBy, setBookingsBy] = useState("model"); // "model" | "source"
 
   const fetchStats = useCallback(
     async (m) => {
@@ -110,6 +129,14 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
   const period = month ? monthLabel(month) : "All time";
   const exchangeRows = (stats?.exchange || []).map((row) => (row.label === "Not Filled" ? { ...row, muted: true } : row));
   const chart = (node, h = 220) => (loading ? <Skeleton height={h} /> : node);
+  const pipelineMap = Object.fromEntries((stats?.pipeline || []).map((p) => [p.label, p.count]));
+  const leadStages = (stats?.pipeline || []).map((p) => ({ label: p.label, count: p.count, color: statusChartColor(p.label) }));
+  const dealStages = DEAL_STAGES.filter(([status]) => status in pipelineMap).map(([status, label]) => ({ label, count: pipelineMap[status], color: statusChartColor(status) }));
+  const statusSlices = (stats?.pipeline || []).map((p) => ({ label: p.label, count: p.count, color: statusChartColor(p.label) }));
+  // starts at the first month with any leads, so a new company isn't a row of empty bars
+  const firstMonth = (stats?.monthly || []).findIndex((m) => m.count > 0);
+  const monthlyBars = (stats?.monthly || []).slice(Math.max(0, firstMonth)).map((m) => ({ label: shortMonth(m.month), count: m.count }));
+  const bookingBars = ((bookingsBy === "model" ? stats?.bookingsByModel : stats?.bookingsBySource) || []).slice(0, 10);
 
   return (
     <Layout username={username} role={role} companyName={companyName} companyLogoUrl={companyLogoUrl} companyBrandColor={companyBrandColor}>
@@ -129,6 +156,55 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
       </div>
 
       <div className="dash2-grid">
+        {/* Zoho-style report panels */}
+        <Panel title="Monthly lead creation" note="Last 24 months · by enquiry date" href="/reports" linkLabel="Reports" span={12}>
+          {chart(<ColumnChart data={monthlyBars} slantLabels minBarWidth={34} yLabel="Record count" />, 240)}
+        </Panel>
+
+        <Panel title="Lead stage" note={`${period} · where every lead stands now`} href="/leads" span={4}>
+          {chart(<FunnelChart stages={leadStages} />, 260)}
+        </Panel>
+        <Panel title="Deals by stages" note={`${period} · qualified onwards`} span={4}>
+          {chart(<FunnelChart stages={dealStages} emptyText="No qualified leads yet." />, 200)}
+        </Panel>
+        <Panel title="Lost leads by source" note={period} span={4}>
+          {chart(<RecordTable rows={stats?.lostBySource} emptyText="No lost leads in this period." />, 240)}
+        </Panel>
+
+        <Panel title="Leads by source" note={period} span={4}>
+          {chart(<DonutChart data={stats?.sources} />, 260)}
+        </Panel>
+        <Panel title="Leads by status" note={period} span={4}>
+          {chart(<DonutChart data={statusSlices} />, 260)}
+        </Panel>
+        <Panel title="Top 10 lead sources" note={period} span={4}>
+          {chart(<RecordTable rows={stats?.sources} />, 260)}
+        </Panel>
+
+        <Panel title="New this week" note="Since Monday · newest first" href="/leads" linkLabel="All leads" span={12}>
+          {chart(<NewThisWeek week={stats?.newThisWeek} />, 300)}
+        </Panel>
+
+        <Panel title="QSL month-wise comparison" note="Leads that reached Qualified or further, by the month they came in" span={8}>
+          {chart(<QslCompare months={stats?.qsl} />, 220)}
+        </Panel>
+        <section className="dash2-panel dash2-span-4" aria-label="Bookings">
+          <header className="dash2-panel-head">
+            <div className="min-w-0">
+              <h3 className="dash2-panel-title">Bookings by {bookingsBy}</h3>
+              <p className="dash2-panel-note">{period} · booked or sold</p>
+            </div>
+            <div className="seg-toggle" role="group" aria-label="Group bookings by">
+              {["model", "source"].map((k) => (
+                <button key={k} type="button" aria-pressed={bookingsBy === k} className={bookingsBy === k ? "is-active" : ""} onClick={() => setBookingsBy(k)}>
+                  {k === "model" ? "Model" : "Source"}
+                </button>
+              ))}
+            </div>
+          </header>
+          <div className="dash2-panel-body">{chart(<ColumnChart data={bookingBars} color="#7ea8ff" slantLabels={bookingBars.length > 5} yLabel="Record count" emptyText="No bookings in this period." />, 220)}</div>
+        </section>
+
         <Panel title={month ? `Leads per day · ${period}` : "Leads per day · last 30 days"} span={8}>
           {chart(<LeadsTrendChart trend={stats?.trend} />, 240)}
         </Panel>
@@ -157,12 +233,6 @@ export default function Dashboard({ username, role, companyName, companyLogoUrl,
           </Panel>
         </div>
 
-        <Panel title="Status mix" note={period} span={4}>
-          {chart(<StatusPieChart pipeline={stats?.pipeline} />)}
-        </Panel>
-        <Panel title="Lead sources" note={period} span={4}>
-          {chart(<BarListChart data={stats?.sources} />)}
-        </Panel>
         <Panel title="Leads by model" note={period} span={4}>
           {chart(<ModelBarChart models={stats?.models} />)}
         </Panel>
