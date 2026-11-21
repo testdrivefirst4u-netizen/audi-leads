@@ -60,10 +60,12 @@ async function handler(req, res) {
   if (req.method === "GET") {
     const settings = await Settings.findOne({ companyId }).select("meta.capi statusOptions").lean();
     const weekAgo = new Date(Date.now() - MAX_AGE_MS);
+    const datasetId = settings?.meta?.capi?.datasetId || "";
     const [events, sentWeek, failed, metaLeads] = await Promise.all([
       CapiEvent.find({ companyId }).sort({ updatedAt: -1 }).limit(50).lean(),
-      CapiEvent.countDocuments({ companyId, state: "sent", sentAt: { $gte: weekAgo } }),
-      CapiEvent.countDocuments({ companyId, state: "failed", eventTime: { $gte: weekAgo } }),
+      // counts are for the dataset the company sends to now
+      CapiEvent.countDocuments({ companyId, datasetId, state: "sent", sentAt: { $gte: weekAgo } }),
+      CapiEvent.countDocuments({ companyId, datasetId, state: "failed", eventTime: { $gte: weekAgo } }),
       Lead.countDocuments({ companyId, ...META_LEAD_FILTER }),
     ]);
     return res.status(200).json({
@@ -75,6 +77,7 @@ async function handler(req, res) {
         leadId: String(e.leadId),
         leadName: e.leadName,
         eventName: e.eventName,
+        datasetId: e.datasetId || "",
         eventTime: e.eventTime,
         state: e.state,
         attempts: e.attempts,
@@ -94,6 +97,10 @@ async function handler(req, res) {
     const datasetId = body.datasetId !== undefined ? String(body.datasetId).trim() : current.datasetId || "";
     if (datasetId && !/^\d{6,25}$/.test(datasetId)) return res.status(400).json({ error: "The dataset ID is the number shown in Events Manager (digits only)." });
     const newToken = typeof body.accessToken === "string" ? body.accessToken.trim() : "";
+    // A token belongs to one dataset, so a different dataset needs its own.
+    if (datasetId && current.datasetId && datasetId !== current.datasetId && !newToken) {
+      return res.status(400).json({ error: "You changed the dataset ID: paste the access token generated for that dataset too." });
+    }
 
     // A new dataset or token is checked with Meta before it's saved.
     if (newToken || (datasetId && datasetId !== current.datasetId)) {

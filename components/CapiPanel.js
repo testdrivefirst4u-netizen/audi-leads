@@ -219,7 +219,7 @@ export default function CapiPanel({ companyId }) {
             <table className="w-full border-collapse text-[12.5px]">
               <thead>
                 <tr className="border-b border-border text-left">
-                  {["Lead", "Event", "Reached stage", "Result", ""].map((h) => (
+                  {["Lead", "Event", "Dataset", "Reached stage", "Result", ""].map((h) => (
                     <th key={h} className="py-2 pr-3 font-semibold">
                       {h}
                     </th>
@@ -235,6 +235,7 @@ export default function CapiPanel({ companyId }) {
                       </Link>
                     </td>
                     <td className="py-2 pr-3">{e.eventName}</td>
+                    <td className={`py-2 pr-3 tabular-nums ${e.datasetId && e.datasetId !== config.datasetId ? "text-muted" : ""}`}>{e.datasetId || "—"}</td>
                     <td className="py-2 pr-3 whitespace-nowrap">{fmt(e.eventTime)}</td>
                     <td className="py-2 pr-3">{e.state === "sent" ? <Pill tone="ok">Sent</Pill> : <Pill tone="bad">Failed ×{e.attempts}</Pill>}</td>
                     <td className="py-2 text-muted max-w-[360px]">{e.lastError}</td>
