@@ -54,7 +54,7 @@ export default function CapiPanel({ companyId }) {
     if (form.accessToken.trim()) body.accessToken = form.accessToken.trim();
     const d = await call("save", "PATCH", body);
     if (d) {
-      toast(extra.enabled === true ? "Conversions API is on" : extra.enabled === false ? "Conversions API is off" : "Saved");
+      toast(d.warning || (extra.enabled === true ? "Conversions API is on" : extra.enabled === false ? "Conversions API is off" : "Saved"));
       await load();
     }
   }

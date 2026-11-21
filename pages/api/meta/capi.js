@@ -19,12 +19,19 @@ const { sendTestEvent, retryFailed, backfill, MAX_AGE_MS } = require("../../../l
 
 const META_LEAD_FILTER = { $or: [{ metaLeadId: { $exists: true, $ne: null } }, { "data.id": { $regex: /^(l:)?\d{10,}$/ } }] };
 
-// → { ok, name } or { ok: false, error }
+// Reads the dataset's name with the token → { ok, name } or { ok: false, error, badToken }.
+// Tokens from Events Manager's "Generate access token" may only be allowed
+// to send events, not read the dataset ("(#100) Missing Permission"), so only
+// an invalid or expired token (code 190) is treated as bad; "Send test
+// event" is the real check.
 async function checkDataset(datasetId, token) {
   try {
     const res = await fetch(`https://graph.facebook.com/${apiVersion()}/${encodeURIComponent(datasetId)}?fields=id,name&access_token=${encodeURIComponent(token)}`);
     const json = await res.json().catch(() => null);
-    if (!res.ok || json?.error) return { ok: false, error: redact(json?.error?.message || `Meta returned HTTP ${res.status}`) };
+    if (!res.ok || json?.error) {
+      const e = json?.error || {};
+      return { ok: false, badToken: e.code === 190 || e.code === 102, error: redact(e.message || `Meta returned HTTP ${res.status}`) };
+    }
     return { ok: true, name: json?.name || "" };
   } catch (err) {
     return { ok: false, error: redact(err.message) };
@@ -82,6 +89,7 @@ async function handler(req, res) {
     const settings = await Settings.findOne({ companyId }).select("meta.capi statusOptions").lean();
     const current = settings?.meta?.capi || {};
     const $set = {};
+    let warning = "";
 
     const datasetId = body.datasetId !== undefined ? String(body.datasetId).trim() : current.datasetId || "";
     if (datasetId && !/^\d{6,25}$/.test(datasetId)) return res.status(400).json({ error: "The dataset ID is the number shown in Events Manager (digits only)." });
@@ -93,8 +101,9 @@ async function handler(req, res) {
       if (!token && current.accessTokenEnc) token = decryptSecret(current.accessTokenEnc);
       if (token && datasetId) {
         const check = await checkDataset(datasetId, token);
-        if (!check.ok) return res.status(400).json({ error: `Meta didn't accept this dataset and token: ${check.error}` });
-        $set["meta.capi.datasetName"] = check.name;
+        if (check.badToken) return res.status(400).json({ error: `Meta says this access token isn't valid: ${check.error}` });
+        $set["meta.capi.datasetName"] = check.ok ? check.name : "";
+        if (!check.ok) warning = "Saved. Meta didn't let this token read the dataset's details, which is normal for a token made in Events Manager. Use Send test event to confirm it works.";
       }
     }
     $set["meta.capi.datasetId"] = datasetId;
@@ -114,7 +123,7 @@ async function handler(req, res) {
     }
     await Settings.updateOne({ companyId }, { $set }, { upsert: true });
     const saved = await Settings.findOne({ companyId }).select("meta.capi").lean();
-    return res.status(200).json({ config: publicConfig(saved?.meta?.capi) });
+    return res.status(200).json({ config: publicConfig(saved?.meta?.capi), warning });
   }
 
   if (req.method === "POST") {
