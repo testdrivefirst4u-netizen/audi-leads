@@ -130,6 +130,26 @@ const MetaOAuthSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Meta Conversions API (lib/meta/capi.js): when a Meta lead moves to one of
+// `stages`, that stage is sent to the company's dataset so Meta can
+// optimise lead ads for leads that convert, not just form fills. The access
+// token is a dataset (Events Manager) token, stored encrypted like page tokens.
+const MetaCapiSchema = new mongoose.Schema(
+  {
+    enabled: { type: Boolean, default: false },
+    datasetId: { type: String, default: "" },
+    datasetName: { type: String, default: "" },
+    accessTokenEnc: { type: String, default: "" },
+    tokenPreview: { type: String, default: "" },
+    stages: { type: [String], default: ["Qualified", "Test Drive", "Booking", "Retail (Converted)"] },
+    testEventCode: { type: String, default: "" }, // while set, events go to Events Manager → Test events only
+    lastSentAt: { type: Date },
+    lastError: { type: String, default: "" },
+    lastErrorAt: { type: Date },
+  },
+  { _id: false }
+);
+
 const MetaConfigSchema = new mongoose.Schema(
   {
     enabled: { type: Boolean, default: true },
@@ -141,6 +161,7 @@ const MetaConfigSchema = new mongoose.Schema(
     lastLeadAt: { type: Date },
     lastError: { type: String, default: "" },
     lastErrorAt: { type: Date },
+    capi: { type: MetaCapiSchema, default: () => ({}) },
   },
   { _id: false }
 );

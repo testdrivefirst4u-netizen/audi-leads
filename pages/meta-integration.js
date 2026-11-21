@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import Layout from "../components/Layout";
 import CompanySwitcher from "../components/CompanySwitcher";
 import MetaIntegrationPanel from "../components/MetaIntegrationPanel";
+import CapiPanel from "../components/CapiPanel";
 import { getSessionFromCookieHeader } from "../lib/auth";
 
 // Meta Lead Ads settings — the "admin settings → Meta integration" page.
@@ -36,6 +37,7 @@ export default function MetaIntegrationPage({ username, role, companyName, compa
       {isSuperAdminView && <CompanySwitcher companyId={viewCompanyId} onChange={setViewCompanyId} editable />}
 
       {(!isSuperAdminView || viewCompanyId) && <MetaIntegrationPanel key={viewCompanyId || "own"} companyId={isSuperAdminView ? viewCompanyId : ""} />}
+      {(!isSuperAdminView || viewCompanyId) && <CapiPanel key={`capi-${viewCompanyId || "own"}`} companyId={isSuperAdminView ? viewCompanyId : ""} />}
     </Layout>
   );
 }

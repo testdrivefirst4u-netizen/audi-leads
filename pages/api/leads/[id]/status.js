@@ -8,6 +8,7 @@ const { invalidate } = require("../../../../lib/serverCache");
 const { effectiveStatuses } = require("../../../../lib/leadFields");
 const { sendStatusCallback } = require("../../../../lib/statusCallback");
 const { recordLeadEvent } = require("../../../../lib/leadEvents");
+const capi = require("../../../../lib/meta/capi");
 
 async function handler(req, res) {
   if (req.method !== "PATCH") return res.status(405).json({ error: "Method not allowed" });
@@ -52,6 +53,12 @@ async function handler(req, res) {
   } catch (err) {
     console.error("Status callback dispatch failed:", err);
   }
+
+  // Meta Conversions API: a Meta lead reaching one of the company's chosen
+  // stages is reported to its dataset (lib/meta/capi.js). Awaited for the
+  // same reason as above, bounded to 5s, never throws; a failed send is
+  // retried by the cron sync.
+  if ((previousLead?.status || "New") !== status) await capi.sendStatusChange(lead, status);
 
   res.status(200).json({ lead, followUpsCleared });
 }

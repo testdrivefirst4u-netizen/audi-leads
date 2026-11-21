@@ -2,6 +2,7 @@ const connectDB = require("../../../lib/db");
 const Company = require("../../../models/Company");
 const { runSync } = require("../../../lib/syncService");
 const { retryFailedEvents } = require("../../../lib/meta/processEvent");
+const capi = require("../../../lib/meta/capi");
 const { withTiming } = require("../../../lib/perfMonitor");
 
 // The single trigger point for the background sync, on every host. This is
@@ -65,7 +66,17 @@ async function handler(req, res) {
       metaRetry = { error: err.message };
     }
 
-    res.status(200).json({ companies: results.length, results, metaRetry });
+    // Conversions API events that failed (Meta down, token problem) — resent
+    // while Meta still takes them (7 days).
+    let capiRetry = null;
+    try {
+      capiRetry = await capi.retryFailed({ limit: 1000 });
+    } catch (err) {
+      console.error("[cron] capi retry failed:", err.message);
+      capiRetry = { error: err.message };
+    }
+
+    res.status(200).json({ companies: results.length, results, metaRetry, capiRetry });
   } catch (err) {
     console.error("[cron] sync failed:", err);
     res.status(500).json({ error: "Server error during sync — see server logs for detail." });
