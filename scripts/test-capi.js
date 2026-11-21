@@ -23,6 +23,7 @@ check("from a sheet id without the prefix", metaLeadIdOf({ data: { id: "98765432
 check("not for a hand-added or other-source lead", metaLeadIdOf({ data: { id: "42" } }) === null && metaLeadIdOf({}) === null);
 
 console.log("Event");
+check("the New status is sent as Meta's raw-lead stage \"Lead\"", eventNameFor("New") === "Lead");
 check("status names become valid event names", eventNameFor("Retail (Converted)") === "Retail Converted" && eventNameFor("Test Drive") === "Test Drive");
 check("10-digit Indian phone hashed with 91", hashedPhone("99494 75601") === sha("919949475601"));
 check("phone already with 91 unchanged", hashedPhone("+91 9949475601") === sha("919949475601"));

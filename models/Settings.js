@@ -141,7 +141,7 @@ const MetaCapiSchema = new mongoose.Schema(
     datasetName: { type: String, default: "" },
     accessTokenEnc: { type: String, default: "" },
     tokenPreview: { type: String, default: "" },
-    stages: { type: [String], default: ["Qualified", "Test Drive", "Booking", "Retail (Converted)"] },
+    stages: { type: [String], default: ["New", "Qualified", "Test Drive", "Booking", "Retail (Converted)"] }, // "New" = raw lead, sent as "Lead"
     testEventCode: { type: String, default: "" }, // while set, events go to Events Manager → Test events only
     lastSentAt: { type: Date },
     lastError: { type: String, default: "" },

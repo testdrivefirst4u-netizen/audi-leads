@@ -130,16 +130,14 @@ export default function CapiPanel({ companyId }) {
         <div className="mb-4">
           <div className="text-sm font-semibold mb-1.5">Send these stages to Meta</div>
           <div className="flex flex-wrap gap-2">
-            {statuses
-              .filter((s) => s !== "New")
-              .map((s) => (
+            {statuses.map((s) => (
                 <label key={s} className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px] cursor-pointer ${form.stages.includes(s) ? "border-accent bg-accent/5" : "border-border"}`}>
                   <input type="checkbox" checked={form.stages.includes(s)} onChange={() => toggleStage(s)} />
-                  {s}
+                  {s === "New" ? "New lead (sent as “Lead”)" : s}
                 </label>
-              ))}
+            ))}
           </div>
-          <div className="hint mt-1.5">Usually the steps towards a sale: Qualified, Test Drive, Booking, Retail. In Ads Manager pick the one to optimise for.</div>
+          <div className="hint mt-1.5">Meta needs the first stage (New lead) plus the steps towards a sale: Qualified, Test Drive, Booking, Retail. In Ads Manager pick the one to optimise for.</div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5 items-end">
