@@ -62,7 +62,8 @@ export default function CapiPanel({ companyId }) {
   async function test() {
     const d = await call("test", "POST", { action: "test", testEventCode: form.testEventCode });
     if (!d) return;
-    if (d.ok) toast(`Test event "${d.eventName}" sent for ${d.leadName || "a Meta lead"}. Check Events Manager → Test events.`);
+    if (d.ok && d.note) toast(`Meta received the test event but says: ${d.note}`, { type: "err" });
+    else if (d.ok) toast(`Test event "${d.eventName}" sent for ${d.leadName || "a Meta lead"}. In Events Manager → Test events, choose the CRM / system generated action source to see it.`);
     else toast(`Meta refused the test event: ${d.error}`, { type: "err" });
     load();
   }
